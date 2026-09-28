@@ -1,0 +1,64 @@
+// paging.c - страничная адресация (PSE, 4 МБ страницы).
+// Identity-маппинг: виртуальный адрес == физический. Так вся существующая
+// система (framebuffer, backbuffer, код ELF, стеки) продолжает работать
+// по тем же адресам, но уже через MMU.
+#include "paging.h"
+
+// Страничная директория: 1024 записи по 4 байта = 4 КБ. Должна быть
+// выровнена на 4 КБ. Одна запись с флагом PS (бит 7) описывает 4 МБ.
+#define PDE_PRESENT 0x1
+#define PDE_RW      0x2
+#define PDE_PS      0x80        // 4 МБ страница
+
+// Разместим PD статически, выровняв на 4 КБ.
+static unsigned int g_pd[1024] __attribute__((aligned(4096)));
+
+unsigned int* paging_kernel_pd(void) { return g_pd; }
+
+#define PMAX_TASK_PD 8
+static unsigned int g_task_pd[PMAX_TASK_PD][1024] __attribute__((aligned(4096)));
+static unsigned int g_pd_used_mask = 0;
+
+#define PDE_IDX_STACK 2
+#define PDE_IDX_CODE 16
+
+unsigned int paging_task_pd_alloc(unsigned int code_phys, unsigned int stack_phys) {
+    int slot = -1;
+    for (int i = 0; i < PMAX_TASK_PD; i++) {
+        if (!(g_pd_used_mask & (1u << i))) { slot = i; break; }
+    }
+    if (slot < 0) return 0;
+    g_pd_used_mask |= (1u << slot);
+
+    unsigned int* pd = g_task_pd[slot];
+    for (int i = 0; i < 1024; i++) pd[i] = g_pd[i];
+    pd[PDE_IDX_STACK] = stack_phys | PDE_PRESENT | PDE_RW | PDE_PS;
+    pd[PDE_IDX_CODE]  = code_phys  | PDE_PRESENT | PDE_RW | PDE_PS;
+    return (unsigned int)pd;
+}
+
+void paging_task_pd_free(unsigned int pd_phys) {
+    for (int i = 0; i < PMAX_TASK_PD; i++) {
+        if ((unsigned int)g_task_pd[i] == pd_phys) { g_pd_used_mask &= ~(1u << i); return; }
+    }
+}
+
+void paging_init(void) {
+    // Заполняем все 1024 записи: каждая — 4 МБ, identity.
+    for (unsigned int i = 0; i < 1024; i++) {
+        g_pd[i] = (i * 0x400000u) | PDE_PRESENT | PDE_RW | PDE_PS;
+    }
+
+    // Загружаем PD в CR3 и включаем PSE + paging.
+    paging_load_cr3((unsigned int)g_pd);
+
+    unsigned int cr4;
+    __asm__ volatile ("mov %%cr4, %0" : "=r"(cr4));
+    cr4 |= (1u << 4);           // PSE
+    __asm__ volatile ("mov %0, %%cr4" :: "r"(cr4));
+
+    unsigned int cr0;
+    __asm__ volatile ("mov %%cr0, %0" : "=r"(cr0));
+    cr0 |= 0x80000000u;         // PG
+    __asm__ volatile ("mov %0, %%cr0" :: "r"(cr0));
+}
