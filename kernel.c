@@ -15,6 +15,7 @@
 #include "pmem.h"
 #include "bmp.h"
 #include "fs.h"
+#include "msfs.h"
 
 void put_char(char c);
 void print_string(const char* s);
@@ -1115,6 +1116,8 @@ static void cmd_execute(void) {
     for (int i = 0; h[i]; i++) if (cmd_buf[i] != h[i]) { is_help = 0; break; }
     if (is_help && cmd_len == 4) {
         term_print("commands: help, ls, cat <f>, ver, clear\n");
+        term_print("  mofsf.msfs -D0   - format disk as MSFS\n");
+        term_print("  mofsf.fat -16 -D1 - format disk as FAT16\n");
     } else if (cmd_len == 2 && cmd_buf[0] == 'l' && cmd_buf[1] == 's') {
         extern int g_out_to_term;
         g_out_to_term = 1;
@@ -1135,6 +1138,41 @@ static void cmd_execute(void) {
         unsigned short bps = sb[11] | (sb[12] << 8);
         term_print_int((int)bps);
         term_newline();
+    } else if (cmd_len > 6 && cmd_buf[0]=='m' && cmd_buf[1]=='o' && cmd_buf[2]=='f' &&
+               cmd_buf[3]=='s' && cmd_buf[4]=='f' && cmd_buf[5]=='.') {
+        // mofsf.<fs> [-<ver>] -D<n>   — форматировать диск.
+        // Разбираем: fs = после 'mofsf.', затем флаги.
+        char fsname[8]; int fp = 0;
+        int i = 6;
+        while (cmd_buf[i] && cmd_buf[i] != ' ' && fp < 7) fsname[fp++] = cmd_buf[i++];
+        fsname[fp] = 0;
+        int drv = 0, ver = 16;
+        // Парсим остаток: ищем -D<n> и -<ver>.
+        for (int k = i; k < cmd_len; k++) {
+            if (cmd_buf[k] == '-' && (cmd_buf[k+1]=='D' || cmd_buf[k+1]=='d') &&
+                cmd_buf[k+2] >= '0' && cmd_buf[k+2] <= '9') {
+                drv = cmd_buf[k+2] - '0';
+            } else if (cmd_buf[k] == '-' && cmd_buf[k+1] >= '0' && cmd_buf[k+1] <= '9') {
+                ver = 0; int k2 = k + 1;
+                while (cmd_buf[k2] >= '0' && cmd_buf[k2] <= '9') { ver = ver * 10 + (cmd_buf[k2] - '0'); k2++; }
+            }
+        }
+        // Сравнение имени ФС.
+        int is_msfs = (fsname[0]=='m'&&fsname[1]=='s'&&fsname[2]=='f'&&fsname[3]=='s'&&fsname[4]==0);
+        int is_fat  = (fsname[0]=='f'&&fsname[1]=='a'&&fsname[2]=='t'&&fsname[3]==0);
+        term_print("mofsf: formatting D"); term_print_int(drv); term_print("...\n");
+        ata_select(drv); fat_use_drive(drv); msfs_use_drive(drv);
+        int ok = 0;
+        if (is_msfs) { msfs_format(); ok = msfs_probe(); }
+        else if (is_fat) { ok = fat_format(ver); }
+        else { term_print("mofsf: unknown fs (use msfs or fat)\n"); }
+        if (is_msfs || is_fat) {
+            term_print(ok ? "mofsf: done\n" : "mofsf: FAILED\n");
+            // Переинициализировать VFS (переопределить ФС на дисках).
+            vfs_init();
+            desktop_scan();
+            mark_dirty(0, 0, (int)vbe_width(), (int)vbe_height());
+        }
     } else if (cmd_len > 4 && cmd_buf[0]=='r' && cmd_buf[1]=='u' && cmd_buf[2]=='n' && cmd_buf[3]==' ') {
         term_print("running "); term_print(cmd_buf + 4); term_print("...\n");
         int rc = run_program(cmd_buf + 4);
