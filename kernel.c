@@ -1414,7 +1414,7 @@ void kernel_main(void) {
         if (mx != old_mx || my != old_my || changed || dirty_w > 0) {
             render_region(rx, ry, rw, rh);
             draw_cursor_bb(mx, my);
-            fb_flip_rect(rx, ry, rw, rh);
+            fb_flip_rect(rx, ry, rw, rh);   // теперь исправлен
             old_mx = mx; old_my = my;
             dirty_w = 0; dirty_h = 0;
         }

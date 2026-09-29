@@ -199,6 +199,10 @@ void fb_flip_rect(int x, int y, int w, int h) {
         unsigned int bytes = (unsigned int)w * 3u;
         unsigned int dwords = bytes / 4u;
         unsigned int tail = bytes % 4u;
+        // ВАЖНО: сохранить исходные указатели — rep movsl их СДВИГАЕТ,
+        // иначе хвост (tail байт) скопировался бы со сдвигом (баг!).
+        unsigned char* src0 = src;
+        unsigned char* dst0 = dst;
         __asm__ volatile (
             "cld\n\t"
             "rep movsl\n\t"
@@ -206,7 +210,7 @@ void fb_flip_rect(int x, int y, int w, int h) {
             :
             : "memory"
         );
-        for (unsigned int i = 0; i < tail; i++) dst[i] = src[i];
+        for (unsigned int i = 0; i < tail; i++) dst0[dwords * 4u + i] = src0[dwords * 4u + i];
     }
 }
 
@@ -220,6 +224,8 @@ void fb_flip(void) {
         unsigned int bytes = (unsigned int)g_w * 3u;
         unsigned int dwords = bytes / 4u;
         unsigned int tail = bytes % 4u;
+        unsigned char* src0 = src;
+        unsigned char* dst0 = dst;
         __asm__ volatile (
             "cld\n\t"
             "rep movsl\n\t"
@@ -227,8 +233,7 @@ void fb_flip(void) {
             :
             : "memory"
         );
-        // Хвост строки (1-3 байта), если ширина*3 не кратна 4.
-        // Без этого правый край строки не копируется (мусор на экране).
-        for (unsigned int i = 0; i < tail; i++) dst[i] = src[i];
+        // Хвост строки (1-3 байта). Используем ИСХОДНЫЕ указатели (rep их сдвинул).
+        for (unsigned int i = 0; i < tail; i++) dst0[dwords * 4u + i] = src0[dwords * 4u + i];
     }
 }
