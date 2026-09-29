@@ -953,7 +953,13 @@ static int process_events(int handle_kbd) {
             }
         }
         ctx_open = 0;
-        mark_dirty(0, 0, (int)vbe_width(), (int)vbe_height());
+        // После действий меню (создание/refresh) — ПОЛНАЯ перерисовка + полный
+        // flip: частичная давала визуальный «сдвиг», т.к. desktop_scan меняет
+        // раскладку иконок, а fb_flip_rect копировал лишь область курсора.
+        render_region(0, 0, (int)vbe_width(), (int)vbe_height());
+        draw_cursor_bb(mx, my);
+        fb_flip();
+        dirty_w = 0; dirty_h = 0;
         changed = 1;
         prev_left = left;
         return changed;
