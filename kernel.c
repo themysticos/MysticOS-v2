@@ -944,10 +944,17 @@ static int process_events(int handle_kbd) {
                     case CTX_REFRESH: desktop_scan(); break;
                     case CTX_TERM:    run_program("/kernel/SYSPR/TERM.ELF"); break;
                     case CTX_WALL:    run_program("/kernel/SYSPR/WPICK.ELF"); break;
-                    // Создаём на D1 (безопасно, не трогаем системный D0).
-                    // vfs_init() НЕ зовём (перезаход в VFS посреди обработки клика).
-                    case CTX_NEWDIR:  vfs_mkdir("D1:/NEWDIR"); desktop_scan(); break;
-                    case CTX_NEWFILE: vfs_write("D1:/NEW.TXT", "x"); desktop_scan(); break;
+                    // ПРИЧИНА "улёта": fat/msfs write зовут print_string, а он при
+                    // g_out_to_term=0 идёт в console -> пишет в LFB и СКРОЛЛИТ экран.
+                    // На время записи направляем вывод в терминал (буфер, не LFB).
+                    case CTX_NEWDIR: {
+                        extern int g_out_to_term; g_out_to_term = 1;
+                        vfs_mkdir("D1:/NEWDIR");
+                        g_out_to_term = 0; desktop_scan(); break; }
+                    case CTX_NEWFILE: {
+                        extern int g_out_to_term; g_out_to_term = 1;
+                        vfs_write("D1:/NEW.TXT", "x");
+                        g_out_to_term = 0; desktop_scan(); break; }
                     default: break;
                 }
             }
