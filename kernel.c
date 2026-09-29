@@ -834,9 +834,65 @@ static void draw_start_menu(int rx,int ry,int rw,int rh) {
     }
 }
 
+// ============================================================
+// КОНТЕКСТНОЕ МЕНЮ (ПКМ)
+// ============================================================
+static int ctx_open = 0;
+static int ctx_x = 0, ctx_y = 0;
+static int ctx_n = 0;
+static const char* ctx_items[8];
+static int ctx_action[8];   // код действия для пункта
+
+// Коды действий контекстного меню.
+#define CTX_NONE    0
+#define CTX_REFRESH 1
+#define CTX_NEWDIR  2
+#define CTX_TERM    3
+#define CTX_WALL    4
+#define CTX_NEWFILE 5
+#define CTX_RENAME  6
+
+#define CTX_W 150
+#define CTX_IH 22
+
+// Открыть меню с текущим набором пунктов (вызывается из process_events).
+static void ctx_open_at(int x, int y) {
+    ctx_x = x; ctx_y = y; ctx_open = 1;
+    // Базовый набор для рабочего стола.
+    ctx_n = 0;
+    ctx_items[ctx_n] = "Refresh";        ctx_action[ctx_n++] = CTX_REFRESH;
+    ctx_items[ctx_n] = "New folder";     ctx_action[ctx_n++] = CTX_NEWDIR;
+    ctx_items[ctx_n] = "New file";       ctx_action[ctx_n++] = CTX_NEWFILE;
+    ctx_items[ctx_n] = "Terminal";       ctx_action[ctx_n++] = CTX_TERM;
+    ctx_items[ctx_n] = "Wallpaper";      ctx_action[ctx_n++] = CTX_WALL;
+}
+
+static void draw_ctx_menu(int rx,int ry,int rw,int rh) {
+    if (!ctx_open) return;
+    int w = CTX_W, h = ctx_n * CTX_IH + 4;
+    int x = ctx_x, y = ctx_y;
+    // Не вылезать за экран.
+    if (x + w > (int)vbe_width()) x = (int)vbe_width() - w;
+    if (y + h > (int)vbe_height()) y = (int)vbe_height() - h;
+    if (!rects_overlap(rx,ry,rw,rh, x - 3, y - 3, w + 6, h + 6)) return;
+    draw_shadow(x, y, w, h);
+    fb_backbuffer_fill(x, y, w, h, COL_MENU_BG);
+    fb_backbuffer_rect(x, y, w, h, COL_WIN_BORDER);
+    int mx = mouse_x(), my = mouse_y();
+    for (int i = 0; i < ctx_n; i++) {
+        int iy = y + 2 + i * CTX_IH;
+        int hi = (mx >= x + 2 && mx < x + w - 2 && my >= iy && my < iy + CTX_IH);
+        unsigned int bg = hi ? COL_MENU_SEL : COL_MENU_BG;
+        if (hi) fb_backbuffer_fill(x + 2, iy, w - 4, CTX_IH, bg);
+        bb_text(x + 10, iy + 7, ctx_items[i], COL_TEXT, bg);
+    }
+}
+
 static int process_events(int handle_kbd) {
     int mx = mouse_x(), my = mouse_y();
     int left = mouse_left();
+    int right = mouse_right();
+    static int prev_right = 0;
     int changed = 0;
 
     if (handle_kbd) {
@@ -857,7 +913,42 @@ static int process_events(int handle_kbd) {
         }
     }
 
+    // --- Контекстное меню (ПКМ) ---
+    if (right && !prev_right) {
+        ctx_open_at(mx, my);
+        mark_dirty(0, 0, (int)vbe_width(), (int)vbe_height());
+        changed = 1;
+    }
+    prev_right = right;
+
+    // Если меню открыто — сначала обрабатываем клик по нему.
+    if (ctx_open && left && !prev_left) {
+        int w = CTX_W, h = ctx_n * CTX_IH + 4;
+        int x = ctx_x, y = ctx_y;
+        if (x + w > (int)vbe_width()) x = (int)vbe_width() - w;
+        if (y + h > (int)vbe_height()) y = (int)vbe_height() - h;
+        if (mx >= x && mx < x + w && my >= y && my < y + h) {
+            int idx = (my - y - 2) / CTX_IH;
+            if (idx >= 0 && idx < ctx_n) {
+                switch (ctx_action[idx]) {
+                    case CTX_REFRESH: vfs_init(); desktop_scan(); break;
+                    case CTX_TERM:    run_program("/kernel/SYSPR/TERM.ELF"); break;
+                    case CTX_WALL:    run_program("/kernel/SYSPR/WPICK.ELF"); break;
+                    case CTX_NEWDIR:  vfs_mkdir("NEWDIR"); vfs_init(); desktop_scan(); break;
+                    case CTX_NEWFILE: vfs_write("NEW.TXT", " "); vfs_init(); desktop_scan(); break;
+                    default: break;
+                }
+            }
+        }
+        ctx_open = 0;
+        mark_dirty(0, 0, (int)vbe_width(), (int)vbe_height());
+        changed = 1;
+        prev_left = left;
+        return changed;
+    }
+
     if (left && !prev_left) {
+        ctx_open = 0;   // клик вне меню — закрыть его
         int handled = 0;
         int tb_y = (int)vbe_height() - TASKBAR_H;
 
@@ -1209,6 +1300,7 @@ static void render_region(int rx,int ry,int rw,int rh) {
     for (int i = 0; i < MAXWIN; i++) draw_window(&wins[i], rx, ry, rw, rh);
     draw_taskbar_region(rx, ry, rw, rh);
     draw_start_menu(rx, ry, rw, rh);
+    draw_ctx_menu(rx, ry, rw, rh);
 }
 
 static void draw_cursor_bb(int mx, int my) {
@@ -1424,6 +1516,13 @@ void kernel_main(void) {
                 fb_flip_rect(0, fh - TASKBAR_H, fw, TASKBAR_H);
                 if (start_open)
                     fb_flip_rect(sm_x(), sm_y(), SM_W, SM_N * SM_ITEM_H + 4);
+                if (ctx_open) {
+                    int cw = CTX_W, chh = ctx_n * CTX_IH + 4;
+                    int cxm = ctx_x, cym = ctx_y;
+                    if (cxm + cw > fw) cxm = fw - cw;
+                    if (cym + chh > fh) cym = fh - chh;
+                    fb_flip_rect(cxm, cym, cw, chh);
+                }
             }
             old_mx = mx; old_my = my;
             dirty_w = 0; dirty_h = 0;
