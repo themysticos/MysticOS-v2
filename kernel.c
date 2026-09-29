@@ -941,11 +941,13 @@ static int process_events(int handle_kbd) {
             int idx = (my - y - 2) / CTX_IH;
             if (idx >= 0 && idx < ctx_n) {
                 switch (ctx_action[idx]) {
-                    case CTX_REFRESH: vfs_init(); desktop_scan(); break;
+                    case CTX_REFRESH: desktop_scan(); break;
                     case CTX_TERM:    run_program("/kernel/SYSPR/TERM.ELF"); break;
                     case CTX_WALL:    run_program("/kernel/SYSPR/WPICK.ELF"); break;
-                    case CTX_NEWDIR:  vfs_mkdir("NEWDIR"); vfs_init(); desktop_scan(); break;
-                    case CTX_NEWFILE: vfs_write("NEW.TXT", " "); vfs_init(); desktop_scan(); break;
+                    // Создаём на D1 (безопасно, не трогаем системный D0).
+                    // vfs_init() НЕ зовём (перезаход в VFS посреди обработки клика).
+                    case CTX_NEWDIR:  vfs_mkdir("D1:/NEWDIR"); desktop_scan(); break;
+                    case CTX_NEWFILE: vfs_write("D1:/NEW.TXT", "x"); desktop_scan(); break;
                     default: break;
                 }
             }
