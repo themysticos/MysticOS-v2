@@ -532,11 +532,8 @@ void fat_write_path(int base_dir, const char* path, const char* content) {
     ent->first_cluster_high = (unsigned short)((chain[0] >> 16) & 0xFFFF);
     ent->file_size = len2;
     ata_write_sector(ws, buf);
-    print_string("OK: wrote ");
-    print_int(len2);
-    print_string(" bytes to ");
-    print_string(fname);
-    print_string("\n");
+    // Успешная запись НЕ печатает: вывод в консоль (LFB) скроллил экран
+    // (баг «рабочий стол улетает вверх»). Ошибки ниже — печатаются.
 }
 
 // Читает файл целиком в буфер. Возвращает размер или -1.
