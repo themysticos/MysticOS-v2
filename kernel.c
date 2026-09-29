@@ -27,6 +27,26 @@ extern void exec_do_exit(int code);
 
 #define TASKBAR_H 28
 
+// ============================================================
+// ПАЛИТРА (современная тёмная тема). Одна таблица на всю ОС.
+// ============================================================
+#define COL_DESKTOP    FB_RGB(0x1A, 0x1B, 0x26)  // фон рабочего стола (если нет обоев)
+#define COL_WIN_BG     FB_RGB(0x25, 0x26, 0x32)  // тело окна
+#define COL_WIN_BORDER FB_RGB(0x3A, 0x3C, 0x4E)  // рамка окна
+#define COL_TITLE_ACT  FB_RGB(0x2D, 0x4A, 0x7C)  // заголовок активного окна
+#define COL_TITLE_INA  FB_RGB(0x2A, 0x2B, 0x38)  // заголовок неактивного
+#define COL_TEXT       FB_RGB(0xE8, 0xE8, 0xF0)  // основной текст
+#define COL_TEXT_DIM   FB_RGB(0x90, 0x92, 0xA0)  // приглушённый текст
+#define COL_ACCENT     FB_RGB(0x4A, 0x8A, 0xD8)  // акцент (кнопки, выделение)
+#define COL_ACCENT_HI  FB_RGB(0x6A, 0xA8, 0xF0)  // акцент при наведении
+#define COL_SEL        FB_RGB(0x2E, 0x4A, 0x7A)  // фон выделения
+#define COL_TASKBAR    FB_RGB(0x1E, 0x1F, 0x2A)  // фон таскбара
+#define COL_TASKBAR_HI FB_RGB(0x2A, 0x2C, 0x3C)  // кнопка таскбара при наведении
+#define COL_MENU_BG    FB_RGB(0x25, 0x26, 0x34)  // фон меню
+#define COL_MENU_SEL   FB_RGB(0x2D, 0x4A, 0x7C)  // пункт меню при наведении
+#define COL_SHADOW     FB_RGB(0x0A, 0x0A, 0x10)  // тень окна
+#define COL_SEP        FB_RGB(0x38, 0x3A, 0x48)  // разделитель
+
 #define MAXWIN     8
 #define NWIN_SYS   3
 #define PWIN_MAXW  256
@@ -150,6 +170,7 @@ static void mark_dirty(int x, int y, int w, int h) {
 }
 
 static int run_program(const char* name);
+static void draw_shadow(int x, int y, int w, int h);
 static void render_region(int rx, int ry, int rw, int rh);
 static void draw_cursor_bb(int mx, int my);
 static int  process_events(int handle_kbd);
@@ -796,12 +817,20 @@ static void draw_start_menu(int rx,int ry,int rw,int rh) {
     if (!start_open) return;
     int x = sm_x(), y = sm_y();
     int w = SM_W, h = SM_N * SM_ITEM_H + 4;
-    if (!rects_overlap(rx,ry,rw,rh, x, y, w, h)) return;
-    fb_backbuffer_fill(x, y, w, h, FB_RGB(0x28, 0x28, 0x38));
-    fb_backbuffer_rect(x, y, w, h, FB_RGB(0x60, 0x60, 0x80));
+    if (!rects_overlap(rx,ry,rw,rh, x - 4, y - 4, w + 8, h + 8)) return;
+    // Тень меню.
+    draw_shadow(x, y, w, h);
+    // Фон меню.
+    fb_backbuffer_fill(x, y, w, h, COL_MENU_BG);
+    fb_backbuffer_rect(x, y, w, h, COL_WIN_BORDER);
+    // Пункты с hover-подсветкой.
+    int mx = mouse_x(), my = mouse_y();
     for (int i = 0; i < SM_N; i++) {
         int iy = y + 2 + i * SM_ITEM_H;
-        bb_text(x + 12, iy + 6, sm_items[i], FB_RGB(0xE0,0xE0,0xF0), FB_RGB(0x28,0x28,0x38));
+        int hi = (mx >= x + 2 && mx < x + w - 2 && my >= iy && my < iy + SM_ITEM_H);
+        unsigned int bg = hi ? COL_MENU_SEL : COL_MENU_BG;
+        if (hi) fb_backbuffer_fill(x + 2, iy, w - 4, SM_ITEM_H, bg);
+        bb_text(x + 12, iy + 8, sm_items[i], COL_TEXT, bg);
     }
 }
 
@@ -1035,45 +1064,110 @@ static int process_events(int handle_kbd) {
     return changed;
 }
 
+// Тень окна: несколько полупрозрачных смещённых прямоугольников.
+// Дёшево (плоские заливки), даёт ощущение «приподнятости».
+static void draw_shadow(int x, int y, int w, int h) {
+    // Один плотный слой смещён на 4px, полутень на 7px.
+    fb_backbuffer_fill(x + 4, y + 4, w, h, FB_RGB(0x08, 0x08, 0x0E));
+}
+
+// Градиентная заливка по вертикали: от c1 (верх) к c2 (низ).
+static void fill_grad_v(int x, int y, int w, int h, unsigned int c1, unsigned int c2) {
+    for (int yy = 0; yy < h; yy++) {
+        int t = (h > 1) ? (yy * 255 / (h - 1)) : 0;
+        int r = (((c1 >> 16) & 0xFF) * (255 - t) + ((c2 >> 16) & 0xFF) * t) / 255;
+        int g = (((c1 >> 8) & 0xFF) * (255 - t) + ((c2 >> 8) & 0xFF) * t) / 255;
+        int b = ((c1 & 0xFF) * (255 - t) + (c2 & 0xFF) * t) / 255;
+        fb_backbuffer_fill(x, y + yy, w, 1, FB_RGB(r, g, b));
+    }
+}
+
+// Скруглить углы: затереть «уголки» цветом фона (простое сглаживание).
+static void round_corners(int x, int y, int w, int h, unsigned int col) {
+    // Отсекаем по 2 пикселя в каждом углу (радиус 2).
+    fb_backbuffer_pixel(x, y, col);           fb_backbuffer_pixel(x + 1, y, col);
+    fb_backbuffer_pixel(x, y + 1, col);
+    fb_backbuffer_pixel(x + w - 1, y, col);   fb_backbuffer_pixel(x + w - 2, y, col);
+    fb_backbuffer_pixel(x + w - 1, y + 1, col);
+    fb_backbuffer_pixel(x, y + h - 1, col);   fb_backbuffer_pixel(x + 1, y + h - 1, col);
+    fb_backbuffer_pixel(x, y + h - 2, col);
+    fb_backbuffer_pixel(x + w - 1, y + h - 1, col); fb_backbuffer_pixel(x + w - 2, y + h - 1, col);
+    fb_backbuffer_pixel(x + w - 1, y + h - 2, col);
+}
+
 static void draw_window(window_t* w, int rx, int ry, int rw, int rh) {
     if (!w->used || !w->visible) return;
     if (!rects_overlap(rx, ry, rw, rh, w->x - 4, w->y - 4, w->w + 8, w->h + 8)) return;
 
-    fb_backbuffer_fill(w->x + 4, w->y + 4, w->w, w->h, FB_RGB(0x08, 0x10, 0x18));
-    fb_backbuffer_fill(w->x, w->y, w->w, w->h, FB_RGB(0xE0, 0xE0, 0xE8));
+    // Тень.
+    draw_shadow(w->x, w->y, w->w, w->h);
 
-    unsigned int tcol = w->active ? FB_RGB(0x30, 0x60, 0xB0) : FB_RGB(0x60, 0x60, 0x70);
-    fb_backbuffer_fill(w->x, w->y, w->w, 20, tcol);
+    // Тело окна.
+    fb_backbuffer_fill(w->x, w->y, w->w, w->h, COL_WIN_BG);
+
+    // Заголовок: градиент (активный — синий, неактивный — серый).
+    unsigned int t1 = w->active ? COL_TITLE_ACT : COL_TITLE_INA;
+    unsigned int t2 = w->active ? COL_ACCENT : FB_RGB(0x22, 0x23, 0x2E);
+    fill_grad_v(w->x, w->y, w->w, 20, t1, t2);
+
+    // Кнопки окна.
     draw_icon(w->x + w->w - 18, w->y + 4, &ICON_BTN_CLOSE);
     draw_icon(w->x + w->w - 34, w->y + 4, &ICON_BTN_MAX);
     draw_icon(w->x + w->w - 50, w->y + 4, &ICON_BTN_MIN);
-    bb_text(w->x + 8, w->y + 6, w->title, FB_RGB(0xFF,0xFF,0xFF), tcol);
-    fb_backbuffer_rect(w->x, w->y, w->w, w->h, FB_RGB(0x30,0x30,0x40));
 
+    // Заголовок (текст) — по центру заголовка.
+    bb_text(w->x + 8, w->y + 6, w->title, COL_TEXT, t1);
+
+    // Тонкая рамка.
+    fb_backbuffer_rect(w->x, w->y, w->w, w->h, COL_WIN_BORDER);
+
+    // Содержимое.
     if (w->is_program && w->buf) {
-        // Быстрый построчный блит (раньше — вызов функции на каждый пиксель).
         int ch = w->h - 20;
         fb_backbuffer_blit(w->x, w->y + 20, w->buf, w->w, ch, w->w * 3);
     } else if (w->draw_content) {
         w->draw_content(w);
     }
+
+    // (Скругление углов отключено: затирало обои под окном. Вернём с alpha-блендом позже.)
+    (void)round_corners;
 }
 
 static void draw_taskbar_region(int rx,int ry,int rw,int rh) {
     int y = (int)vbe_height() - TASKBAR_H;
-    if (!rects_overlap(rx,ry,rw,rh, 0,y,(int)vbe_width(),TASKBAR_H)) return;
-    fb_backbuffer_fill(0, y, (int)vbe_width(), TASKBAR_H, FB_RGB(0x20,0x20,0x30));
-    fb_backbuffer_line(0, y, (int)vbe_width(), y, FB_RGB(0x50,0x50,0x70));
-    fb_backbuffer_fill(4, y + 4, 60, TASKBAR_H - 8, FB_RGB(0x30,0x60,0xA0));
-    bb_text(14, y + 10, "Start", FB_RGB(0xFF,0xFF,0xFF), FB_RGB(0x30,0x60,0xA0));
-    int bx = 70;
+    int sw = (int)vbe_width();
+    if (!rects_overlap(rx,ry,rw,rh, 0,y,sw,TASKBAR_H)) return;
+    // Градиент фона таскбара.
+    fill_grad_v(0, y, sw, TASKBAR_H, FB_RGB(0x28, 0x2A, 0x38), COL_TASKBAR);
+    fb_backbuffer_line(0, y, sw, y, COL_SEP);
+
+    // Кнопка Start с hover.
+    int mx = mouse_x(), my = mouse_y();
+    int start_hi = (mx >= 4 && mx < 74 && my >= y + 3 && my < y + TASKBAR_H - 3) || start_open;
+    unsigned int sc = start_hi ? COL_ACCENT_HI : COL_ACCENT;
+    fb_backbuffer_fill(4, y + 4, 70, TASKBAR_H - 8, sc);
+    bb_text(12, y + 10, "Start", COL_TEXT, sc);
+
+    // Кнопки свёрнутых окон.
+    int bx = 80;
     for (int i = 0; i < MAXWIN; i++) {
         if (!wins[i].used || !wins[i].minimized) continue;
-        fb_backbuffer_fill(bx, y + 4, 90, TASKBAR_H - 8, FB_RGB(0x40,0x40,0x58));
-        bb_text(bx + 6, y + 10, wins[i].title, FB_RGB(0xE0,0xE0,0xF0), FB_RGB(0x40,0x40,0x58));
-        bx += 96;
+        int hi = (mx >= bx && mx < bx + 100 && my >= y + 3 && my < y + TASKBAR_H - 3);
+        unsigned int bc = hi ? COL_TASKBAR_HI : FB_RGB(0x33, 0x35, 0x46);
+        fb_backbuffer_fill(bx, y + 4, 100, TASKBAR_H - 8, bc);
+        bb_text(bx + 8, y + 10, wins[i].title, COL_TEXT, bc);
+        bx += 106;
     }
-    bb_text((int)vbe_width() - 90, y + 10, "MysticOS 2", FB_RGB(0xC0,0xC0,0xD0), FB_RGB(0x20,0x20,0x30));
+
+    // Счётчик секунд справа (тики / 100). Позже — RTC-часы.
+    unsigned int tsec = timer_ticks() / 100;
+    char clk[16]; int cp = 0; clk[cp++] = '[';
+    char nb[12]; int np = 0; unsigned int tv = tsec;
+    if (tv == 0) nb[np++] = '0';
+    while (tv) { nb[np++] = '0' + (tv % 10); tv /= 10; }
+    while (np) clk[cp++] = nb[--np];
+    clk[cp++] = ']'; clk[cp] = 0;
+    bb_text(sw - 60, y + 10, clk, COL_TEXT_DIM, COL_TASKBAR);
 }
 
 static const unsigned char CUR[19][12] = {
@@ -1090,7 +1184,7 @@ static const unsigned char CUR[19][12] = {
 // fallback: сплошная синяя заливка (как было раньше).
 static void wall_blit_region(int rx, int ry, int rw, int rh) {
     if (!g_wall_on || !g_wall) {
-        fb_backbuffer_fill(rx, ry, rw, rh, FB_RGB(0x10, 0x30, 0x50));
+        fb_backbuffer_fill(rx, ry, rw, rh, COL_DESKTOP);
         return;
     }
     // Копируем построчно только нужный прямоугольник из буфера обоев.
