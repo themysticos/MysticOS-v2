@@ -1414,7 +1414,17 @@ void kernel_main(void) {
         if (mx != old_mx || my != old_my || changed || dirty_w > 0) {
             render_region(rx, ry, rw, rh);
             draw_cursor_bb(mx, my);
-            fb_flip_rect(rx, ry, rw, rh);   // теперь исправлен
+            fb_flip_rect(rx, ry, rw, rh);
+            // ВАЖНО: render_region рисует таскбар и меню ЦЕЛИКОМ (по всей
+            // ширине), но fb_flip_rect скопировал только область курсора.
+            // Копируем таскбар и меню ПОЛНОСТЬЮ (иначе Start/меню не обновятся).
+            {
+                int fh = (int)vbe_height();
+                int fw = (int)vbe_width();
+                fb_flip_rect(0, fh - TASKBAR_H, fw, TASKBAR_H);
+                if (start_open)
+                    fb_flip_rect(sm_x(), sm_y(), SM_W, SM_N * SM_ITEM_H + 4);
+            }
             old_mx = mx; old_my = my;
             dirty_w = 0; dirty_h = 0;
         }
