@@ -42,7 +42,10 @@ vbe.o: vbe.c
 bmp.o: bmp.c bmp.h
 	$(GCC) $(CFLAGS) -c $< -o $@
 
-vfs.o: vfs.c fs.h fat.h
+vfs.o: vfs.c fs.h fat.h msfs.h
+	$(GCC) $(CFLAGS) -c $< -o $@
+
+msfs.o: msfs.c msfs.h ata.h
 	$(GCC) $(CFLAGS) -c $< -o $@
 
 font.o: font.c
@@ -87,7 +90,7 @@ term.o: term.c
 exec.o: exec.c
 	$(GCC) $(CFLAGS) -c $< -o $@
 
-$(ELF): entry.o switch.o kernel.o task.o paging.o paging_asm.o pmem.o vbe.o bmp.o vfs.o font.o console.o idt.o pic.o io.o cursor.o icons.o icons_gen.o ata.o fat.o kprint.o term.o exec.o
+$(ELF): entry.o switch.o kernel.o task.o paging.o paging_asm.o pmem.o vbe.o bmp.o vfs.o msfs.o font.o console.o idt.o pic.o io.o cursor.o icons.o icons_gen.o ata.o fat.o kprint.o term.o exec.o
 	$(LD) $(LDFLAGS) -o $@ $^
 
 $(BIN): $(ELF)
