@@ -1413,7 +1413,10 @@ static void cmd_execute(void) {
 }
 
 int exec_run(const unsigned char* image, unsigned int size, const mystic_api_t* api);
-static unsigned char prog_buf[256 * 1024];
+// prog_buf вынесен из .bss в верхнюю RAM: 256 КБ в .bss приближали её конец
+// к стеку ядра (0x90000) — риск коллизии при глубоких вызовах ("улёт").
+#define PROG_BUF_ADDR 0x02A00000u
+static unsigned char* prog_buf = (unsigned char*)PROG_BUF_ADDR;
 
 // Защита от реентрантности: пока программа работает, повторный run_program
 // (например, из рекурсивного process_events по всё ещё нажатой мыши) запрещён.
@@ -1426,7 +1429,7 @@ static int run_program(const char* name) {
     // Ограничение "одна программа" снято: каждая задача изолирована (своя PD).
     // prog_buf используется только на время загрузки — это безопасно.
     ata_select(0);
-    int sz = vfs_read_file(name, prog_buf, sizeof(prog_buf));
+    int sz = vfs_read_file(name, prog_buf, 256 * 1024);   // prog_buf = 256 КБ (в верхней RAM)
     if (sz <= 0) return -1;
     while (kb_available()) kb_getchar();
     // Создаём ЗАДАЧУ (своё адресное пространство) вместо блокирующего exec_run.
