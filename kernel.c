@@ -1137,8 +1137,8 @@ static void draw_taskbar_region(int rx,int ry,int rw,int rh) {
     int y = (int)vbe_height() - TASKBAR_H;
     int sw = (int)vbe_width();
     if (!rects_overlap(rx,ry,rw,rh, 0,y,sw,TASKBAR_H)) return;
-    // Градиент фона таскбара.
-    fill_grad_v(0, y, sw, TASKBAR_H, FB_RGB(0x28, 0x2A, 0x38), COL_TASKBAR);
+    // Градиент фона таскбара (заметный: светлее сверху).
+    fill_grad_v(0, y, sw, TASKBAR_H, FB_RGB(0x3A, 0x3D, 0x52), FB_RGB(0x16, 0x17, 0x20));
     fb_backbuffer_line(0, y, sw, y, COL_SEP);
 
     // Кнопка Start с hover.
@@ -1395,6 +1395,20 @@ void kernel_main(void) {
                 g_term_cursor_on = !g_term_cursor_on;
                 mark_dirty(wins[twin].x - 4, wins[twin].y - 4, wins[twin].w + 8, wins[twin].h + 8);
             }
+        }
+
+        // ВСЕГДА включаем таскбар (низ экрана) в область перерисовки:
+        // иначе hover кнопки Start/окон «залипает» при уходе мыши.
+        {
+            int full_h = (int)vbe_height();
+            int tby = full_h - TASKBAR_H - 2;   // чуть выше таскбара (рамка)
+            if (ry < tby) { rh = full_h - ry; }         // расширить до низа
+            else { ry = tby; rh = full_h - tby; }        // область только таскбар
+        }
+        if (start_open) {
+            // Меню тоже перерисовываем (hover пунктов).
+            int sy = sm_y();
+            if (sy < ry) { rh += ry - sy; ry = sy; }
         }
 
         if (mx != old_mx || my != old_my || changed || dirty_w > 0) {
