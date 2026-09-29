@@ -608,6 +608,24 @@ static int api_fs_write(const char* path, const char* content) {
     return vfs_write(path, content);
 }
 
+// API: форматировать диск (drive 0/1). fs: 0=FAT, 1=MSFS. 1/0.
+// ВНИМАНИЕ: уничтожает данные на диске. После — переопределяем VFS.
+static int api_format(int drive, int fs, int version) {
+    if (drive < 0 || drive > 1) return 0;
+    ata_select(drive);
+    fat_use_drive(drive);
+    msfs_use_drive(drive);
+    int ok = 0;
+    if (fs == 1) { msfs_format(); ok = msfs_probe(); }
+    else { ok = fat_format(version); }
+    if (ok) {
+        vfs_init();          // переопределить ФС на дисках
+        desktop_scan();      // обновить иконки (если форматировали D0)
+        mark_dirty(0, 0, (int)vbe_width(), (int)vbe_height());
+    }
+    return ok;
+}
+
 static unsigned int api_screen_w(void) { return vbe_width(); }
 static unsigned int api_screen_h(void) { return vbe_height(); }
 
@@ -762,7 +780,8 @@ static mystic_api_t g_api = {
     api_run_program_arg,
     api_get_arg,
     api_window_image,
-    api_fs_write
+    api_fs_write,
+    api_format
 };
 
 static int start_open = 0;

@@ -84,6 +84,11 @@ typedef struct {
     // Записать текстовый файл (строка до '\0'). Перезаписывает существующий.
     // Возвращает 1 при успехе, 0 при ошибке. Пустой текст не пишется.
     int  (*fs_write)(const char* path, const char* content);
+
+    // --- Форматирование диска (v2, в конец — ABI сохранён) ---
+    // drive: 0/1 (D0/D1). fs: 0=FAT, 1=MSFS. version: для FAT (12/16/32).
+    // Возвращает 1 при успехе, 0 при ошибке. ВНИМАНИЕ: стирает диск!
+    int  (*format)(int drive, int fs, int version);
 } mystic_api_t;
 
 #endif

@@ -75,6 +75,8 @@ static void cmd_exec(void) {
     putc_('\n');
     if (streq(cmd, "help")) {
         prints("commands: help, ls, cat <f>, run <f>, ver, clear\n");
+        prints("  mofsf.msfs -D1   - format D1 as MSFS\n");
+        prints("  mofsf.fat -16 -D1 - format D1 as FAT16\n");
     } else if (streq(cmd, "ls")) {
         char names[64 * 13]; int isd[64]; unsigned int sz[64];
         int n = g->fs_list("/", names, isd, sz, 64);
@@ -84,6 +86,25 @@ static void cmd_exec(void) {
         int n = g->fs_read(cmd + 4, fb, sizeof(fb));
         if (n > 0) { for (int i = 0; i < n; i++) putc_(fb[i]); prints("\n"); }
         else prints("cat: cannot read\n");
+    } else if (cmd[0]=='m'&&cmd[1]=='o'&&cmd[2]=='f'&&cmd[3]=='s'&&cmd[4]=='f'&&cmd[5]=='.') {
+        // mofsf.<fs> [-<ver>] -D<n>
+        char fsname[8]; int fp = 0, i = 6;
+        while (cmd[i] && cmd[i] != ' ' && fp < 7) fsname[fp++] = cmd[i++];
+        fsname[fp] = 0;
+        int drv = 0, ver = 16;
+        for (int k = i; cmd[k]; k++) {
+            if (cmd[k]=='-' && (cmd[k+1]=='D'||cmd[k+1]=='d') && cmd[k+2]>='0' && cmd[k+2]<='9') drv = cmd[k+2]-'0';
+            else if (cmd[k]=='-' && cmd[k+1]>='0' && cmd[k+1]<='9') { ver = 0; int k2 = k+1; while (cmd[k2]>='0'&&cmd[k2]<='9') { ver = ver*10 + (cmd[k2]-'0'); k2++; } }
+        }
+        int is_msfs = (fsname[0]=='m'&&fsname[1]=='s'&&fsname[2]=='f'&&fsname[3]=='s'&&fsname[4]==0);
+        int is_fat  = (fsname[0]=='f'&&fsname[1]=='a'&&fsname[2]=='t'&&fsname[3]==0);
+        if ((is_msfs || is_fat) && g->format) {
+            prints("formatting D"); printi(drv); prints("...\n");
+            int ok = g->format(drv, is_msfs ? 1 : 0, ver);
+            prints(ok ? "done\n" : "FAILED\n");
+        } else {
+            prints("usage: mofsf.msfs -D1 | mofsf.fat -16 -D1\n");
+        }
     } else if (cmd[0]=='r' && cmd[1]=='u' && cmd[2]=='n' && cmd[3]==' ') {
         prints("running...\n");
         int rc = g->run_program(cmd + 4);
