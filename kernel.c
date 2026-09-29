@@ -16,6 +16,16 @@
 #include "bmp.h"
 #include "fs.h"
 #include "msfs.h"
+#include "gdt.h"
+
+// ============================================================
+// SYSCALL (int 0x80) — заглушка. Этап ring3.
+// ============================================================
+void syscall_handler(unsigned int* regs) {
+    // regs[8] = eax (номер syscall) в структуре pusha+сегменты.
+    // Пока — просто печатаем номер (позже — диспетчер).
+    (void)regs;
+}
 
 void put_char(char c);
 void print_string(const char* s);
@@ -1432,6 +1442,7 @@ void kernel_main(void) {
     icons_layout();
     windows_init();
     task_init();   // ядро = задача 0; задачи ELF получают своё адресное пространство
+    gdt_init_all();   // GDT с ring3 + TSS (этап ring3)
     idt_init();
     pic_init();
     pit_init(100);

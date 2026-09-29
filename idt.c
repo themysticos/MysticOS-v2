@@ -91,5 +91,10 @@ void idt_init(void) {
     idt_set_gate(30, (unsigned int)isr30);
     idt_set_gate(31, (unsigned int)isr31);
 
+    // Системный вызов: int 0x80 (DPL=3 — доступен из ring3).
+    extern void isr128(void);
+    idt_set_gate(0x80, (unsigned int)isr128);
+    g_idt[0x80].flags = 0xEE;   // present, DPL=3, 32-bit interrupt gate
+
     idt_load((unsigned int)&g_idt_ptr);
 }

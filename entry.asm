@@ -54,6 +54,53 @@ exec_do_exit:
     mov esp, [g_exec_ret_esp]
     ret
 
+; ============ GDT (ring0 + ring3 + TSS) ============
+; Перезагружаем GDT из ядра (загрузчик дал только ring0).
+; Селекторы: 0x08=ring0 code, 0x10=ring0 data, 0x18=ring3 code,
+;            0x20=ring3 data, 0x28=TSS.
+global gdt_init
+section .data
+gdt_start:
+    dq 0                                    ; 0x00 null
+    dw 0xFFFF, 0x0000, 0x9A00, 0x00CF       ; 0x08 ring0 code
+    dw 0xFFFF, 0x0000, 0x9200, 0x00CF       ; 0x10 ring0 data
+    dw 0xFFFF, 0x0000, 0xFA00, 0x00CF       ; 0x18 ring3 code (DPL=3)
+    dw 0xFFFF, 0x0000, 0xF200, 0x00CF       ; 0x20 ring3 data (DPL=3)
+    ; TSS descriptor (0x28) — заполним базой/лимитом в gdt_init
+    dw 0, 0, 0x8900, 0x0000
+gdt_end:
+gdt_desc:
+    dw gdt_end - gdt_start - 1
+    dd gdt_start
+section .text
+
+; void gdt_init(unsigned int tss_base, unsigned int tss_limit)
+gdt_init:
+    mov eax, [esp+4]        ; tss_base
+    mov edx, [esp+8]        ; tss_limit
+    ; Заполняем TSS-дескриптор (смещение 0x28 от gdt_start, 8-й байт = 5*8=40)
+    mov ecx, gdt_start + 40
+    mov [ecx], dx           ; limit low (2 байта)
+    shr edx, 16
+    and edx, 0x0F
+    mov [ecx+6], dl         ; limit high (4 бита, гранулярность 0)
+    mov [ecx+2], ax         ; base low
+    shr eax, 16
+    mov [ecx+4], al         ; base mid
+    shr eax, 8
+    mov [ecx+7], al         ; base high
+    ; Загрузить GDT и перезагрузить сегменты.
+    lgdt [gdt_desc]
+    mov ax, 0x10
+    mov ds, ax
+    mov es, ax
+    mov fs, ax
+    mov gs, ax
+    mov ss, ax
+    jmp 0x08:.reload
+.reload:
+    ret
+
 ; ============ IDT ============
 global idt_load
 idt_load:
@@ -131,6 +178,32 @@ ISR_NOERR 28
 ISR_NOERR 29
 ISR_NOERR 30
 ISR_NOERR 31
+
+; ============ SYSCALL (int 0x80) ============
+; Вход: eax=номер, ebx/ecx/edx/esi/edi = аргументы. Выход: eax.
+; Пока — заглушка (передаёт в C-обработчик syscall_handler).
+extern syscall_handler
+global isr128
+isr128:
+    pusha
+    push ds
+    push es
+    push fs
+    push gs
+    mov ax, 0x10
+    mov ds, ax
+    mov es, ax
+    mov fs, ax
+    mov gs, ax
+    push esp
+    call syscall_handler
+    add esp, 4
+    pop gs
+    pop fs
+    pop es
+    pop ds
+    popa
+    iret
 
 ; ============ IRQ ============
 global irq_common
