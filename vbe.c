@@ -174,6 +174,29 @@ void fb_backbuffer_blit(int dx, int dy, const unsigned char* src, int w, int h, 
     }
 }
 
+// Блит с key-цветом (прозрачность). Пиксели источника, совпадающие с key,
+// НЕ копируются — на их месте остаётся то, что уже было в backbuffer
+// (нижний слой). key — 0xRRGGBB, в источнике байты идут B,G,R.
+void fb_backbuffer_blit_key(int dx, int dy, const unsigned char* src, int w, int h, int stride, unsigned int key) {
+    if (!g_bb) return;
+    unsigned char kb = key & 0xFF, kg = (key >> 8) & 0xFF, kr = (key >> 16) & 0xFF;
+    int sy0 = 0, sx0 = 0;
+    if (dx < 0) { sx0 = -dx; w += dx; dx = 0; }
+    if (dy < 0) { sy0 = -dy; h += dy; dy = 0; }
+    if (dx + w > g_w) w = g_w - dx;
+    if (dy + h > g_h) h = g_h - dy;
+    if (w <= 0 || h <= 0) return;
+    for (int y = 0; y < h; y++) {
+        unsigned char* d = g_bb + ((unsigned int)(dy + y) * (unsigned int)g_w + (unsigned int)dx) * 3u;
+        const unsigned char* s = src + (unsigned int)(sy0 + y) * (unsigned int)stride + (unsigned int)sx0 * 3u;
+        for (int x = 0; x < w; x++) {
+            if (s[0] == kb && s[1] == kg && s[2] == kr) { s += 3; d += 3; continue; }
+            d[0] = s[0]; d[1] = s[1]; d[2] = s[2];
+            s += 3; d += 3;
+        }
+    }
+}
+
 void fb_backbuffer_rect(int x, int y, int w, int h, unsigned int color) {
     fb_backbuffer_line(x, y, x + w - 1, y, color);
     fb_backbuffer_line(x, y + h - 1, x + w - 1, y + h - 1, color);

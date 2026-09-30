@@ -137,7 +137,7 @@ $(IMAGE): $(BOOT) $(BIN) $(WINAPP_ELF) $(SYSPR_ELFS)
 	python3 tools/fatput.py $@ examples/editor.elf EDITOR.ELF kernel/SYSPR 2>/dev/null || true
 	# Дефолтные обои: BG.BMP (если файл подготовлен в корне проекта).
 	# Отсутствие файла НЕ ломает сборку (|| true) — фон останется fallback.
-	python3 tools/fatput.py $@ BG.BMP BG.BMP kernel/BG 2>/dev/null || true
+	python3 tools/fatput.py $@ BG.BMP BG.BMP kernel/BG/ 2>/dev/null || true
 
 # Второй диск (D1): простой FAT16-образ с парой тестовых файлов.
 $(IMAGE2):

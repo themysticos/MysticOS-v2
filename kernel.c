@@ -77,6 +77,10 @@ typedef struct window_s {
     int grab_dx, grab_dy;
     int rx, ry, rw, rh;
     void (*draw_content)(struct window_s* w);
+    // Статичный текст: ОТДЕЛЬНЫЙ буфер (нижний слой). Анимация в buf его
+    // не портит. Если buf залит WIN_TRANSPARENT — сквозь него виден этот текст.
+    unsigned char* text_buf;
+    int text_buf_idx;              // индекс буфера в пуле или -1
 } window_t;
 
 static window_t wins[MAXWIN];
@@ -84,15 +88,18 @@ static int win_next_id = 100;
 
 // Буферы окон: независимый пул, чтобы номер слота окна не влиял на буфер.
 // Буфер k лежит по 0x06000000 + k * PWIN_MAXW * PWIN_MAXH * 3.
+// Пул = 2*MAXWIN: на окно ДВА буфера — w->buf (анимация, верх) и
+// w->text_buf (статичный текст, низ).
+#define BUF_POOL (MAXWIN * 2)
 static unsigned int g_buf_used = 0;   // битовая маска занятых буферов
 
 static int buf_alloc(void) {
-    for (int k = 0; k < MAXWIN; k++)
+    for (int k = 0; k < BUF_POOL; k++)
         if (!(g_buf_used & (1u << k))) { g_buf_used |= (1u << k); return k; }
     return -1;
 }
 static void buf_free(int k) {
-    if (k >= 0 && k < MAXWIN) g_buf_used &= ~(1u << k);
+    if (k >= 0 && k < BUF_POOL) g_buf_used &= ~(1u << k);
 }
 static unsigned char* buf_ptr(int k) {
     return (unsigned char*)(0x06000000u + (unsigned int)k * PWIN_MAXW * PWIN_MAXH * 3u);
@@ -102,10 +109,12 @@ static unsigned char* buf_ptr(int k) {
 // ОБОИ РАБОЧЕГО СТОЛА (слой 0 под окнами)
 // ============================================================
 // Буфер обоев: 800x600x24bpp = 1.44 МБ, фиксированный адрес выше буферов окон
-// (те кончаются ~0x612C000) и НИЖЕ pmem (0x08000000).
-#define WALL_BUF_ADDR  0x06130000u
+// и НИЖЕ pmem (0x08000000).
+// КАРТА: 16 буферов окон по 0x25800 -> 0x06000000..0x06258000;
+//        обои 0x06260000..0x063BF900; src 0x063D0000..0x08000000.
+#define WALL_BUF_ADDR  0x06260000u
 // Буфер под СЫРОЙ файл BMP (читаем с диска целиком), до pmem. ~29 МБ лимит.
-#define WALL_SRC_ADDR  0x062A0000u
+#define WALL_SRC_ADDR  0x063D0000u
 #define WALL_SRC_MAX   (0x08000000u - WALL_SRC_ADDR)
 
 static unsigned char* g_wall = 0;      // буфер обоев (или 0, если не готов)
@@ -453,6 +462,7 @@ static void content_about(window_t* w) {
 static void windows_init(void) {
     for (int i = 0; i < MAXWIN; i++) {
         wins[i].used = 0; wins[i].buf = 0; wins[i].buf_idx = -1; wins[i].draw_content = 0;
+        wins[i].text_buf = 0; wins[i].text_buf_idx = -1;
         wins[i].active = 0; wins[i].visible = 0;
         wins[i].maximized = 0; wins[i].minimized = 0; wins[i].is_program = 0;
     }
@@ -470,7 +480,8 @@ static void open_sys_win(const char* title) {
             if (wins[i].used) continue;
             window_t* w = &wins[i];
             w->used = 1; w->id = win_next_id++;
-            w->buf = 0; w->is_program = 0;
+            w->buf = 0; w->buf_idx = -1; w->is_program = 0;
+            w->text_buf = 0; w->text_buf_idx = -1;
             w->maximized = 0; w->minimized = 0; w->visible = 0; w->active = 0;
             win_set_title(w, title);
             if (title[0] == 'T') {
@@ -509,11 +520,21 @@ static int api_window_create(const char* title, int x, int y, int cw, int ch) {
         w->draw_content = 0;
         w->grab_dx = 0; w->grab_dy = 0;
         win_set_title(w, title);
+        // Буфер анимации (верхний слой). Изначально залит WIN_TRANSPARENT:
+        // пока программа не нарисует — окно "прозрачно", виден text_buf/фон.
         int bk = buf_alloc();
         if (bk < 0) { w->used = 0; return -1; }   // нет свободных буферов
         w->buf_idx = bk;
         w->buf = buf_ptr(bk);
-        for (int k = 0; k < cw * ch * 3; k++) w->buf[k] = 0x00;
+        for (int k = 0; k < cw * ch; k++) {
+            w->buf[k*3+0] = 0xFF; w->buf[k*3+1] = 0x00; w->buf[k*3+2] = 0xFF; // WIN_TRANSPARENT (B,G,R)
+        }
+        // Буфер статичного текста (нижний слой). Зануляем — изначально пуст.
+        int tk = buf_alloc();
+        if (tk < 0) { buf_free(bk); w->used = 0; return -1; }
+        w->text_buf_idx = tk;
+        w->text_buf = buf_ptr(tk);
+        for (int k = 0; k < cw * ch * 3; k++) w->text_buf[k] = 0x00;
         int nid = w->id;
         bring_to_front(i);
         for (int j = 0; j < MAXWIN; j++) wins[j].active = 0;
@@ -584,11 +605,53 @@ static void api_window_clear(int id, unsigned int color) {
     mark_dirty(0, 0, (int)vbe_width(), (int)vbe_height());
 }
 
+// Пиксель в text_buf (нижний слой), с обрезкой по клиентской области.
+static void textbuf_pixel(window_t* w, int x, int y, unsigned int color) {
+    int ch = w->h - 20;
+    if (x < 0 || y < 0 || x >= w->w || y >= ch) return;
+    unsigned char* p = w->text_buf + (y * w->w + x) * 3;
+    p[0] = color & 0xFF; p[1] = (color >> 8) & 0xFF; p[2] = (color >> 16) & 0xFF;
+}
+
+// API: статичный текст в НИЖНИЙ слой. Анимация в buf накрывает его там, где
+// нарисована; где buf залит WIN_TRANSPARENT — текст виден. Рисуются только
+// непрозрачные пиксели букв (фон не трогается), вызовы накапливаются.
+static void api_window_static_text(int id, int x, int y, const char* s, unsigned int fg) {
+    int idx = win_by_id(id);
+    if (idx < 0) return;
+    window_t* w = &wins[idx];
+    if (!w->text_buf) return;
+    int px = x;
+    while (*s) {
+        const unsigned char* g = font_glyph8x8(*s++);
+        for (int row = 0; row < 8; row++) {
+            unsigned char bits = g[row];
+            for (int col = 0; col < 8; col++)
+                if (bits & (0x80 >> col)) textbuf_pixel(w, px + col, y + row, fg);
+        }
+        px += 8;
+    }
+    mark_dirty(w->x - 4, w->y - 4, w->w + 8, w->h + 8);
+}
+
+// API: очистить нижний (текстовый) слой окна.
+static void api_window_static_clear(int id) {
+    int idx = win_by_id(id);
+    if (idx < 0) return;
+    window_t* w = &wins[idx];
+    if (!w->text_buf) return;
+    int ch = w->h - 20;
+    for (int k = 0; k < w->w * ch * 3; k++) w->text_buf[k] = 0x00;
+    mark_dirty(w->x - 4, w->y - 4, w->w + 8, w->h + 8);
+}
+
 static void api_window_close(int id) {
     int idx = win_by_id(id);
     if (idx < 0) return;
     buf_free(wins[idx].buf_idx);
+    buf_free(wins[idx].text_buf_idx);
     wins[idx].used = 0; wins[idx].buf = 0; wins[idx].buf_idx = -1;
+    wins[idx].text_buf = 0; wins[idx].text_buf_idx = -1;
     mark_dirty(0, 0, (int)vbe_width(), (int)vbe_height());
 }
 
@@ -713,6 +776,12 @@ static int api_window_image(int id, int x, int y, int w, int h, const char* path
 }
 
 static int g_last_cmx = -100, g_last_cmy = -100;
+
+// Последняя НАРИСОВАННАЯ позиция курсора. Обновляется в draw_cursor_bb ЛЮБЫМ
+// кодом (главный цикл, yield программы, process_events). Область перерисовки
+// обязана её покрывать — иначе старый курсор остаётся как "мусор" (особенно
+// когда курсор рисовал не главный цикл и old_mx/old_my успели устареть).
+static int g_cur_drawn_x = -1000, g_cur_drawn_y = -1000;
 static unsigned int g_yield_frames = 0;
 static unsigned int g_yield_fps = 60;
 static unsigned int g_fps_tick = 0;
@@ -766,6 +835,15 @@ static void api_yield_impl(void) {
         if (g_last_cmx + 12 > rx2) rx2 = g_last_cmx + 12;
         if (g_last_cmy + 19 > ry2) ry2 = g_last_cmy + 19;
     }
+    // Плюс последняя НАРИСОВАННАЯ позиция курсора (её мог нарисовать главный
+    // цикл или process_events — тогда g_last_cmx её не знает, и без этого
+    // остаётся "мусор" от курсора).
+    if (g_cur_drawn_x > -500) {
+        if (g_cur_drawn_x < rx) rx = g_cur_drawn_x;
+        if (g_cur_drawn_y < ry) ry = g_cur_drawn_y;
+        if (g_cur_drawn_x + 12 > rx2) rx2 = g_cur_drawn_x + 12;
+        if (g_cur_drawn_y + 19 > ry2) ry2 = g_cur_drawn_y + 19;
+    }
     if (dirty_w > 0 && dirty_h > 0) {
         if (dirty_x < rx) rx = dirty_x;
         if (dirty_y < ry) ry = dirty_y;
@@ -812,7 +890,9 @@ static mystic_api_t g_api = {
     api_get_arg,
     api_window_image,
     api_fs_write,
-    api_format
+    api_format,
+    api_window_static_text,   // в КОНЕЦ — ABI v2 сохранён
+    api_window_static_clear
 };
 
 static int start_open = 0;
@@ -1237,10 +1317,17 @@ static void draw_window(window_t* w, int rx, int ry, int rw, int rh) {
     // Тонкая рамка.
     fb_backbuffer_rect(w->x, w->y, w->w, w->h, COL_WIN_BORDER);
 
-    // Содержимое.
+    // Содержимое: СНАЧАЛА статичный текст (нижний слой), ПОТОМ buf (анимация).
+    // buf блитится С ПРОЗРАЧНОСТЬЮ по WIN_TRANSPARENT: где программа залила
+    // фон "прозрачным" цветом, виден текст из text_buf; где нарисован объект —
+    // он текст накрывает.
+    if (w->is_program && w->text_buf) {
+        int ch = w->h - 20;
+        fb_backbuffer_blit(w->x, w->y + 20, w->text_buf, w->w, ch, w->w * 3);
+    }
     if (w->is_program && w->buf) {
         int ch = w->h - 20;
-        fb_backbuffer_blit(w->x, w->y + 20, w->buf, w->w, ch, w->w * 3);
+        fb_backbuffer_blit_key(w->x, w->y + 20, w->buf, w->w, ch, w->w * 3, WIN_TRANSPARENT);
     } else if (w->draw_content) {
         w->draw_content(w);
     }
@@ -1335,6 +1422,9 @@ static void draw_cursor_bb(int mx, int my) {
             if (m == 1) fb_backbuffer_pixel(mx + col, my + row, 0xFFFFFF);
             else if (m == 2) fb_backbuffer_pixel(mx + col, my + row, 0x000000);
         }
+    // Запомнить, куда курсор нарисован: любой отрисовщик обязан быть учтён
+    // при вычислении области перерисовки (иначе остаётся "мусор").
+    g_cur_drawn_x = mx; g_cur_drawn_y = my;
 }
 
 static void cmd_prompt(void) { term_print("[/]> "); cmd_len = 0; cmd_buf[0] = 0; }
@@ -1495,8 +1585,18 @@ void kernel_main(void) {
 
         int rx = mx < old_mx ? mx : old_mx;
         int ry = my < old_my ? my : old_my;
-        int rw = (mx > old_mx ? mx : old_mx) - rx + 12;
-        int rh = (my > old_my ? my : old_my) - ry + 19;
+        int rw = (mx > old_mx ? mx : old_mx) - rx + 13;  // +1 запас: правый край курсора
+        int rh = (my > old_my ? my : old_my) - ry + 20;  // +1 запас: нижний край курсора
+        // Включить в область и ПОСЛЕДНЮЮ НАРИСОВАННУЮ позицию курсора:
+        // её мог нарисовать не главный цикл (yield программы / process_events),
+        // и old_mx/old_my её не знают. Без этого старый курсор = "мусор".
+        if (g_cur_drawn_x > -500) {
+            int cx2 = g_cur_drawn_x + 12, cy2 = g_cur_drawn_y + 19;
+            if (g_cur_drawn_x < rx) { rw += rx - g_cur_drawn_x; rx = g_cur_drawn_x; }
+            if (g_cur_drawn_y < ry) { rh += ry - g_cur_drawn_y; ry = g_cur_drawn_y; }
+            if (cx2 > rx + rw) rw = cx2 - rx;
+            if (cy2 > ry + rh) rh = cy2 - ry;
+        }
 
         if (dirty_w > 0 && dirty_h > 0) {
             if (dirty_x < rx) { rw += rx - dirty_x; rx = dirty_x; }
