@@ -463,6 +463,10 @@ static void api_window_rect(int id, int x, int y, int ww, int hh, unsigned int c
 }
 
 static void api_window_text(int id, int x, int y, const char* s, unsigned int fg, unsigned int bg) {
+    // Если bg == WIN_TRANSPARENT — рисуем ТОЛЬКО пиксели букв,
+    // фон под ними НЕ трогаем. Так текст можно накладывать на любой
+    // уже нарисованный фон/градиент без чёрной плашки под буквами.
+    int transparent = (bg == WIN_TRANSPARENT);
     int px = x;
     while (*s) {
         const unsigned char* g = font_glyph8x8(*s++);
@@ -470,6 +474,7 @@ static void api_window_text(int id, int x, int y, const char* s, unsigned int fg
             unsigned char bits = g[row];
             for (int col = 0; col < 8; col++) {
                 int on = (bits & (0x80 >> col)) ? 1 : 0;
+                if (!on && transparent) continue;   // фон прозрачный — пропускаем
                 api_window_pixel(id, px + col, y + row, on ? fg : bg);
             }
         }

@@ -116,18 +116,18 @@ $(WINAPP_ELF): examples/winapp.c api.h
 SYSPR = about files term wpick imgview editor
 SYSPR_ELFS = $(addprefix examples/,$(addsuffix .elf,$(SYSPR)))
 
-# msyscall.c — stub-библиотека для ring3. Линкуется с программами,
-# которые перешли на ms_api() (вместо api из ядра). Список таких
-# программ — MSYSCALL_PROGS. Сейчас только about.
-MSYSCALL_PROGS = about
+# Программы на новом API (include/mysticos.h): все вызовы — static inline
+# в заголовках, каждый делает int 0x80 напрямую. msyscall.c больше не нужен.
+# Список — MSYS_PROGS.
+MSYS_PROGS = about
 
-# Явные правила для stub-программ (перебивают pattern-rule ниже).
-$(addprefix examples/,$(addsuffix .elf,$(MSYSCALL_PROGS))): examples/%.elf: examples/%.c examples/msyscall.c api.h dll/msyscall.h
-	gcc $(ELFCFLAGS) $< examples/msyscall.c -o $@
+$(addprefix examples/,$(addsuffix .elf,$(MSYS_PROGS))): examples/%.elf: examples/%.c include/mysticos.h dll/msyscall.h
+	gcc $(ELFCFLAGS) -Iinclude $< -o $@
 
-# Старые программы (без stub): пока работают в ring0, упадут в ring3 — это ок.
+# Старые программы (api->): пока работают в ring0, в ring3 упадут.
 examples/%.elf: examples/%.c api.h
 	gcc $(ELFCFLAGS) $< -o $@
+
 
 $(IMAGE): $(BOOT) $(BIN) $(WINAPP_ELF) $(SYSPR_ELFS)
 	# Один FAT16-образ: 64 зарезервированных сектора под загрузчик+ядро.
