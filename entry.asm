@@ -54,6 +54,31 @@ exec_do_exit:
     mov esp, [g_exec_ret_esp]
     ret
 
+; ============================================================
+; RING3 ШАГ 1 (только диагностика).
+; task_enter_ring3 — тонкая обёртка. Вся логика в C (task.c):
+; печатает entry/top/api в консоль и вызывает entry(api) в ring0.
+; ИРЕТ НЕ ДЕЛАЕМ — программа работает как раньше.
+;
+; void task_enter_ring3(unsigned int entry, unsigned int ustack_top,
+;                       unsigned int api)
+global task_enter_ring3
+extern task_enter_ring3_c
+task_enter_ring3:
+    ; cdecl: [esp+4]=entry [esp+8]=ustack_top [esp+12]=api
+    ; ВАЖНО: esp сдвигается после каждого push. Берём аргументы
+    ; СНАЧАЛА в регистры, потом пушим — иначе все три push прочитают
+    ; одно и то же [esp+12].
+    mov eax, [esp+4]      ; entry
+    mov ecx, [esp+8]      ; ustack_top
+    mov edx, [esp+12]     ; api
+    push edx              ; 3-й аргумент (api)
+    push ecx              ; 2-й (ustack_top)
+    push eax              ; 1-й (entry)
+    call task_enter_ring3_c
+    add esp, 12
+    ret
+
 ; ============ GDT (ring0 + ring3 + TSS) ============
 ; Перезагружаем GDT из ядра (загрузчик дал только ring0).
 ; Селекторы: 0x08=ring0 code, 0x10=ring0 data, 0x18=ring3 code,

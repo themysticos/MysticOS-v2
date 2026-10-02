@@ -1472,6 +1472,10 @@ void kernel_main(void) {
     if (!vbe_init()) { for (;;) __asm__ volatile ("hlt"); }
     diag_mark(1, 'B');   // vbe_init вернул успех
     fb_backbuffer_init();
+    // console_init ОБЯЗАТЕЛЕН: без него console.cols/rows = 0, и первый же
+    // console_putc сделает while(cy>=0) scroll() — сдвинет ВЕСЬ LFB вверх
+    // на 8 строк. Так у нас «улетал рабочий стол» при put_char/print_hex.
+    console_init();
     // Буфер обоев: фиксированный адрес в верхней RAM (см. WALL_BUF_ADDR).
     g_wall = (unsigned char*)WALL_BUF_ADDR;
     g_wall_on = 0;   // загрузим дефолт ниже, после инициализации ATA
