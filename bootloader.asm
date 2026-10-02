@@ -16,6 +16,10 @@ boot_code:
     mov sp, 0x7C00
     mov [boot_drive], dl
 
+    ; --- ДИАГНОСТИКА: '1' = наши сектор-0 выполняются. ---
+    mov al, '1'
+    call putc_bios
+
     ; --- VBE: установить режим 800x600x24 с линейным framebuffer ---
     mov dword [0x9000], 0
     mov ax, 0x4F01
@@ -23,12 +27,12 @@ boot_code:
     mov di, 0x8000
     int 0x10
     cmp ax, 0x004F
-    jne vbe_skip
+    jne vbe_fail
     mov ax, 0x4F02
     mov bx, 0x4115
     int 0x10
     cmp ax, 0x004F
-    jne vbe_skip
+    jne vbe_fail
     mov eax, [0x8000 + 0x28]
     mov [0x9000], eax
     mov ax, [0x8000 + 0x10]
@@ -37,7 +41,13 @@ boot_code:
     mov [0x9006], ax
     mov ax, [0x8000 + 0x14]
     mov [0x9008], ax
-vbe_skip:
+    mov al, 'V'           ; маркер: VBE ok
+    call putc_bios
+    jmp vbe_done
+vbe_fail:
+    mov al, 'v'           ; маркер: VBE провал (текстовый режим)
+    call putc_bios
+vbe_done:
 
     ; --- Загрузка ядра: сектор 2 и далее (LBA 1+) на 0x10000 ---
     mov word [kern_sectors], 240
@@ -78,6 +88,10 @@ read_loop:
     jmp read_loop
 
 read_done:
+    mov al, 'K'           ; маркер: ядро прочитано
+    call putc_bios
+    mov al, 'J'           ; маркер: сейчас прыжок в ядро (до cli!)
+    call putc_bios
     in al, 0x92
     or al, 2
     out 0x92, al
@@ -102,6 +116,18 @@ print_str:
     int 0x10
     jmp .l
 .d: ret
+
+; Печать символа (AL) через BIOS teletype. Сохраняет ВСЕ регистры.
+putc_bios:
+    pusha
+    push ds
+    push es
+    mov ah, 0x0E
+    int 0x10
+    pop es
+    pop ds
+    popa
+    ret
 
 boot_drive db 0
 kern_sectors dw 0

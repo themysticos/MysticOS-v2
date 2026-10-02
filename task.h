@@ -22,6 +22,13 @@ typedef struct task_s {
     unsigned int pd_phys;    // физ. адрес PD задачи (CR3)
     unsigned int code_phys;  // физ. блок кода (4 МБ)
     unsigned int stack_phys; // физ. блок стека (4 МБ)
+    // want_exit: задача должна завершиться на следующем api->yield().
+    // Ставится, когда ядро закрывает окно, ПРИНАДЛЕЖАЩЕЕ этой задаче
+    // (см. process_events в kernel.c). Раньше был глобальный g_exit_request,
+    // который убивал СЛУЧАЙНУЮ задачу (ту, что сейчас зовёт yield), а не ту,
+    // чьё окно закрыли.
+    int want_exit;
+    int exit_request_code;
 } task_t;
 
 void task_init(void);                       // инициализация подсистемы
@@ -48,5 +55,13 @@ int  task_any_alive(void);
 
 // Освободить ресурсы завершённых задач (память, PD). Зовётся из ядра.
 void task_reap(void);
+
+// Пометить задачу как "должна завершиться на следующем yield".
+// Используется, когда ядро закрывает окно, принадлежащее этой задаче.
+// 1 при успехе, 0 если задача не найдена.
+int task_request_exit(int task_id, int code);
+
+// Текущая задача должна завершиться? Для вызова из api_yield_impl.
+int task_current_wants_exit(int* out_code);
 
 #endif

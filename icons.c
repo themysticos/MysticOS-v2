@@ -9,21 +9,6 @@ extern const unsigned int btn_close_pixels[144];
 extern const unsigned int btn_max_pixels[144];
 extern const unsigned int btn_min_pixels[144];
 
-// Заглушка для My PC, если нет своей PNG.
-static unsigned int mypc_fallback[1024];
-static int mypc_fb_ready = 0;
-static void make_mypc_fallback(void) {
-    for (int y = 0; y < 32; y++)
-        for (int x = 0; x < 32; x++) {
-            unsigned int c = 0x3050A0;
-            if (x < 2 || y < 2 || x >= 30 || y >= 30) c = 0x101010;
-            if (x >= 6 && x <= 25 && y >= 8 && y <= 20) c = 0x4080E0;  // "экран"
-            if (x >= 12 && x <= 19 && y >= 22 && y <= 25) c = 0x808080; // "подставка"
-            mypc_fallback[y*32+x] = 0xFF000000u | c;
-        }
-    mypc_fb_ready = 1;
-}
-
 // Простая иконка-обои (32x32): рамка-картина, "небо", "солнце", "горы".
 // Рисуется кодом, чтобы не зависеть от PNG. ARGB, alpha=0 = прозрачно.
 static unsigned int wall_fallback[1024];

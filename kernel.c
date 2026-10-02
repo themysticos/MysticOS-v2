@@ -17,6 +17,7 @@
 #include "fs.h"
 #include "msfs.h"
 #include "gdt.h"
+#include "dll/msdll.h"
 
 // ============================================================
 // SYSCALL (int 0x80) — заглушка. Этап ring3.
@@ -59,8 +60,8 @@ extern void exec_do_exit(int code);
 
 #define MAXWIN     8
 #define NWIN_SYS   3
-#define PWIN_MAXW  256
-#define PWIN_MAXH  200
+#define PWIN_MAXW  800
+#define PWIN_MAXH  600
 
 typedef struct window_s {
     int used;
@@ -81,6 +82,16 @@ typedef struct window_s {
     // не портит. Если buf залит WIN_TRANSPARENT — сквозь него виден этот текст.
     unsigned char* text_buf;
     int text_buf_idx;              // индекс буфера в пуле или -1
+    // dirty: 1 = содержимое окна изменилось с прошлой перерисовки.
+    // Ставится любой api_window_pixel/fill/text/... и сбрасывается
+    // в api_yield_impl после успешной отрисовки. Нужен, чтобы НЕ
+    // перерисовывать окна, которые не менялись (иначе при maximize
+    // на весь экран перерисовывался весь экран каждый кадр -> лаги).
+    int dirty;
+    // task_id: какая задача владеет окном. Нужно, чтобы при закрытии
+    // окна крестиком помечать на выход ИМЕННО ЕЁ, а не ту, что случайно
+    // сейчас в api_yield (старый баг g_exit_request убивал чужую задачу).
+    int task_id;
 } window_t;
 
 static window_t wins[MAXWIN];
@@ -110,11 +121,16 @@ static unsigned char* buf_ptr(int k) {
 // ============================================================
 // Буфер обоев: 800x600x24bpp = 1.44 МБ, фиксированный адрес выше буферов окон
 // и НИЖЕ pmem (0x08000000).
-// КАРТА: 16 буферов окон по 0x25800 -> 0x06000000..0x06258000;
-//        обои 0x06260000..0x063BF900; src 0x063D0000..0x08000000.
-#define WALL_BUF_ADDR  0x06260000u
-// Буфер под СЫРОЙ файл BMP (читаем с диска целиком), до pmem. ~29 МБ лимит.
-#define WALL_SRC_ADDR  0x063D0000u
+// НОВАЯ КАРТА (PWIN_MAXW/H = 800x600):
+//   16 буферов окон по 800*600*3 = 0x15F900
+//     -> 0x06000000 .. 0x075F9000 (~23 МБ, ~6 PDE: 24..29)
+//   обои 0x07600000..0x0775F900
+//   src  0x07760000..0x08000000 (~8.6 МБ под сырой BMP)
+// ВАЖНО: paging_task_pd_alloc копирует всю ядровую PD, поэтому новые
+// PDE (24..29) автоматически identity во всех задачах.
+#define WALL_BUF_ADDR  0x07600000u
+// Буфер под СЫРОЙ файл BMP (читаем с диска целиком), до pmem. ~8.6 МБ лимит.
+#define WALL_SRC_ADDR  0x07760000u
 #define WALL_SRC_MAX   (0x08000000u - WALL_SRC_ADDR)
 
 static unsigned char* g_wall = 0;      // буфер обоев (или 0, если не готов)
@@ -150,10 +166,6 @@ static int win_by_id(int id) {
     return -1;
 }
 
-static int in_title(window_t* w, int mx, int my) {
-    return mx >= w->x && mx < w->x + w->w && my >= w->y && my < w->y + 20;
-}
-
 static void bring_to_front(int idx) {
     if (idx < 0 || idx >= MAXWIN - 1) return;
     window_t tmp = wins[idx];
@@ -173,7 +185,6 @@ static int find_win(const char* title) {
 
 static int drag_win = -1;
 static int prev_left = 0;
-static volatile int g_exit_request = 0;
 
 static int dirty_x = 0, dirty_y = 0, dirty_w = 0, dirty_h = 0;
 static void mark_dirty(int x, int y, int w, int h) {
@@ -336,172 +347,29 @@ static int icon_hit(int i, int mx, int my) {
            my >= dicons[i].y && my < dicons[i].y + 32;
 }
 
-#define FMAX 64
-static char f_names[FMAX * 13];
-static int  f_isdir[FMAX];
-static unsigned int f_sizes[FMAX];
-static int  f_count = -1;
-static char g_files_path[128] = "/";   // текущий каталог эксплорера
-
-static int files_at_root(void) { return g_files_path[0] == '/' && g_files_path[1] == 0; }
-
-static void files_reload(void) {
-    ata_select(0);
-    f_count = fat_read_dir(0, g_files_path, f_names, f_isdir, f_sizes, FMAX);
-    if (f_count < 0) f_count = 0;
-}
-
-static void files_render(int x, int y, int w, int h) {
-    if (f_count < 0) files_reload();
-    fb_backbuffer_fill(x, y, w, h, FB_RGB(0x18, 0x18, 0x22));
-    int row_h = 16;
-    int rows = h / row_h;
-    // Заголовок с текущим путём.
-    bb_text(x + 4, y + 2, g_files_path, FB_RGB(0x80,0xC0,0xFF), FB_RGB(0x18,0x18,0x22));
-    fb_backbuffer_line(x, y + 12, x + w, y + 12, FB_RGB(0x40,0x40,0x50));
-    // Если не корень — строка ".." (выход наверх).
-    int special = files_at_root() ? 0 : 1;
-    if (special) {
-        bb_text(x + 6, y + 16, "..", FB_RGB(0xFF,0xC0,0x60), FB_RGB(0x18,0x18,0x22));
-    }
-    if (f_count == 0 && !special) {
-        bb_text(x + 6, y + 16, "(empty)", FB_RGB(0xA0,0xA0,0xB0), FB_RGB(0x18,0x18,0x22));
-        return;
-    }
-    int maxrows = rows - 1 - special;
-    for (int i = 0; i < f_count && i < maxrows; i++) {
-        int ry = y + 16 + (i + special) * row_h;
-        unsigned int fgc = f_isdir[i] ? FB_RGB(0xFF,0xE0,0x60) : FB_RGB(0xE0,0xE0,0xF0);
-        bb_text(x + 6, ry, f_names + i * 13, fgc, FB_RGB(0x18,0x18,0x22));
-        if (!f_isdir[i]) {
-            char sz[16]; int v = (int)f_sizes[i], p = 0;
-            if (v == 0) sz[p++] = '0';
-            char tmp[12]; int t = 0;
-            while (v) { tmp[t++] = '0' + (v % 10); v /= 10; }
-            while (t) sz[p++] = tmp[--t];
-            sz[p] = 0;
-            int sx = x + 6 + 13 * 8;
-            bb_text(sx, ry, sz, FB_RGB(0x80,0x80,0x90), FB_RGB(0x18,0x18,0x22));
-        }
-    }
-}
-
-// Что под курсором в окне Files:
-//   -2 = строка ".." (наверх),  -1 = ничего,  >=0 = индекс файла.
-// Геометрия совпадает с files_render: заголовок 16px, затем строки по 16px.
-static int files_pick(window_t* w, int mx, int my) {
-    int lx = mx - (w->x + 6);
-    int ly = my - (w->y + 26 + 16);
-    if (lx < 0 || lx >= w->w - 12) return -1;
-    if (ly < 0) return -1;
-    int row = ly / 16;
-    int special = files_at_root() ? 0 : 1;
-    if (special && row == 0) return -2;   // ".."
-    int idx = row - special;
-    if (idx < 0 || idx >= f_count) return -1;
-    return idx;
-}
-
-// Собрать полный путь к элементу текущего каталога в out (buf 160).
-static void files_full_path(const char* name, char* out) {
-    int n = 0; while (g_files_path[n] && n < 150) { out[n] = g_files_path[n]; n++; }
-    if (n > 0 && out[n-1] != '/') out[n++] = '/';
-    for (int k = 0; name[k] && n < 158; k++) out[n++] = name[k];
-    out[n] = 0;
-}
-
-// Войти в каталог: добавить компонент к текущему пути.
-static void files_enter(const char* name) {
-    int n = 0; while (g_files_path[n]) n++;
-    if (n > 0 && g_files_path[n-1] != '/') { if (n < 126) g_files_path[n++] = '/'; }
-    for (int k = 0; name[k] && n < 126; k++) g_files_path[n++] = name[k];
-    g_files_path[n] = 0;
-    f_count = -1;   // перечитать
-}
-
-// Выйти на уровень выше (обрезать последний компонент).
-static void files_go_up(void) {
-    int n = 0; while (g_files_path[n]) n++;
-    if (n <= 1) { g_files_path[0] = '/'; g_files_path[1] = 0; f_count = -1; return; }
-    if (g_files_path[n-1] == '/') n--;          // хвостовой слэш
-    while (n > 1 && g_files_path[n-1] != '/') n--;
-    if (n <= 1) { g_files_path[0] = '/'; g_files_path[1] = 0; }
-    else g_files_path[n-1] = 0;
-    f_count = -1;
-}
-
-// Двойной клик по файлу в окне Files.
-static unsigned int g_files_last_tick = 0;
-static int g_files_last_idx = -1;
+// (files-логика удалена из ядра: файловый менеджер теперь полностью
+//  реализован в FILES.ELF через API (fs_list/fs_read/run_program_arg).
+//  Ядру не нужно дублировать навигацию по ФС — это ответственность программы.)
 
 // Мигание курсора терминала: период ~0.5с (50 тиков по 10мс).
 static unsigned int g_term_cursor_tick = 0;
 static int g_term_cursor_on = 0;
 
-static void content_terminal(window_t* w) {
-    term_set_area(w->x + 4, w->y + 24, w->w - 8, w->h - 28);
-    term_render();
-    // Курсор ввода виден только когда окно терминала активно.
-    // Фазу мигания (g_term_cursor_on) переключает главный цикл по таймеру,
-    // а здесь лишь рисуем текущее состояние — иначе мигание зависело бы
-    // от того, есть ли события (мышь/клавиатура).
-    if (w->active) term_draw_cursor(g_term_cursor_on);
-}
-
-static void content_files(window_t* w) {
-    files_render(w->x + 6, w->y + 26, w->w - 12, w->h - 32);
-}
-
-static void content_about(window_t* w) {
-    unsigned int bg = FB_RGB(0xE0,0xE0,0xE8);
-    bb_text(w->x + 10, w->y + 30, "MysticOS 2",        FB_RGB(0x20,0x20,0x40), bg);
-    bb_text(w->x + 10, w->y + 48, "Graphics edition", FB_RGB(0x40,0x40,0x60), bg);
-    bb_text(w->x + 10, w->y + 64, "C + NASM, VBE 24bpp", FB_RGB(0x40,0x40,0x60), bg);
-}
+// (draw_content удалён: все окна теперь программные — рисуют сами через API.
+//  Ветка "else if (w->draw_content)" в draw_window оставлена как задел на
+//  будущие не-ELF системные окна.)
 
 static void windows_init(void) {
     for (int i = 0; i < MAXWIN; i++) {
         wins[i].used = 0; wins[i].buf = 0; wins[i].buf_idx = -1; wins[i].draw_content = 0;
+        wins[i].dirty = 0;
+        wins[i].task_id = 0;
         wins[i].text_buf = 0; wins[i].text_buf_idx = -1;
         wins[i].active = 0; wins[i].visible = 0;
         wins[i].maximized = 0; wins[i].minimized = 0; wins[i].is_program = 0;
     }
-    // НИЧЕГО не создаём. Все окна (в т.ч. системные) создаются по требованию
-    // функцией open_sys_win() при открытии из иконки/меню.
-}
-
-// Открыть системное окно по заголовку. Если его ещё нет — СОЗДАТЬ в свободном
-// слоте (геометрия и content — по типу). Идемпотентно: повторный вызов просто
-// показывает существующее и делает его активным.
-static void open_sys_win(const char* title) {
-    int wi = find_win(title);
-    if (wi < 0) {
-        for (int i = 0; i < MAXWIN; i++) {
-            if (wins[i].used) continue;
-            window_t* w = &wins[i];
-            w->used = 1; w->id = win_next_id++;
-            w->buf = 0; w->buf_idx = -1; w->is_program = 0;
-            w->text_buf = 0; w->text_buf_idx = -1;
-            w->maximized = 0; w->minimized = 0; w->visible = 0; w->active = 0;
-            win_set_title(w, title);
-            if (title[0] == 'T') {
-                w->x = 80;  w->y = 80;  w->w = 320; w->h = 200; w->draw_content = content_terminal;
-                // Первое создание терминала: задать область и напечатать приветствие.
-                term_set_area(w->x + 4, w->y + 24, w->w - 8, w->h - 28);
-                term_print("MysticOS 2 terminal\nType 'help' for commands.\n\n");
-                term_print("[/]> ");
-            }
-            else if (title[0] == 'F') { w->x = 420; w->y = 140; w->w = 300; w->h = 180; w->draw_content = content_files; }
-            else { w->x = 200; w->y = 320; w->w = 260; w->h = 150; w->draw_content = content_about; }
-            wi = i;
-            break;
-        }
-        if (wi < 0) return;   // нет свободных слотов
-    }
-    wins[wi].visible = 1;
-    wins[wi].minimized = 0;
-    for (int j = 0; j < MAXWIN; j++) wins[j].active = (j == wi) ? 1 : 0;
-    mark_dirty(wins[wi].x - 4, wins[wi].y - 4, wins[wi].w + 8, wins[wi].h + 8);
+    // НИЧЕГО не создаём. Все окна создаются по требованию:
+    // ELF-программы — через api_window_create из api_run_program_arg/run_program.
 }
 
 static int api_window_create(const char* title, int x, int y, int cw, int ch) {
@@ -519,6 +387,8 @@ static int api_window_create(const char* title, int x, int y, int cw, int ch) {
         w->maximized = 0; w->minimized = 0; w->visible = 1;
         w->draw_content = 0;
         w->grab_dx = 0; w->grab_dy = 0;
+        w->dirty = 1;   // первый кадр нарисовать
+        w->task_id = task_current();   // кто владеет окном
         win_set_title(w, title);
         // Буфер анимации (верхний слой). Изначально залит WIN_TRANSPARENT:
         // пока программа не нарисует — окно "прозрачно", виден text_buf/фон.
@@ -526,7 +396,10 @@ static int api_window_create(const char* title, int x, int y, int cw, int ch) {
         if (bk < 0) { w->used = 0; return -1; }   // нет свободных буферов
         w->buf_idx = bk;
         w->buf = buf_ptr(bk);
-        for (int k = 0; k < cw * ch; k++) {
+        // Заливаем ВЕСЬ буфер PWIN_MAXW*PWIN_MAXH (не только клиентскую часть
+        // cw*ch): при maximize окно растягивается до экрана, и область за
+        // пределами cw*ch должна быть WIN_TRANSPARENT, а не мусор.
+        for (int k = 0; k < PWIN_MAXW * PWIN_MAXH; k++) {
             w->buf[k*3+0] = 0xFF; w->buf[k*3+1] = 0x00; w->buf[k*3+2] = 0xFF; // WIN_TRANSPARENT (B,G,R)
         }
         // Буфер статичного текста (нижний слой). Зануляем — изначально пуст.
@@ -534,7 +407,7 @@ static int api_window_create(const char* title, int x, int y, int cw, int ch) {
         if (tk < 0) { buf_free(bk); w->used = 0; return -1; }
         w->text_buf_idx = tk;
         w->text_buf = buf_ptr(tk);
-        for (int k = 0; k < cw * ch * 3; k++) w->text_buf[k] = 0x00;
+        for (int k = 0; k < PWIN_MAXW * PWIN_MAXH * 3; k++) w->text_buf[k] = 0x00;
         int nid = w->id;
         bring_to_front(i);
         for (int j = 0; j < MAXWIN; j++) wins[j].active = 0;
@@ -567,8 +440,12 @@ static void api_window_pixel(int id, int x, int y, unsigned int color) {
     window_t* w = &wins[idx];
     int ch = w->h - 20;
     if (x < 0 || y < 0 || x >= w->w || y >= ch) return;
-    unsigned char* p = w->buf + (y * w->w + x) * 3;
+    // ВАЖНО: stride всегда PWIN_MAXW, а не w->w. При maximize w->w меняется
+    // на 800, но буфер был нарисован со stride 256 (или другим). Если читать
+    // его с текущим w->w — содержимое «смазывается». PWIN_MAXW — фиксирован.
+    unsigned char* p = w->buf + (y * PWIN_MAXW + x) * 3;
     p[0] = color & 0xFF; p[1] = (color >> 8) & 0xFF; p[2] = (color >> 16) & 0xFF;
+    w->dirty = 1;   // через эту функцию идут fill/rect/text/clear
 }
 
 static void api_window_fill(int id, int x, int y, int ww, int hh, unsigned int color) {
@@ -609,7 +486,8 @@ static void api_window_clear(int id, unsigned int color) {
 static void textbuf_pixel(window_t* w, int x, int y, unsigned int color) {
     int ch = w->h - 20;
     if (x < 0 || y < 0 || x >= w->w || y >= ch) return;
-    unsigned char* p = w->text_buf + (y * w->w + x) * 3;
+    // stride всегда PWIN_MAXW (см. комментарий в api_window_pixel).
+    unsigned char* p = w->text_buf + (y * PWIN_MAXW + x) * 3;
     p[0] = color & 0xFF; p[1] = (color >> 8) & 0xFF; p[2] = (color >> 16) & 0xFF;
 }
 
@@ -631,6 +509,7 @@ static void api_window_static_text(int id, int x, int y, const char* s, unsigned
         }
         px += 8;
     }
+    w->dirty = 1;
     mark_dirty(w->x - 4, w->y - 4, w->w + 8, w->h + 8);
 }
 
@@ -640,8 +519,10 @@ static void api_window_static_clear(int id) {
     if (idx < 0) return;
     window_t* w = &wins[idx];
     if (!w->text_buf) return;
-    int ch = w->h - 20;
-    for (int k = 0; k < w->w * ch * 3; k++) w->text_buf[k] = 0x00;
+    // Очищаем ВЕСЬ буфер (PWIN_MAXW*PWIN_MAXH), а не w->w*ch: stride
+    // фиксирован, и при maximize клиентская часть больше w->w из начала.
+    for (int k = 0; k < PWIN_MAXW * PWIN_MAXH * 3; k++) w->text_buf[k] = 0x00;
+    w->dirty = 1;
     mark_dirty(w->x - 4, w->y - 4, w->w + 8, w->h + 8);
 }
 
@@ -769,9 +650,11 @@ static int api_window_image(int id, int x, int y, int w, int h, const char* path
     int sz = vfs_read_file(path, src, (unsigned int)WALL_SRC_MAX);
     if (sz <= 0) return 0;
     // Указываем декодеру на начало области (x,y) в буфере окна.
-    unsigned char* dst = win->buf + ((unsigned int)y * (unsigned int)win->w + (unsigned int)x) * 3u;
+    // stride фиксирован PWIN_MAXW (см. комментарий в api_window_pixel).
+    unsigned char* dst = win->buf + ((unsigned int)y * (unsigned int)PWIN_MAXW + (unsigned int)x) * 3u;
     int rc = bmp_decode_scaled(src, (unsigned int)sz, dst, w, h);
     (void)cw; (void)ch;
+    if (rc == BMP_OK) win->dirty = 1;
     return (rc == BMP_OK) ? 1 : 0;
 }
 
@@ -791,8 +674,14 @@ static unsigned int g_min_draw_ticks = 1;
 // Реализация вывода кадра. Обёрнута api_yield, которая в конце уступает CPU.
 static void api_yield_impl(void) {
     int changed = process_events(0);
-    // Окно программы закрыли — завершить ЗАДАЧУ (не exec_do_exit: мы теперь задача).
-    if (g_exit_request) { g_exit_request = 0; task_exit(0); }
+    // Закрытие окна крестиком помечает на выход ИМЕННО задачу-владельца
+    // (task_request_exit). Проверяем — не наша ли задача помечена.
+    // Раньше был g_exit_request, который убивал ту задачу, что сейчас
+    // в yield — то есть СЛУЧАЙНУЮ (не ту, чьё окно закрыли).
+    {
+        int code = 0;
+        if (task_current_wants_exit(&code)) task_exit(code);
+    }
 
     unsigned int now = timer_ticks();
     g_yield_frames++;
@@ -823,6 +712,7 @@ static void api_yield_impl(void) {
         fb_flip();
         g_last_cmx = cmx; g_last_cmy = cmy;
         dirty_w = 0; dirty_h = 0;
+        for (int i = 0; i < MAXWIN; i++) wins[i].dirty = 0;
         return;
     }
     // Область перерисовки: СТАРЫЙ и НОВЫЙ курсор + dirty + ВСЕ видимые окна
@@ -850,10 +740,13 @@ static void api_yield_impl(void) {
         if (dirty_x + dirty_w > rx2) rx2 = dirty_x + dirty_w;
         if (dirty_y + dirty_h > ry2) ry2 = dirty_y + dirty_h;
     }
-    // Включаем видимые окна программ — иначе их содержимое (анимация)
-    // не перерисовывается после отпускания мыши.
+    // Включаем видимые окна программ — но ТОЛЬКО те, что помечены dirty
+    // (программа что-то нарисовала с прошлого кадра). Это критично при
+    // maximize: если окно на весь экран и НЕ менялось, не надо гонять
+    // 1.44 МБ через backbuffer каждый кадр — иначе лаги.
     for (int i = 0; i < MAXWIN; i++) {
         if (!wins[i].used || !wins[i].is_program || !wins[i].visible) continue;
+        if (!wins[i].dirty) continue;
         int wx = wins[i].x - 4, wy = wins[i].y - 4;
         int wx2 = wins[i].x + wins[i].w + 4, wy2 = wins[i].y + wins[i].h + 4;
         if (wx < rx) rx = wx;
@@ -866,6 +759,7 @@ static void api_yield_impl(void) {
     fb_flip_rect(rx, ry, rx2 - rx, ry2 - ry);
     g_last_cmx = cmx; g_last_cmy = cmy;
     dirty_w = 0; dirty_h = 0;
+    for (int i = 0; i < MAXWIN; i++) wins[i].dirty = 0;
 }
 
 // Программный yield: показать кадр и уступить CPU другим задачам.
@@ -873,6 +767,51 @@ static void api_yield(void) {
     api_yield_impl();
     task_yield();   // кооперативное переключение (если включено)
 }
+
+// ============================================================
+// msdll: экспорты "mskernel.dll" (виртуальная DLL — не файл).
+// Программы зовут msdll_resolve("mskernel", "...") и получают
+// указатель на соответствующую функцию ядра. Заполняется до g_api,
+// потому что все api_* уже объявлены выше (строки < 878).
+// ============================================================
+static const msdll_builtin_export_t g_mskernel_exports[] = {
+    // Вывод
+    { "put_char",           (unsigned int)&put_char           },
+    { "print_string",       (unsigned int)&print_string       },
+    { "print_int",          (unsigned int)&print_int          },
+    { "print_hex",          (unsigned int)&print_hex          },
+    // Окна
+    { "window_create",      (unsigned int)&api_window_create      },
+    { "window_create_ex",   (unsigned int)&api_window_create_ex   },
+    { "window_pixel",       (unsigned int)&api_window_pixel       },
+    { "window_rect",        (unsigned int)&api_window_rect        },
+    { "window_fill",        (unsigned int)&api_window_fill        },
+    { "window_text",        (unsigned int)&api_window_text        },
+    { "window_clear",       (unsigned int)&api_window_clear       },
+    { "window_close",       (unsigned int)&api_window_close       },
+    { "window_flush",       (unsigned int)&api_window_flush       },
+    { "window_image",       (unsigned int)&api_window_image       },
+    { "window_static_text", (unsigned int)&api_window_static_text },
+    { "window_static_clear",(unsigned int)&api_window_static_clear},
+    // ФС
+    { "fs_list",            (unsigned int)&api_fs_list       },
+    { "fs_read",            (unsigned int)&api_fs_read       },
+    { "fs_size",            (unsigned int)&api_fs_size       },
+    { "fs_exists",          (unsigned int)&api_fs_exists     },
+    { "fs_write",           (unsigned int)&api_fs_write      },
+    { "format",             (unsigned int)&api_format       },
+    // Система
+    { "yield",              (unsigned int)&api_yield        },
+    { "sleep",              (unsigned int)&api_sleep        },
+    { "ticks",              (unsigned int)&timer_ticks      },
+    { "screen_w",           (unsigned int)&api_screen_w     },
+    { "screen_h",           (unsigned int)&api_screen_h     },
+    { "set_wallpaper",      (unsigned int)&api_set_wallpaper},
+    { "get_arg",            (unsigned int)&api_get_arg      },
+    { "run_program",        (unsigned int)&run_program      },
+    { "run_program_arg",    (unsigned int)&api_run_program_arg },
+    { 0, 0 }
+};
 
 static mystic_api_t g_api = {
     MYSTIC_API_VERSION,
@@ -1147,9 +1086,16 @@ static int process_events(int handle_kbd) {
                 if (hit_btn && mx >= cbx && mx < cbx + 12) {
                     mark_dirty(w->x - 4, w->y - 4, w->w + 8, w->h + 8);
                     if (w->is_program) {
+                        // Освобождаем ОБА буфера (раньше text_buf утекал).
                         buf_free(w->buf_idx);
+                        buf_free(w->text_buf_idx);
                         w->used = 0; w->buf = 0; w->buf_idx = -1;
-                        if (!handle_kbd) g_exit_request = 1;
+                        w->text_buf = 0; w->text_buf_idx = -1;
+                        // Помечаем на выход ИМЕННО задачу-владельца окна.
+                        // Раньше был глобальный g_exit_request, который убивал
+                        // ту задачу, что сейчас в api_yield — то есть ЧУЖУЮ.
+                        if (!handle_kbd && w->task_id > 0)
+                            task_request_exit(w->task_id, 0);
                     } else {
                         w->visible = 0;
                     }
@@ -1160,9 +1106,10 @@ static int process_events(int handle_kbd) {
                     if (!w->maximized) {
                         w->rx = w->x; w->ry = w->y; w->rw = w->w; w->rh = w->h;
                         w->x = 0; w->y = 0;
-                        if (!w->is_program) {
-                            w->w = (int)vbe_width(); w->h = (int)vbe_height() - TASKBAR_H;
-                        }
+                        // Растягиваем ЛЮБОЕ окно (буфер теперь 800x600).
+                        // Содержимое программ останется в верхнем-левом углу,
+                        // остальное — WIN_TRANSPARENT -> фон окна.
+                        w->w = (int)vbe_width(); w->h = (int)vbe_height() - TASKBAR_H;
                         w->maximized = 1;
                     } else {
                         w->x = w->rx; w->y = w->ry; w->w = w->rw; w->h = w->rh;
@@ -1177,61 +1124,33 @@ static int process_events(int handle_kbd) {
                     mark_dirty(0, 0, (int)vbe_width(), (int)vbe_height());
                     handled = 1; break;
                 }
-                if (in_title(w, mx, my)) {
+                // Клик в ЛЮБОЕ место окна (кроме кнопок выше) → активировать.
+                // Заголовок — заодно начать drag. Тело — просто фокус.
+                if (mx >= w->x && mx < w->x + w->w &&
+                    my >= w->y && my < w->y + w->h) {
                     bring_to_front(i);
-                    drag_win = MAXWIN - 1;
-                    for (int j = 0; j < MAXWIN; j++) wins[j].active = (j == MAXWIN - 1) ? 1 : 0;
-                    wins[MAXWIN - 1].grab_dx = mx - wins[MAXWIN - 1].x;
-                    wins[MAXWIN - 1].grab_dy = my - wins[MAXWIN - 1].y;
+                    // bring_to_front сдвинул массив — окно теперь в MAXWIN-1.
+                    // Обновляем i, иначе последующий код (Files) использует старый индекс.
+                    i = MAXWIN - 1;
+                    for (int j = 0; j < MAXWIN; j++) wins[j].active = (j == i) ? 1 : 0;
+                    if (my < wins[i].y + 20) {
+                        // клик в заголовок — тащим
+                        drag_win = i;
+                        wins[i].grab_dx = mx - wins[i].x;
+                        wins[i].grab_dy = my - wins[i].y;
+                    } else {
+                        // клик в тело — не тащим
+                        drag_win = -1;
+                    }
                     for (int j = 0; j < MAXWIN; j++)
                         if (wins[j].used && wins[j].visible)
                             mark_dirty(wins[j].x - 4, wins[j].y - 4, wins[j].w + 8, wins[j].h + 8);
-                    handled = 1; break;
-                }
-                // Клик в клиентской области окна Files: выбор файла.
-                // Двойной клик по .ELF — запуск программы.
-                if (!w->is_program && w->title[0] == 'F' && w->title[1] == 'i' &&
-                    my >= w->y + 24 && my < w->y + w->h) {
-                    // Фокус на это окно.
-                    for (int j = 0; j < MAXWIN; j++) wins[j].active = (j == i) ? 1 : 0;
-                    int fi = files_pick(w, mx, my);
-                    if (fi == -2) {
-                        // Двойной клик по ".." — выйти на уровень выше.
-                        unsigned int now = timer_ticks();
-                        if (g_files_last_idx == -2 && (now - g_files_last_tick) < 40) {
-                            files_go_up();
-                            g_files_last_idx = -1;
-                            mark_dirty(0, 0, (int)vbe_width(), (int)vbe_height());
-                        } else { g_files_last_idx = -2; g_files_last_tick = now; }
-                    } else if (fi >= 0) {
-                        unsigned int now = timer_ticks();
-                        if (fi == g_files_last_idx && (now - g_files_last_tick) < 40) {
-                            const char* nm = f_names + fi * 13;
-                            if (f_isdir[fi]) {
-                                // Двойной клик по каталогу — войти в него.
-                                files_enter(nm);
-                                mark_dirty(0, 0, (int)vbe_width(), (int)vbe_height());
-                            } else {
-                                // Двойной клик по .ELF — запустить программу.
-                                int is_elf = 0;
-                                for (int k = 0; nm[k]; k++) {
-                                    if (nm[k] == '.' && (nm[k+1]|0x20) == 'e' && (nm[k+2]|0x20) == 'l' && (nm[k+3]|0x20) == 'f')
-                                        is_elf = 1;
-                                }
-                                if (is_elf) {
-                                    char full[160];
-                                    files_full_path(nm, full);
-                                    run_program(full);
-                                    mark_dirty(0, 0, (int)vbe_width(), (int)vbe_height());
-                                }
-                            }
-                            g_files_last_idx = -1;
-                        } else {
-                            g_files_last_idx = fi;
-                            g_files_last_tick = now;
-                        }
-                    }
-                    handled = 1; break;
+                    handled = 1;
+                    // НЕ break: ниже — обработка кликов по файлам в окне Files.
+                    // Но она проверяет w->title, а w указывает на старый индекс.
+                    // w теперь указывает на то же окно, но по новому индексу (i).
+                    // Никакой Files-специфики ниже нет — вложенные клики
+                    // обрабатывает сама программа FILES.ELF.
                 }
             }
         }
@@ -1321,13 +1240,16 @@ static void draw_window(window_t* w, int rx, int ry, int rw, int rh) {
     // buf блитится С ПРОЗРАЧНОСТЬЮ по WIN_TRANSPARENT: где программа залила
     // фон "прозрачным" цветом, виден текст из text_buf; где нарисован объект —
     // он текст накрывает.
+    // ВАЖНО: stride буфера — PWIN_MAXW * 3 (фиксированный), а не w->w * 3.
+    // При maximize w->w = 800, но пиксели лежат с шагом PWIN_MAXW. Если
+    // передать w->w * 3 — прочитаем со сдвигом и увидим "смазывание".
     if (w->is_program && w->text_buf) {
         int ch = w->h - 20;
-        fb_backbuffer_blit(w->x, w->y + 20, w->text_buf, w->w, ch, w->w * 3);
+        fb_backbuffer_blit(w->x, w->y + 20, w->text_buf, w->w, ch, PWIN_MAXW * 3);
     }
     if (w->is_program && w->buf) {
         int ch = w->h - 20;
-        fb_backbuffer_blit_key(w->x, w->y + 20, w->buf, w->w, ch, w->w * 3, WIN_TRANSPARENT);
+        fb_backbuffer_blit_key(w->x, w->y + 20, w->buf, w->w, ch, PWIN_MAXW * 3, WIN_TRANSPARENT);
     } else if (w->draw_content) {
         w->draw_content(w);
     }
@@ -1536,8 +1458,19 @@ static int run_program(const char* name) {
     return 0;
 }
 
+// --- ДИАГНОСТИКА для реального железа: запись символа прямо в VGA-текст
+// (0xB8000). Работает ВСЕГДА в текстовом режиме, не требует VBE. Увидим,
+// докуда доходит ядро, даже если графика не завелась. Убрать потом.
+static void diag_mark(int pos, char c) {
+    volatile unsigned char* vga = (volatile unsigned char*)0xB8000;
+    vga[pos * 2] = (unsigned char)c;
+    vga[pos * 2 + 1] = 0x0F;   // белый на чёрном
+}
+
 void kernel_main(void) {
+    diag_mark(0, 'A');   // ядро стартовало (до vbe_init)
     if (!vbe_init()) { for (;;) __asm__ volatile ("hlt"); }
+    diag_mark(1, 'B');   // vbe_init вернул успех
     fb_backbuffer_init();
     // Буфер обоев: фиксированный адрес в верхней RAM (см. WALL_BUF_ADDR).
     g_wall = (unsigned char*)WALL_BUF_ADDR;
@@ -1545,6 +1478,7 @@ void kernel_main(void) {
     // Включить страничную адресацию (identity, PSE 4 МБ). Если система уйдёт
     // в перезагрузку/зависание сразу после старта — закомментируй эту строку.
     paging_init();
+    diag_mark(2, 'C');   // paging_init() прошёл (если видим C — paging не убил систему)
     pmem_init();
     icons_init();
     icons_layout();
@@ -1558,6 +1492,12 @@ void kernel_main(void) {
     interrupts_enable();
     task_enable(); // включить кооперативное переключение (api_yield -> task_yield)
 
+    // msdll: инициализация подсистемы DLL + регистрация виртуальной
+    // "mskernel.dll" (не файл — таблица в ядре). Программы смогут
+    // звать msdll_resolve("mskernel", "window_create") и т.п.
+    msdll_init();
+    msdll_register_builtin("mskernel", g_mskernel_exports);
+
     ata_select(0);
     vfs_init();   // определить ФС и выбрать активный драйвер
     desktop_scan();   // иконки файлов из корня диска (кроме /kernel)
@@ -1566,13 +1506,16 @@ void kernel_main(void) {
     // останется fallback-заливка (wall_blit_region).
     wall_load("/kernel/BG/BG.BMP");   // FAT16 8.3: каталог 'BG' (не BACKGROUND)
 
-    // Окон при старте нет — все создаются по требованию. Приветствие терминала
-    // печатается в open_sys_win() при первом создании его окна.
+    // Окон при старте нет — все создаются по требованию (ELF-программы
+    // через api_window_create). Приветствие терминала печатается самой
+    // программой TERM.ELF при первом запуске.
 
+    diag_mark(3, 'D');   // дошли до первой отрисовки (все init прошли)
     render_region(0, 0, (int)vbe_width(), (int)vbe_height());
     int mx = mouse_x(), my = mouse_y();
     draw_cursor_bb(mx, my);
     fb_flip();
+    diag_mark(4, 'E');   // первый fb_flip() выполнен (запись в LFB не упала)
     int old_mx = mx, old_my = my;
 
     for (;;) {

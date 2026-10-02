@@ -21,6 +21,8 @@ void task_init(void) {
     for (int i = 0; i < TASK_MAX; i++) {
         tasks[i].state = TASK_FREE;
         tasks[i].esp = 0; tasks[i].pd_phys = 0; tasks[i].id = 0;
+        tasks[i].want_exit = 0;
+        tasks[i].exit_request_code = 0;
     }
     // Задача 0 = само ядро. Своё адресное пространство — ядровая PD.
     // pd_phys = адрес ядровой PD (НЕ 0!): возврат из программы обязан
@@ -82,6 +84,8 @@ int task_create_elf(const unsigned char* image, unsigned int size, const void* a
     t->id = next_id++;
     t->state = TASK_READY;
     t->exit_code = 0;
+    t->want_exit = 0;
+    t->exit_request_code = 0;
     t->pd_phys = pd;
     t->code_phys = code_phys;
     t->stack_phys = stack_phys;
@@ -116,6 +120,8 @@ void task_reap(void) {
             tasks[i].code_phys = tasks[i].stack_phys = tasks[i].pd_phys = 0;
             tasks[i].state = TASK_FREE;
             tasks[i].id = 0;
+            tasks[i].want_exit = 0;
+            tasks[i].exit_request_code = 0;
         }
     }
 }
@@ -147,6 +153,28 @@ void task_tick(void) {
     tasks[cur].state = TASK_RUN;
     switch_set_cr3(tasks[cur].pd_phys);   // 0 => не менять (ядро)
     switch_context(&tasks[prev].esp, tasks[cur].esp);
+}
+
+// Пометить задачу как "должна завершиться на следующем yield".
+// Используется, когда ядро закрывает окно, принадлежащее этой задаче.
+int task_request_exit(int task_id, int code) {
+    if (task_id <= 0) return 0;   // 0 — ядро, не завершаем
+    for (int i = 1; i < TASK_MAX; i++) {
+        if (tasks[i].state != TASK_FREE && tasks[i].id == task_id) {
+            tasks[i].want_exit = 1;
+            tasks[i].exit_request_code = code;
+            return 1;
+        }
+    }
+    return 0;
+}
+
+// Текущая задача должна завершиться? Для api_yield_impl.
+int task_current_wants_exit(int* out_code) {
+    if (cur <= 0) return 0;
+    if (!tasks[cur].want_exit) return 0;
+    if (out_code) *out_code = tasks[cur].exit_request_code;
+    return 1;
 }
 
 void task_exit(int code) {

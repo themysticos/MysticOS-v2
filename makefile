@@ -93,7 +93,10 @@ term.o: term.c
 exec.o: exec.c
 	$(GCC) $(CFLAGS) -c $< -o $@
 
-$(ELF): entry.o switch.o kernel.o task.o paging.o paging_asm.o pmem.o vbe.o bmp.o vfs.o msfs.o gdt.o font.o console.o idt.o pic.o io.o cursor.o icons.o icons_gen.o ata.o fat.o kprint.o term.o exec.o
+msdll.o: dll/msdll.c dll/msdll.h
+	$(GCC) $(CFLAGS) -c $< -o $@
+
+$(ELF): entry.o switch.o kernel.o task.o paging.o paging_asm.o pmem.o vbe.o bmp.o vfs.o msfs.o gdt.o font.o console.o idt.o pic.o io.o cursor.o icons.o icons_gen.o ata.o fat.o kprint.o term.o exec.o msdll.o
 	$(LD) $(LDFLAGS) -o $@ $^
 
 $(BIN): $(ELF)
@@ -123,6 +126,8 @@ $(IMAGE): $(BOOT) $(BIN) $(WINAPP_ELF) $(SYSPR_ELFS)
 	dd if=$@ of=$(BOOT) bs=1 count=59 skip=3 seek=3 conv=notrunc 2>/dev/null
 	dd if=$(BOOT) of=$@ conv=notrunc 2>/dev/null
 	dd if=$(BIN) of=$@ bs=512 seek=1 conv=notrunc 2>/dev/null
+	# Таблица разделов MBR — чтобы BIOS видел флешку загрузочной.
+	python3 tools/mbr.py $@
 	echo 'MysticOS 2 file system' > /tmp/readme.txt
 	python3 tools/fatput.py $@ /tmp/readme.txt README.TXT 2>/dev/null || true
 	echo 'hello world' > /tmp/hi.txt
@@ -156,6 +161,7 @@ run: $(IMAGE) $(IMAGE2)
 
 clean:
 	rm -f *.o *.elf *.bin *.img
+	rm -f msdll.o
 	rm -f examples/*.elf disk2.img
 
 .PHONY: all clean run

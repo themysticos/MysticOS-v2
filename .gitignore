@@ -20,3 +20,4 @@ __pycache__/
 
 # Второй диск создаётся make
 /disk2.img
+dll/test_msdll
