@@ -34,6 +34,10 @@ static inline void load_tss(void) {
     __asm__ volatile ("ltr %%ax" :: "a"(0x28));
 }
 
+void gdt_set_esp0(unsigned int esp0) {
+    g_tss.esp0 = esp0;
+}
+
 void gdt_init_all(void) {
     // Обнулить TSS.
     unsigned char* p = (unsigned char*)&g_tss;

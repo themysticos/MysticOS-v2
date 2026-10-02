@@ -20,12 +20,15 @@
 #include "dll/msdll.h"
 
 // ============================================================
-// SYSCALL (int 0x80) — заглушка. Этап ring3.
+// SYSCALL (int 0x80) — заглушка в начале файла (настоящий диспетчер
+// см. ниже после всех api_* — он слишком длинный, чтобы держать его тут,
+// а api_* ссылаются на forward-decl). Эта пустышка нужна, чтобы
+// существующий entry.asm:isr128 слинковался.
 // ============================================================
+void syscall_handler_dispatch(unsigned int* raw);   // настоящий — ниже
+
 void syscall_handler(unsigned int* regs) {
-    // regs[8] = eax (номер syscall) в структуре pusha+сегменты.
-    // Пока — просто печатаем номер (позже — диспетчер).
-    (void)regs;
+    syscall_handler_dispatch(regs);
 }
 
 void put_char(char c);
@@ -812,6 +815,88 @@ static const msdll_builtin_export_t g_mskernel_exports[] = {
     { "run_program_arg",    (unsigned int)&api_run_program_arg },
     { 0, 0 }
 };
+
+// ============================================================
+// SYSCALL DISPATCHER (int 0x80) — настоящий.
+// ============================================================
+// Раскладка стека isr128 (entry.asm), после pusha + push ds/es/fs/gs:
+//   raw[0]=gs raw[1]=fs raw[2]=es raw[3]=ds
+//   raw[4]=edi raw[5]=esi raw[6]=ebp raw[7]=esp
+//   raw[8]=ebx raw[9]=edx raw[10]=ecx raw[11]=eax
+//   raw[12]=eip raw[13]=cs raw[14]=eflags raw[15]=useresp raw[16]=ss
+// Аргументы — ebx/ecx/edx/esi/edi. Возврат — raw[11] (eax).
+#include "dll/msyscall.h"
+
+// Шесть аргументов: ebx,ecx,edx,esi,edi,ebp.
+// ebp (a5) — для 6-го аргумента функций (например, color у fill/rect).
+// В cdecl-вызове int 0x80 ebp обычно «занят» как frame pointer, но
+// программы в ring3 — freestanding, могут передавать в нём что угодно,
+// если собственный код не использует ebp как fp (у нас -O2 с fp-omit).
+static int msys_dispatch(unsigned int n,
+                         unsigned int a0, unsigned int a1,
+                         unsigned int a2, unsigned int a3,
+                         unsigned int a4, unsigned int a5) {
+    switch (n) {
+    // ----- Базовые -----
+    case SYS_PUTCHAR:       put_char((char)a0); return 0;
+    case SYS_PRINT_STRING:  print_string((const char*)a0); return 0;
+    case SYS_PRINT_INT:     print_int((int)a0); return 0;
+    case SYS_PRINT_HEX:     print_hex((unsigned int)a0); return 0;
+    case SYS_TICKS:         return (int)timer_ticks();
+    case SYS_SLEEP:         api_sleep(a0); return 0;
+    case SYS_KEY_AVAILABLE: return kb_available();
+    case SYS_KEY_GETCHAR:   return kb_getchar();
+    case SYS_MOUSE_X:       return mouse_x();
+    case SYS_MOUSE_Y:       return mouse_y();
+    case SYS_MOUSE_LEFT:    return mouse_left();
+    case SYS_SCREEN_W:      return (int)vbe_width();
+    case SYS_SCREEN_H:      return (int)vbe_height();
+    case SYS_YIELD:         api_yield(); return 0;
+    // ----- Окна -----
+    case SYS_WINDOW_CREATE:      return api_window_create((const char*)a0, (int)a1, (int)a2, (int)a3, (int)a4);
+    case SYS_WINDOW_CREATE_EX:   return api_window_create_ex((const char*)a0, (int)a1, (int)a2, (int)a3, (int)a4, 0);
+    case SYS_WINDOW_PIXEL:       api_window_pixel((int)a0, (int)a1, (int)a2, a3); return 0;
+    case SYS_WINDOW_RECT:        api_window_rect((int)a0, (int)a1, (int)a2, (int)a3, (int)a4, a5); return 0;
+    case SYS_WINDOW_FILL:        api_window_fill((int)a0, (int)a1, (int)a2, (int)a3, (int)a4, a5); return 0;
+    case SYS_WINDOW_TEXT:        api_window_text((int)a0, (int)a1, (int)a2, (const char*)a3, a4, a5); return 0;
+    case SYS_WINDOW_CLEAR:       api_window_clear((int)a0, a1); return 0;
+    case SYS_WINDOW_CLOSE:       api_window_close((int)a0); return 0;
+    case SYS_WINDOW_FLUSH:       api_window_flush(); return 0;
+    case SYS_WINDOW_IMAGE:       return api_window_image((int)a0, (int)a1, (int)a2, (int)a3, (int)a4, 0);
+    case SYS_WINDOW_STATIC_TEXT: api_window_static_text((int)a0, (int)a1, (int)a2, (const char*)a3, a4); return 0;
+    case SYS_WINDOW_STATIC_CLEAR:api_window_static_clear((int)a0); return 0;
+    // ----- ФС -----
+    case SYS_FS_SIZE:   return api_fs_size((const char*)a0);
+    case SYS_FS_EXISTS: return api_fs_exists((const char*)a0);
+    case SYS_FS_READ:   return api_fs_read((const char*)a0, (unsigned char*)a1, a2);
+    case SYS_FS_WRITE:  return api_fs_write((const char*)a0, (const char*)a1);
+    case SYS_FS_LIST:   return api_fs_list((const char*)a0, (char*)a1, (int*)a2, (unsigned int*)a3, (int)a4);
+    case SYS_FORMAT:    return api_format((int)a0, (int)a1, (int)a2);
+    // ----- Система -----
+    case SYS_RUN_PROGRAM:   return run_program((const char*)a0);
+    case SYS_GET_ARG:       return (int)api_get_arg();
+    case SYS_SET_WALLPAPER: return api_set_wallpaper((const char*)a0);
+    default: return 0;
+    }
+}
+
+void syscall_handler_dispatch(unsigned int* raw) {
+    unsigned int n  = raw[11];
+    unsigned int a0 = raw[8];
+    unsigned int a1 = raw[10];
+    unsigned int a2 = raw[9];
+    unsigned int a3 = raw[5];
+    unsigned int a4 = raw[4];
+    unsigned int a5 = raw[6];   // ebp — 6-й аргумент (color у fill/rect)
+
+    if (n == SYS_EXIT) {
+        task_request_exit(task_current(), (int)a0);
+        raw[11] = 0;
+        return;
+    }
+
+    raw[11] = (unsigned int)msys_dispatch(n, a0, a1, a2, a3, a4, a5);
+}
 
 static mystic_api_t g_api = {
     MYSTIC_API_VERSION,

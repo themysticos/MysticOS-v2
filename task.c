@@ -2,6 +2,7 @@
 #include "task.h"
 #include "paging.h"
 #include "pmem.h"
+#include "gdt.h"
 
 static task_t tasks[TASK_MAX];
 static int cur = -1;
@@ -23,6 +24,8 @@ void task_init(void) {
         tasks[i].esp = 0; tasks[i].pd_phys = 0; tasks[i].id = 0;
         tasks[i].want_exit = 0;
         tasks[i].exit_request_code = 0;
+        tasks[i].kernel_stack_phys = 0;
+        tasks[i].kernel_stack_top = 0;
     }
     // Задача 0 = само ядро. Своё адресное пространство — ядровая PD.
     // pd_phys = адрес ядровой PD (НЕ 0!): возврат из программы обязан
@@ -44,19 +47,44 @@ int task_current(void) { return (cur >= 0) ? tasks[cur].id : -1; }
 extern int exec_load_segments(const unsigned char* image, unsigned int size,
                               unsigned int virt_base, unsigned int phys_base);
 
-// RING3 ШАГ 3: task_enter_ring3 (asm) строит iret-кадр и делает iret.
-// Программа уходит в ring3. Возврата нет — при первом же api->...
-// будет page fault или GP, и сработает isr_handler (panic).
-// Нормальный выход из ring3 появится на шаге 4 (сисколлы int 0x80).
+// RING3 ШАГ 1 (диагностика). Ассемблерная task_enter_ring3 (entry.asm)
+// просто зовёт эту C-функцию. Пока — печатаем аргументы в консоль и
+// запускаем программу как раньше (в ring0). Никаких iret.
+// put_char/print_string/print_hex — определены в kprint.c.
+void put_char(char c);
+void print_string(const char* s);
+void print_hex(unsigned int v);
 extern void task_enter_ring3(unsigned int entry, unsigned int ustack_top,
                              unsigned int api);
+
+void task_enter_ring3_c(unsigned int entry, unsigned int ustack_top,
+                        unsigned int api) {
+    // ВАЖНО: console_print/put_char пишут ПРЯМО в LFB (не в backbuffer)
+    // и при переполнении строки делают console_scroll(), который СДВИГАЕТ
+    // ВЕСЬ LFB вверх на 8 строк — рабочий стол «улетает вверх».
+    // Поэтому здесь НЕ печатаем в console. Для отладки используем VGA-текст
+    // (0xB8000), он не трогает графику.
+    volatile unsigned char* vga = (volatile unsigned char*)0xB8000;
+    vga[20 * 2] = 'R';
+    vga[21 * 2] = (char)('0' + (entry ? 1 : 0));
+    vga[22 * 2] = 'T';
+    vga[23 * 2] = (char)('0' + (ustack_top ? 1 : 0));
+    vga[24 * 2] = 'A';
+    vga[25 * 2] = (char)('0' + (api ? 1 : 0));
+    (void)entry; (void)ustack_top; (void)api;
+
+    // Запускаем программу как раньше — в ring0.
+    task_t* t = &tasks[cur];
+    if (t->entry) t->entry(t->arg);
+    task_exit(0);
+}
 
 static void task_trampoline(void) {
     task_t* t = &tasks[cur];
     task_enter_ring3((unsigned int)t->entry,
                      (unsigned int)t->stack_top,
                      (unsigned int)t->arg);
-    // Не возвращаемся: task_enter_ring3 уходит через iret в ring3.
+    // Не должны сюда вернуться: task_enter_ring3_c сделает task_exit.
     for (;;) { __asm__ volatile ("hlt"); }
 }
 
@@ -68,23 +96,25 @@ int task_create_elf(const unsigned char* image, unsigned int size, const void* a
     }
     if (slot < 0) return -1;
 
-    unsigned int code_phys  = pmem_alloc_block();
-    unsigned int stack_phys = pmem_alloc_block();
-    if (!code_phys || !stack_phys) {
-        if (code_phys)  pmem_free_block(code_phys);
-        if (stack_phys) pmem_free_block(stack_phys);
+    unsigned int code_phys   = pmem_alloc_block();
+    unsigned int stack_phys  = pmem_alloc_block();
+    unsigned int kstack_phys = pmem_alloc_block();   // стек ЯДРА этой задачи
+    if (!code_phys || !stack_phys || !kstack_phys) {
+        if (code_phys)   pmem_free_block(code_phys);
+        if (stack_phys)  pmem_free_block(stack_phys);
+        if (kstack_phys) pmem_free_block(kstack_phys);
         return -1;
     }
 
     int entry = exec_load_segments(image, size, TASK_CODE_VIRT, code_phys);
     if (entry < 0) {
-        pmem_free_block(code_phys); pmem_free_block(stack_phys);
+        pmem_free_block(code_phys); pmem_free_block(stack_phys); pmem_free_block(kstack_phys);
         return -1;
     }
 
     unsigned int pd = paging_task_pd_alloc(code_phys, stack_phys);
     if (!pd) {
-        pmem_free_block(code_phys); pmem_free_block(stack_phys);
+        pmem_free_block(code_phys); pmem_free_block(stack_phys); pmem_free_block(kstack_phys);
         return -1;
     }
 
@@ -97,6 +127,12 @@ int task_create_elf(const unsigned char* image, unsigned int size, const void* a
     t->pd_phys = pd;
     t->code_phys = code_phys;
     t->stack_phys = stack_phys;
+    // Стек ядра задачи: kstack_phys .. kstack_phys + 4 МБ (pmem блок).
+    // Верх — туда CPU положит iret-кадр при ring3 -> ring0 (int 0x80).
+    // 4 МБ блок — избыточно, но pmem работает блоками 4 МБ. Верх
+    // подровняем, чтобы был «нормальный» стек-указатель.
+    t->kernel_stack_phys = kstack_phys;
+    t->kernel_stack_top  = kstack_phys + PMEM_BLOCK - 16;   // -16 — выравн. по 16
     t->entry = (void (*)(void*))entry;
     t->arg = (void*)api;
 
@@ -122,10 +158,13 @@ void task_enable(void) { sched_on = 1; }
 void task_reap(void) {
     for (int i = 1; i < TASK_MAX; i++) {
         if (tasks[i].state == TASK_DEAD) {
-            if (tasks[i].code_phys)  pmem_free_block(tasks[i].code_phys);
-            if (tasks[i].stack_phys) pmem_free_block(tasks[i].stack_phys);
-            if (tasks[i].pd_phys)    paging_task_pd_free(tasks[i].pd_phys);
+            if (tasks[i].code_phys)   pmem_free_block(tasks[i].code_phys);
+            if (tasks[i].stack_phys)  pmem_free_block(tasks[i].stack_phys);
+            if (tasks[i].kernel_stack_phys) pmem_free_block(tasks[i].kernel_stack_phys);
+            if (tasks[i].pd_phys)     paging_task_pd_free(tasks[i].pd_phys);
             tasks[i].code_phys = tasks[i].stack_phys = tasks[i].pd_phys = 0;
+            tasks[i].kernel_stack_phys = 0;
+            tasks[i].kernel_stack_top  = 0;
             tasks[i].state = TASK_FREE;
             tasks[i].id = 0;
             tasks[i].want_exit = 0;
@@ -159,6 +198,11 @@ void task_tick(void) {
     cur = next;
     if (tasks[prev].state == TASK_RUN) tasks[prev].state = TASK_READY;
     tasks[cur].state = TASK_RUN;
+    // У каждой задачи свой стек ядра: при следующем int 0x80 CPU
+    // прыгнет на TSS.esp0 именно этой задачи. Для задачи 0 (ядро)
+    // оставляем дефолтный 0x90000.
+    if (tasks[cur].kernel_stack_top)
+        gdt_set_esp0(tasks[cur].kernel_stack_top);
     switch_set_cr3(tasks[cur].pd_phys);   // 0 => не менять (ядро)
     switch_context(&tasks[prev].esp, tasks[cur].esp);
 }
@@ -198,6 +242,8 @@ void task_exit(int code) {
     int prev = cur;
     cur = next;
     tasks[cur].state = TASK_RUN;
+    if (tasks[cur].kernel_stack_top)
+        gdt_set_esp0(tasks[cur].kernel_stack_top);
     switch_set_cr3(tasks[cur].pd_phys);
     switch_context(&tasks[prev].esp, tasks[cur].esp);
     // Сюда не возвращаемся (кроме ветки возврата в ядро — там свой стек).

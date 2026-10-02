@@ -29,6 +29,11 @@ typedef struct task_s {
     // чьё окно закрыли.
     int want_exit;
     int exit_request_code;
+    // Стек ЯДРА этой задачи — куда CPU прыгает при int 0x80 из ring3.
+    // Без него TSS.esp0 был бы общий (0x90000) и переключение задач
+    // внутри прерывания перезаписывало бы чужой стек.
+    unsigned int kernel_stack_phys;
+    unsigned int kernel_stack_top;   // = phys + 64 КБ (виртуально = физически)
 } task_t;
 
 void task_init(void);                       // инициализация подсистемы
