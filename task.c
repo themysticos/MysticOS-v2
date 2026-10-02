@@ -44,44 +44,19 @@ int task_current(void) { return (cur >= 0) ? tasks[cur].id : -1; }
 extern int exec_load_segments(const unsigned char* image, unsigned int size,
                               unsigned int virt_base, unsigned int phys_base);
 
-// RING3 ШАГ 1 (диагностика). Ассемблерная task_enter_ring3 (entry.asm)
-// просто зовёт эту C-функцию. Пока — печатаем аргументы в консоль и
-// запускаем программу как раньше (в ring0). Никаких iret.
-// put_char/print_string/print_hex — определены в kprint.c.
-void put_char(char c);
-void print_string(const char* s);
-void print_hex(unsigned int v);
+// RING3 ШАГ 3: task_enter_ring3 (asm) строит iret-кадр и делает iret.
+// Программа уходит в ring3. Возврата нет — при первом же api->...
+// будет page fault или GP, и сработает isr_handler (panic).
+// Нормальный выход из ring3 появится на шаге 4 (сисколлы int 0x80).
 extern void task_enter_ring3(unsigned int entry, unsigned int ustack_top,
                              unsigned int api);
-
-void task_enter_ring3_c(unsigned int entry, unsigned int ustack_top,
-                        unsigned int api) {
-    // ВАЖНО: console_print/put_char пишут ПРЯМО в LFB (не в backbuffer)
-    // и при переполнении строки делают console_scroll(), который СДВИГАЕТ
-    // ВЕСЬ LFB вверх на 8 строк — рабочий стол «улетает вверх».
-    // Поэтому здесь НЕ печатаем в console. Для отладки используем VGA-текст
-    // (0xB8000), он не трогает графику.
-    volatile unsigned char* vga = (volatile unsigned char*)0xB8000;
-    vga[20 * 2] = 'R';
-    vga[21 * 2] = (char)('0' + (entry ? 1 : 0));
-    vga[22 * 2] = 'T';
-    vga[23 * 2] = (char)('0' + (ustack_top ? 1 : 0));
-    vga[24 * 2] = 'A';
-    vga[25 * 2] = (char)('0' + (api ? 1 : 0));
-    (void)entry; (void)ustack_top; (void)api;
-
-    // Запускаем программу как раньше — в ring0.
-    task_t* t = &tasks[cur];
-    if (t->entry) t->entry(t->arg);
-    task_exit(0);
-}
 
 static void task_trampoline(void) {
     task_t* t = &tasks[cur];
     task_enter_ring3((unsigned int)t->entry,
                      (unsigned int)t->stack_top,
                      (unsigned int)t->arg);
-    // Не должны сюда вернуться: task_enter_ring3_c сделает task_exit.
+    // Не возвращаемся: task_enter_ring3 уходит через iret в ring3.
     for (;;) { __asm__ volatile ("hlt"); }
 }
 
