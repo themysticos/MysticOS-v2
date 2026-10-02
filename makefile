@@ -116,6 +116,16 @@ $(WINAPP_ELF): examples/winapp.c api.h
 SYSPR = about files term wpick imgview editor
 SYSPR_ELFS = $(addprefix examples/,$(addsuffix .elf,$(SYSPR)))
 
+# msyscall.c — stub-библиотека для ring3. Линкуется с программами,
+# которые перешли на ms_api() (вместо api из ядра). Список таких
+# программ — MSYSCALL_PROGS. Сейчас только about.
+MSYSCALL_PROGS = about
+
+# Явные правила для stub-программ (перебивают pattern-rule ниже).
+$(addprefix examples/,$(addsuffix .elf,$(MSYSCALL_PROGS))): examples/%.elf: examples/%.c examples/msyscall.c api.h dll/msyscall.h
+	gcc $(ELFCFLAGS) $< examples/msyscall.c -o $@
+
+# Старые программы (без stub): пока работают в ring0, упадут в ring3 — это ок.
 examples/%.elf: examples/%.c api.h
 	gcc $(ELFCFLAGS) $< -o $@
 

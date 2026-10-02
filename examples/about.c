@@ -1,10 +1,13 @@
-// about.c - SYSPR: окно "About" как ELF-программа (API v2).
+// about.c - SYSPR: окно "About" как ELF-программа.
+// RING3 + int 0x80: api получаем через ms_api(), завершаемся через api->exit.
 #include "../api.h"
+extern const mystic_api_t* ms_api(void);
 
-int _start(const mystic_api_t* api) {
+int _start(void) {
+    const mystic_api_t* api = ms_api();
     int W = 260, H = 150;
     int id = api->window_create("About", 200, 320, W, H);
-    if (id < 0) return 1;
+    if (id < 0) api->exit(1);   // ring3: не return, а exit через int 0x80
 
     unsigned int bg = 0xE0E0E8;
     api->window_fill(id, 0, 0, W, H, bg);
@@ -22,5 +25,5 @@ int _start(const mystic_api_t* api) {
     }
     api->key_getchar();
     api->window_close(id);
-    return 0;
+    api->exit(0);   // ring3: return невозможен, только exit
 }

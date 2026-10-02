@@ -1,152 +1,144 @@
 // msyscall.c - stub-библиотека для ELF-программ MysticOS 2 в ring3.
 //
 // Линкуется С КАЖДОЙ программой (см. examples/build.sh).
-// Задача: программа вызывает api->window_create(...), а под капотом
-// идёт int 0x80 -> kernel syscall dispatcher -> api_window_create.
+// Программа вызывает api->window_create(...), а под капотом идёт
+//     int 0x80
+// с соглашением Linux-style:
+//     eax = номер сисколла
+//     ebx = указатель на массив аргументов (unsigned int args[N], N<=6)
+// Возврат: eax.
 //
-// Программа получает api НЕ от ядра, а через ms_api():
+// Программа получает api через ms_api():
 //     int _start(void) {
 //         const mystic_api_t* api = ms_api();
 //         ...
 //     }
-//
-// В ring0 int 0x80 тоже работает (для отладки диспетчера без ring3).
 
 #include "../api.h"
 #include "../dll/msyscall.h"
 
 // ============================================================
-// НИЗКОУРОВНЕВЫЙ ВЫЗОВ int 0x80
+// СИСКОЛЛ
 // ============================================================
-// Регистры: eax=номер, ebx,ecx,edx,esi,edi,ebp=аргументы (до 6).
-// Возврат: eax.
-// ВНИМАНИЕ: ebp нельзя занять обычным "r"-constraint'ом — его держит GCC
-// как frame pointer (даже без -fomit-frame-pointer в некоторых случаях).
-// Спасаем его вручную через push/pop вокруг int 0x80.
-//
-// Обёртка на 5 аргументов (для большинства сисколлов).
-static inline int sc5(int n, int a, int b, int c, int d, int e) {
+static inline int __sc(int n, const unsigned int* args) {
     int ret;
     __asm__ volatile (
         "int $0x80"
         : "=a"(ret)
-        : "a"(n), "b"(a), "c"(b), "d"(c), "S"(d), "D"(e)
+        : "a"(n), "b"(args)
         : "memory"
     );
     return ret;
 }
 
-// Обёртка на 6 аргументов (для fill/rect/text — им нужен color).
-// ebp занят вручную.
-static inline int sc6(int n, int a, int b, int c, int d, int e, int f) {
-    int ret;
-    __asm__ volatile (
-        "push %%ebp\n\t"
-        "mov %6, %%ebp\n\t"
-        "int $0x80\n\t"
-        "pop %%ebp\n\t"
-        : "=a"(ret)
-        : "a"(n), "b"(a), "c"(b), "d"(c), "S"(d), "D"(e), "r"(f)
-        : "memory"
-    );
-    return ret;
-}
+#define SC0(n)               __sc((n), 0)
+#define SC1(n,a)             do { unsigned int _a[1]={(unsigned int)(a)}; __sc((n),_a); } while(0)
+#define SC2(n,a,b)           do { unsigned int _a[2]={(unsigned int)(a),(unsigned int)(b)}; __sc((n),_a); } while(0)
+#define SC3(n,a,b,c)         do { unsigned int _a[3]={(unsigned int)(a),(unsigned int)(b),(unsigned int)(c)}; __sc((n),_a); } while(0)
+#define SC4(n,a,b,c,d)       do { unsigned int _a[4]={(unsigned int)(a),(unsigned int)(b),(unsigned int)(c),(unsigned int)(d)}; __sc((n),_a); } while(0)
+#define SC5(n,a,b,c,d,e)     do { unsigned int _a[5]={(unsigned int)(a),(unsigned int)(b),(unsigned int)(c),(unsigned int)(d),(unsigned int)(e)}; __sc((n),_a); } while(0)
+#define SC6(n,a,b,c,d,e,f)   do { unsigned int _a[6]={(unsigned int)(a),(unsigned int)(b),(unsigned int)(c),(unsigned int)(d),(unsigned int)(e),(unsigned int)(f)}; __sc((n),_a); } while(0)
+
+// С версией, возвращающей int (для read/find/window_create)
+static inline int __sc1(int n, unsigned int a) { unsigned int _a[1]={a}; return __sc(n,_a); }
+static inline int __sc2(int n, unsigned int a, unsigned int b) { unsigned int _a[2]={a,b}; return __sc(n,_a); }
+static inline int __sc3(int n, unsigned int a, unsigned int b, unsigned int c) { unsigned int _a[3]={a,b,c}; return __sc(n,_a); }
+static inline int __sc4(int n, unsigned int a, unsigned int b, unsigned int c, unsigned int d) { unsigned int _a[4]={a,b,c,d}; return __sc(n,_a); }
+static inline int __sc5(int n, unsigned int a, unsigned int b, unsigned int c, unsigned int d, unsigned int e) { unsigned int _a[5]={a,b,c,d,e}; return __sc(n,_a); }
+static inline int __sc6(int n, unsigned int a, unsigned int b, unsigned int c, unsigned int d, unsigned int e, unsigned int f) { unsigned int _a[6]={a,b,c,d,e,f}; return __sc(n,_a); }
 
 // ============================================================
-// STUB'Ы (сигнатуры совпадают с mystic_api_t)
+// STUB'Ы
 // ============================================================
 
 // --- Вывод ---
-static void s_put_char(char c)                         { sc5(SYS_PUTCHAR, (int)c, 0, 0, 0, 0); }
-static void s_print_string(const char* s)              { sc5(SYS_PRINT_STRING, (int)s, 0, 0, 0, 0); }
-static void s_print_int(int v)                         { sc5(SYS_PRINT_INT, v, 0, 0, 0, 0); }
-static void s_print_hex(unsigned int v)                { sc5(SYS_PRINT_HEX, (int)v, 0, 0, 0, 0); }
+static void s_put_char(char c)                         { SC1(SYS_PUTCHAR, (int)c); }
+static void s_print_string(const char* s)              { SC1(SYS_PRINT_STRING, s); }
+static void s_print_int(int v)                         { SC1(SYS_PRINT_INT, v); }
+static void s_print_hex(unsigned int v)                { SC1(SYS_PRINT_HEX, v); }
 
 // --- Окна ---
 static int s_window_create(const char* t, int x, int y, int w, int h) {
-    return sc5(SYS_WINDOW_CREATE, (int)t, x, y, w, h);
+    return __sc5(SYS_WINDOW_CREATE, (unsigned int)t, x, y, w, h);
 }
 static int s_window_create_ex(const char* t, int x, int y, int w, int h, int k) {
-    // kind — 6-й аргумент, ebp
-    return sc6(SYS_WINDOW_CREATE_EX, (int)t, x, y, w, h, k);
+    return __sc6(SYS_WINDOW_CREATE_EX, (unsigned int)t, x, y, w, h, k);
 }
 static void s_window_pixel(int id, int x, int y, unsigned int c) {
-    sc5(SYS_WINDOW_PIXEL, id, x, y, (int)c, 0);
+    SC4(SYS_WINDOW_PIXEL, id, x, y, c);
 }
 static void s_window_rect(int id, int x, int y, int w, int h, unsigned int c) {
-    sc6(SYS_WINDOW_RECT, id, x, y, w, h, (int)c);
+    SC6(SYS_WINDOW_RECT, id, x, y, w, h, c);
 }
 static void s_window_fill(int id, int x, int y, int w, int h, unsigned int c) {
-    sc6(SYS_WINDOW_FILL, id, x, y, w, h, (int)c);
+    SC6(SYS_WINDOW_FILL, id, x, y, w, h, c);
 }
 static void s_window_text(int id, int x, int y, const char* s, unsigned int fg, unsigned int bg) {
-    // 7 аргументов — bg не влезает. Пока фиксируем bg = WIN_TRANSPARENT.
-    // Программам, которым нужен bg, надо вызывать напрямую через int 0x80
-    // (TODO: сделать расширенное соглашение с аргументами на стеке).
-    (void)bg;
-    sc6(SYS_WINDOW_TEXT, id, x, y, (int)s, (int)fg, 0);
+    SC6(SYS_WINDOW_TEXT, id, x, y, s, fg, bg);
 }
 static void s_window_clear(int id, unsigned int c) {
-    sc5(SYS_WINDOW_CLEAR, id, (int)c, 0, 0, 0);
+    SC2(SYS_WINDOW_CLEAR, id, c);
 }
-static void s_window_close(int id)                     { sc5(SYS_WINDOW_CLOSE, id, 0, 0, 0, 0); }
-static void s_window_flush(void)                       { sc5(SYS_WINDOW_FLUSH, 0, 0, 0, 0, 0); }
+static void s_window_close(int id)                     { SC1(SYS_WINDOW_CLOSE, id); }
+static void s_window_flush(void)                       { SC0(SYS_WINDOW_FLUSH); }
 static int s_window_image(int id, int x, int y, int w, int h, const char* p) {
-    (void)p;
-    // Не поддержано в v1 stub'ов (7 аргументов). TODO.
-    return sc6(SYS_WINDOW_IMAGE, id, x, y, w, h, 0);
+    return __sc6(SYS_WINDOW_IMAGE, id, x, y, w, h, (unsigned int)p);
 }
 static void s_window_static_text(int id, int x, int y, const char* s, unsigned int fg) {
-    sc5(SYS_WINDOW_STATIC_TEXT, id, x, y, (int)s, (int)fg);
+    SC5(SYS_WINDOW_STATIC_TEXT, id, x, y, s, fg);
 }
 static void s_window_static_clear(int id) {
-    sc5(SYS_WINDOW_STATIC_CLEAR, id, 0, 0, 0, 0);
+    SC1(SYS_WINDOW_STATIC_CLEAR, id);
 }
 
 // --- Время/ввод ---
-static void s_yield(void)                              { sc5(SYS_YIELD, 0, 0, 0, 0, 0); }
-static unsigned int s_ticks(void)                      { return (unsigned int)sc5(SYS_TICKS, 0, 0, 0, 0, 0); }
-static void s_sleep(unsigned int ms)                   { sc5(SYS_SLEEP, (int)ms, 0, 0, 0, 0); }
-static int s_key_available(void)                       { return sc5(SYS_KEY_AVAILABLE, 0, 0, 0, 0, 0); }
-static int s_key_getchar(void)                         { return sc5(SYS_KEY_GETCHAR, 0, 0, 0, 0, 0); }
-static int s_mouse_x(void)                             { return sc5(SYS_MOUSE_X, 0, 0, 0, 0, 0); }
-static int s_mouse_y(void)                             { return sc5(SYS_MOUSE_Y, 0, 0, 0, 0, 0); }
-static int s_mouse_left(void)                          { return sc5(SYS_MOUSE_LEFT, 0, 0, 0, 0, 0); }
+static void s_yield(void)                              { SC0(SYS_YIELD); }
+static unsigned int s_ticks(void)                      { return (unsigned int)__sc(0, 0); }
+static void s_sleep(unsigned int ms)                   { SC1(SYS_SLEEP, ms); }
+static int s_key_available(void)                       { return __sc1(SYS_KEY_AVAILABLE, 0); }
+static int s_key_getchar(void)                         { return __sc1(SYS_KEY_GETCHAR, 0); }
+static int s_mouse_x(void)                             { return __sc1(SYS_MOUSE_X, 0); }
+static int s_mouse_y(void)                             { return __sc1(SYS_MOUSE_Y, 0); }
+static int s_mouse_left(void)                          { return __sc1(SYS_MOUSE_LEFT, 0); }
 
 // --- Экран ---
-static unsigned int s_screen_w(void)                   { return (unsigned int)sc5(SYS_SCREEN_W, 0, 0, 0, 0, 0); }
-static unsigned int s_screen_h(void)                   { return (unsigned int)sc5(SYS_SCREEN_H, 0, 0, 0, 0, 0); }
+static unsigned int s_screen_w(void)                   { return (unsigned int)__sc1(SYS_SCREEN_W, 0); }
+static unsigned int s_screen_h(void)                   { return (unsigned int)__sc1(SYS_SCREEN_H, 0); }
 
 // --- ФС ---
-static int s_fs_size(const char* p)                    { return sc5(SYS_FS_SIZE, (int)p, 0, 0, 0, 0); }
-static int s_fs_exists(const char* p)                  { return sc5(SYS_FS_EXISTS, (int)p, 0, 0, 0, 0); }
+static int s_fs_size(const char* p)                    { return __sc1(SYS_FS_SIZE, (unsigned int)p); }
+static int s_fs_exists(const char* p)                  { return __sc1(SYS_FS_EXISTS, (unsigned int)p); }
 static int s_fs_read(const char* p, unsigned char* buf, unsigned int max) {
-    return sc5(SYS_FS_READ, (int)p, (int)buf, (int)max, 0, 0);
+    return __sc3(SYS_FS_READ, (unsigned int)p, (unsigned int)buf, max);
 }
 static int s_fs_write(const char* p, const char* c) {
-    return sc5(SYS_FS_WRITE, (int)p, (int)c, 0, 0, 0);
+    return __sc2(SYS_FS_WRITE, (unsigned int)p, (unsigned int)c);
 }
 static int s_fs_list(const char* p, char* names, int* isdir, unsigned int* sizes, int max) {
-    return sc5(SYS_FS_LIST, (int)p, (int)names, (int)isdir, (int)sizes, max);
+    return __sc5(SYS_FS_LIST, (unsigned int)p, (unsigned int)names, (unsigned int)isdir, (unsigned int)sizes, max);
 }
 static int s_format(int drive, int fs, int ver) {
-    return sc5(SYS_FORMAT, drive, fs, ver, 0, 0);
+    return __sc3(SYS_FORMAT, drive, fs, ver);
 }
 
 // --- Система ---
-static int s_run_program(const char* name)              { return sc5(SYS_RUN_PROGRAM, (int)name, 0, 0, 0, 0); }
+static int s_run_program(const char* name)              { return __sc1(SYS_RUN_PROGRAM, (unsigned int)name); }
 static int s_run_program_arg(const char* name, const char* arg) {
-    return sc5(SYS_RUN_PROGRAM_ARG, (int)name, (int)arg, 0, 0, 0);
+    return __sc2(SYS_RUN_PROGRAM_ARG, (unsigned int)name, (unsigned int)arg);
 }
-static const char* s_get_arg(void)                      { return (const char*)sc5(SYS_GET_ARG, 0, 0, 0, 0, 0); }
-static int s_set_wallpaper(const char* p)               { return sc5(SYS_SET_WALLPAPER, (int)p, 0, 0, 0, 0); }
-static void s_exit(int code)                            { sc5(SYS_EXIT, code, 0, 0, 0, 0); for(;;) {} }
+static const char* s_get_arg(void)                      { return (const char*)__sc1(SYS_GET_ARG, 0); }
+static int s_set_wallpaper(const char* p)               { return __sc1(SYS_SET_WALLPAPER, (unsigned int)p); }
+static void s_exit(int code) {
+    // SYS_EXIT только ПОМЕЧАЕТ задачу (want_exit). Ядро завершит её
+    // на следующем yield (api_yield_impl -> task_current_wants_exit).
+    // Поэтому после SYS_EXIT крутим yield, пока задача не будет убита.
+    SC1(SYS_EXIT, code);
+    for (;;) { SC0(SYS_YIELD); }
+}
 
 // ============================================================
-// ЛОКАЛЬНЫЙ api (указатели на stub'ы)
+// ЛОКАЛЬНЫЙ api
 // ============================================================
-// Программа получает ЭТОТ указатель, а не ядровый g_api.
-// Поля совпадают с mystic_api_t — но функции делают int 0x80.
 static mystic_api_t g_local_api;
 static int g_api_init = 0;
 
@@ -154,12 +146,10 @@ static void init_api(void) {
     if (g_api_init) return;
     g_api_init = 1;
     g_local_api.version = MYSTIC_API_VERSION;
-    // v1
     g_local_api.put_char     = s_put_char;
     g_local_api.print_string = s_print_string;
     g_local_api.print_int    = s_print_int;
     g_local_api.print_hex    = s_print_hex;
-    // Окна
     g_local_api.window_create    = s_window_create;
     g_local_api.window_create_ex = s_window_create_ex;
     g_local_api.window_pixel     = s_window_pixel;
@@ -169,7 +159,6 @@ static void init_api(void) {
     g_local_api.window_clear     = s_window_clear;
     g_local_api.window_close     = s_window_close;
     g_local_api.window_flush     = s_window_flush;
-    // Время/ввод
     g_local_api.yield         = s_yield;
     g_local_api.ticks         = s_ticks;
     g_local_api.sleep         = s_sleep;
@@ -178,7 +167,6 @@ static void init_api(void) {
     g_local_api.mouse_x       = s_mouse_x;
     g_local_api.mouse_y       = s_mouse_y;
     g_local_api.mouse_left    = s_mouse_left;
-    // ФС
     g_local_api.fs_list   = s_fs_list;
     g_local_api.fs_read   = s_fs_read;
     g_local_api.fs_size   = s_fs_size;
@@ -189,10 +177,8 @@ static void init_api(void) {
     g_local_api.run_program_arg = s_run_program_arg;
     g_local_api.get_arg = s_get_arg;
     g_local_api.set_wallpaper = s_set_wallpaper;
-    // Экран
     g_local_api.screen_w = s_screen_w;
     g_local_api.screen_h = s_screen_h;
-    // Дополнительные
     g_local_api.window_image       = s_window_image;
     g_local_api.window_static_text  = s_window_static_text;
     g_local_api.window_static_clear = s_window_static_clear;

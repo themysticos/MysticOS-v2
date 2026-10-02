@@ -550,7 +550,11 @@ static void api_exit_stub(int code) { (void)code; }
 static void api_sleep(unsigned int ms) {
     unsigned int need = (ms + 9u) / 10u;
     unsigned int start = timer_ticks();
-    while ((timer_ticks() - start) < need) { __asm__ volatile ("hlt"); }
+    // ВАЖНО: при вызове через int 0x80 (interrupt gate) IF=0. Без sti
+    // PIT не сработает и hlt уснёт навсегда. sti на время hlt, cli — обратно.
+    while ((timer_ticks() - start) < need) {
+        __asm__ volatile ("sti; hlt; cli");
+    }
 }
 
 // ============ ФС-API для ELF-программ (v2) ============
@@ -881,13 +885,16 @@ static int msys_dispatch(unsigned int n,
 }
 
 void syscall_handler_dispatch(unsigned int* raw) {
-    unsigned int n  = raw[11];
-    unsigned int a0 = raw[8];
-    unsigned int a1 = raw[10];
-    unsigned int a2 = raw[9];
-    unsigned int a3 = raw[5];
-    unsigned int a4 = raw[4];
-    unsigned int a5 = raw[6];   // ebp — 6-й аргумент (color у fill/rect)
+    unsigned int n   = raw[11];   // eax — номер
+    unsigned int ptr = raw[8];    // ebx — указатель на массив аргументов
+
+    // ABI: args[i] в памяти вызывающего (ring3). ring0 видит их
+    // напрямую благодаря identity-маппингу (virt == phys).
+    unsigned int a0 = 0, a1 = 0, a2 = 0, a3 = 0, a4 = 0, a5 = 0;
+    if (ptr) {
+        const unsigned int* a = (const unsigned int*)ptr;
+        a0 = a[0]; a1 = a[1]; a2 = a[2]; a3 = a[3]; a4 = a[4]; a5 = a[5];
+    }
 
     if (n == SYS_EXIT) {
         task_request_exit(task_current(), (int)a0);

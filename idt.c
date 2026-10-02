@@ -40,14 +40,28 @@ static const char* exc_name(unsigned int n) {
 }
 
 void isr_handler(registers_t* r) {
+    unsigned int cr2;
+    __asm__ volatile ("mov %%cr2, %0" : "=r"(cr2));
     console_set_color(FB_RGB(0xFF,0x44,0x44), FB_RGB(0,0,0));
     console_print("\n=== KERNEL PANIC ===\n");
     console_print("Exception: ");
     console_print(exc_name(r->int_no));
     console_print(" (vector ");
     console_print_int((int)r->int_no);
-    console_print(")\n  EIP: ");
+    console_print(")\n  err_code: ");
+    console_print_hex(r->err_code);
+    console_print("  (P=");
+    console_print_int((int)(r->err_code & 1));
+    console_print(" W=");
+    console_print_int((int)((r->err_code >> 1) & 1));
+    console_print(" U=");
+    console_print_int((int)((r->err_code >> 2) & 1));
+    console_print(")\n  CR2: ");
+    console_print_hex(cr2);
+    console_print("\n  EIP: ");
     console_print_hex(r->eip);
+    console_print("\n  CS:  ");
+    console_print_hex(r->cs);
     console_print("\nSystem halted.\n");
     for (;;) { __asm__ volatile ("cli; hlt"); }
 }

@@ -55,29 +55,42 @@ exec_do_exit:
     ret
 
 ; ============================================================
-; RING3 ШАГ 1 (только диагностика).
-; task_enter_ring3 — тонкая обёртка. Вся логика в C (task.c):
-; печатает entry/top/api в консоль и вызывает entry(api) в ring0.
-; ИРЕТ НЕ ДЕЛАЕМ — программа работает как раньше.
+; RING3: НАСТОЯЩИЙ iret в ring3.
+; task_enter_ring3 строит iret-кадр на стеке задачи и делает iret.
+; Возврата нет — программа уходит в ring3.
 ;
 ; void task_enter_ring3(unsigned int entry, unsigned int ustack_top,
 ;                       unsigned int api)
+;
+; Раскладка стека задачи после iret (ring3 esp = ustack_top - 8):
+;   [esp+0] = 0        (фиктивный return addr: если _start сделает ret —
+;                       прыгнет на 0 и получит page fault; программа
+;                       ДОЛЖНА завершаться через api->exit())
+;   [esp+4] = api      (cdecl: _start(const mystic_api_t* api))
 global task_enter_ring3
-extern task_enter_ring3_c
 task_enter_ring3:
     ; cdecl: [esp+4]=entry [esp+8]=ustack_top [esp+12]=api
-    ; ВАЖНО: esp сдвигается после каждого push. Берём аргументы
-    ; СНАЧАЛА в регистры, потом пушим — иначе все три push прочитают
-    ; одно и то же [esp+12].
     mov eax, [esp+4]      ; entry
-    mov ecx, [esp+8]      ; ustack_top
+    mov ecx, [esp+8]      ; U = ustack_top
     mov edx, [esp+12]     ; api
-    push edx              ; 3-й аргумент (api)
-    push ecx              ; 2-й (ustack_top)
-    push eax              ; 1-й (entry)
-    call task_enter_ring3_c
-    add esp, 12
-    ret
+
+    ; [U-4] = api
+    mov [ecx - 4], edx
+    ; [U-8] = 0 (фиктивный return addr)
+    mov dword [ecx - 8], 0
+
+    ; esp_ring3 после iret = U - 8
+    lea ebx, [ecx - 8]
+
+    ; Переключаемся на стек задачи (пока в ring0) и строим iret-кадр.
+    ; iret снимает: eip, cs, eflags, esp, ss (5 dword, сверху вниз).
+    mov esp, ebx
+    push 0x23             ; ss    = ring3 data | RPL=3
+    push ebx              ; esp   = U-8
+    push 0x202            ; eflags IF=1
+    push 0x1B             ; cs    = ring3 code | RPL=3
+    push eax              ; eip   = entry
+    iret
 
 ; ============ GDT (ring0 + ring3 + TSS) ============
 ; Перезагружаем GDT из ядра (загрузчик дал только ring0).
