@@ -22,6 +22,7 @@
 #include "driver.h"
 #include "serial.h"
 #include "virtio.h"
+#include "virtio_net.h"
 
 // ============================================================
 // SYSCALL (int 0x80) — заглушка в начале файла (настоящий диспетчер
@@ -1654,29 +1655,21 @@ void kernel_main(void) {
     serial_print("=== MysticOS 2 boot ===\n");
     pci_dump_serial();
 
-    // Тест VirtIO: искать virtio-net (legacy id 0x1000 или modern 0x1041).
-    // Пробуем оба: QEMU по умолчанию даёт 0x1000 (transitional).
-    {
-        virtio_dev_t vdev;
-        int found = 0;
-        if (virtio_find_pci(0x1000, &vdev)) found = 1;   // legacy/transitional net
-        else if (virtio_find_pci(0x1041, &vdev)) found = 1;  // modern net
-        if (found) {
-            serial_print("[virtio] found at " );
-            serial_print_int(vdev.pci_bus); serial_print(":");
-            serial_print_int(vdev.pci_slot); serial_print(".");
-            serial_print_int(vdev.pci_func);
-            serial_print(" device=" );
-            serial_print_hex(vdev.pci_device);
-            serial_print("\n");
-            if (virtio_init(&vdev, 0)) {
-                serial_print("[virtio] init OK\n");
-            } else {
-                serial_print("[virtio] init FAILED\n");
-            }
-        } else {
-            serial_print("[virtio] no virtio-net (add -device virtio-net-pci)\n");
+    // Регистрируем драйверы в VDS. При наличии устройства VDS сам
+    // позовёт match/probe в driver_scan().
+    virtio_net_init();
+    int probes = driver_scan();
+    serial_print("[vds] successful probes: ");
+    serial_print_int(probes);
+    serial_print("\n");
+    if (virtio_net_ready()) {
+        serial_print("[net] virtio-net ready, MAC ");
+        const unsigned char* mac = virtio_net_mac();
+        for (int i = 0; i < 6; i++) {
+            serial_print_hex(mac[i]);
+            if (i < 5) serial_print(":");
         }
+        serial_print("\n");
     }
 
     icons_init();

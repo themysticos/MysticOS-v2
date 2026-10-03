@@ -108,7 +108,10 @@ serial.o: serial.c serial.h io.h
 virtio.o: virtio.c virtio.h pci.h serial.h io.h
 	$(GCC) $(CFLAGS) -c $< -o $@
 
-$(ELF): entry.o switch.o kernel.o task.o paging.o paging_asm.o pmem.o vbe.o bmp.o vfs.o msfs.o gdt.o font.o console.o idt.o pic.o io.o cursor.o icons.o icons_gen.o ata.o fat.o kprint.o term.o exec.o msdll.o pci.o driver.o serial.o virtio.o
+virtio_net.o: virtio_net.c virtio_net.h virtio.h driver.h serial.h
+	$(GCC) $(CFLAGS) -c $< -o $@
+
+$(ELF): entry.o switch.o kernel.o task.o paging.o paging_asm.o pmem.o vbe.o bmp.o vfs.o msfs.o gdt.o font.o console.o idt.o pic.o io.o cursor.o icons.o icons_gen.o ata.o fat.o kprint.o term.o exec.o msdll.o pci.o driver.o serial.o virtio.o virtio_net.o
 	$(LD) $(LDFLAGS) -o $@ $^
 
 $(BIN): $(ELF)
