@@ -287,6 +287,7 @@ int net_udp_send(const unsigned char* dst_ip, unsigned short src_port,
 }
 
 static void handle_dhcp(const unsigned char* p, unsigned int len);
+static void handle_dns(const unsigned char* p, unsigned int len);
 
 static void handle_udp(const unsigned char* ip_src,
                        const unsigned char* p, unsigned int len) {
@@ -300,6 +301,11 @@ static void handle_udp(const unsigned char* ip_src,
     // DHCP: dst_port == 68 (клиент).
     if (dst_port == 68) {
         handle_dhcp(payload, payload_len);
+        return;
+    }
+    // DNS: dst_port == 53000 (наш клиентский порт).
+    if (dst_port == 53000) {
+        handle_dns(payload, payload_len);
         return;
     }
     (void)dst_port;
@@ -449,6 +455,115 @@ static void handle_dhcp(const unsigned char* p, unsigned int len) {
     }
 }
 
+// ============================================================
+// DNS (RFC 1035). Упрощённый клиент.
+// ============================================================
+static unsigned char g_dns_server[4] = {10, 0, 2, 3};
+static unsigned short g_dns_tx_id = 0x1234;
+static unsigned char g_dns_result_ip[4];
+static int g_dns_got_reply = 0;
+
+static int build_qname(const char* name, unsigned char* out, int max) {
+    int o = 0;
+    const char* p = name;
+    while (*p) {
+        const char* dot = p;
+        while (*dot && *dot != '.') dot++;
+        int label_len = (int)(dot - p);
+        if (label_len == 0 || label_len > 63) return -1;
+        if (o + 1 + label_len >= max) return -1;
+        out[o++] = (unsigned char)label_len;
+        for (int i = 0; i < label_len; i++) out[o++] = (unsigned char)p[i];
+        p = dot;
+        if (*p == '.') p++;
+    }
+    if (o >= max) return -1;
+    out[o++] = 0;
+    return o;
+}
+
+int net_dns_resolve(const char* name, unsigned char* out_ip) {
+    unsigned char query[256];
+    for (unsigned int i = 0; i < sizeof(query); i++) query[i] = 0;
+    query[0] = (g_dns_tx_id >> 8) & 0xFF;
+    query[1] = g_dns_tx_id & 0xFF;
+    query[2] = 0x01; query[3] = 0x00;
+    query[4] = 0; query[5] = 1;
+    query[6] = 0; query[7] = 0;
+    query[8] = 0; query[9] = 0;
+    query[10]= 0; query[11]= 0;
+    int qn = build_qname(name, query + 12, 200);
+    if (qn < 0) return -1;
+    int off = 12 + qn;
+    query[off++] = 0x00; query[off++] = 0x01;
+    query[off++] = 0x00; query[off++] = 0x01;
+
+    serial_print("[dns] query "); serial_print(name); serial_print("\n");
+    g_dns_got_reply = 0;
+    // Шаг 1: разрешить ARP для DNS-сервера (10.0.2.3).
+    // Иначе net_udp_send вернёт -1.
+    net_arp_request(g_dns_server);
+    for (int i = 0; i < 50000; i++) net_poll();
+    // Шаг 2: отправить один раз. net_udp_send возвращает число байт
+    // при успехе (положительное!) или -1 при ошибке.
+    int sent = net_udp_send(g_dns_server, 53000, 53, query, (unsigned int)off);
+    if (sent < 0) {
+        serial_print("[dns] send failed\n");
+        return -1;
+    }
+    for (unsigned int spin = 0; spin < 2000000u; spin++) {
+        net_poll();
+        if (g_dns_got_reply) {
+            for (int i = 0; i < 4; i++) out_ip[i] = g_dns_result_ip[i];
+            serial_print("[dns] resolved "); serial_print(name); serial_print(" -> ");
+            for (int i = 0; i < 4; i++) { serial_print_int(out_ip[i]); if (i<3) serial_print("."); }
+            serial_print("\n");
+            return 0;
+        }
+    }
+    serial_print("[dns] timeout\n");
+    return -1;
+}
+
+static void handle_dns(const unsigned char* p, unsigned int len) {
+    serial_print("[dns] rx "); serial_print_int((int)len); serial_print(" bytes\n");
+    if (len < 12) return;
+    unsigned short id = (p[0] << 8) | p[1];
+    serial_print("[dns] id="); serial_print_hex(id); serial_print(" want="); serial_print_hex(g_dns_tx_id); serial_print("\n");
+    if (id != g_dns_tx_id) return;
+    unsigned short flags = (p[2] << 8) | p[3];
+    if ((flags & 0x8000) == 0) return;
+    unsigned short qd = (p[4] << 8) | p[5];
+    unsigned short an = (p[6] << 8) | p[7];
+    serial_print("[dns] qd="); serial_print_int(qd); serial_print(" an="); serial_print_int(an); serial_print("\n");
+    if (an == 0) return;
+    unsigned int off = 12;
+    for (int q = 0; q < qd; q++) {
+        while (off < len && p[off] != 0) {
+            if ((p[off] & 0xC0) == 0xC0) { off += 2; goto q_done; }
+            off += 1 + p[off];
+        }
+        off++;
+q_done:
+        off += 4;
+    }
+    for (int a = 0; a < an && off < len; a++) {
+        if ((p[off] & 0xC0) == 0xC0) { off += 2; }
+        else { while (off < len && p[off]) off += 1 + p[off]; off++; }
+        if (off + 10 > len) break;
+        unsigned short type = (p[off] << 8) | p[off+1]; off += 2;
+        unsigned short cls  = (p[off] << 8) | p[off+1]; off += 2;
+        off += 4;
+        unsigned short rdlen = (p[off] << 8) | p[off+1]; off += 2;
+        if (type == 1 && cls == 1 && rdlen == 4 && off + 4 <= len) {
+            for (int i = 0; i < 4; i++) g_dns_result_ip[i] = p[off + i];
+            g_dns_got_reply = 1;
+            return;
+        }
+        off += rdlen;
+    }
+}
+
 static void handle_ip(const unsigned char* p, unsigned int len) {
     if (len < 20) return;
     const ip_hdr_t* ip = (const ip_hdr_t*)p;
@@ -466,6 +581,12 @@ static void handle_ip(const unsigned char* p, unsigned int len) {
     switch (ip->proto) {
     case IP_PROTO_ICMP: handle_icmp(ip->src, payload, plen); break;
     case IP_PROTO_UDP:  handle_udp(ip->src, payload, plen);  break;
+    case 6: {   // TCP
+        extern void tcp_handle_segment(const unsigned char* ip_src,
+                                       const unsigned char* p, unsigned int len);
+        tcp_handle_segment(ip->src, payload, plen);
+        break;
+    }
     default: break;
     }
 }
@@ -489,15 +610,9 @@ static void eth_handle(const unsigned char* p, unsigned int len) {
 }
 
 int net_poll(void) {
-    static int poll_count = 0;
-    poll_count++;
-    // Логируем первые 3 и каждые 10000 вызовов.
-    if (poll_count <= 3 || (poll_count % 10000) == 0) {
-        serial_print("[net_poll] #");
-        serial_print_int(poll_count);
-        serial_print("\n");
+    // Отладка: спам убран. Включай по мере надобности.
+    if (0) {
         virtio_net_debug();
-        if (poll_count == 2) virtio_net_debug2();
     }
     int n = virtio_net_recv(g_rxbuf, sizeof(g_rxbuf));
     if (n <= 0) return 0;

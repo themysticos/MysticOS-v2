@@ -114,6 +114,10 @@ int net_ping(const unsigned char* ip);
 int net_udp_send(const unsigned char* dst_ip, unsigned short src_port,
                  unsigned short dst_port, const void* data, unsigned int len);
 
+// Резолв DNS: name -> out_ip (4 байта). Возвращает 0 или -1.
+// Блокирующий: ждёт ответа до 3 секунд (polling).
+int net_dns_resolve(const char* name, unsigned char* out_ip);
+
 // Запустить DHCP: отправить DISCOVER. Результат придёт в обработчике
 // UDP (handle_udp) — по получении ACK установятся g_ip/g_gw/g_mask.
 // Возвращает 0 или -1.

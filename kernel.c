@@ -24,6 +24,7 @@
 #include "virtio.h"
 #include "virtio_net.h"
 #include "net.h"
+#include "tcp.h"
 
 // ============================================================
 // SYSCALL (int 0x80) — заглушка в начале файла (настоящий диспетчер
@@ -1627,6 +1628,9 @@ static void diag_mark(int pos, char c) {
 
 static int g_ping_sent = 0;
 static int g_dhcp_started = 0;
+static int g_dns_started = 0;
+static int g_tcp_started = 0;
+static unsigned char g_dns_ip[4] = {0,0,0,0};
 
 void kernel_main(void) {
     serial_init();       // COM1 — отладочный вывод в -serial stdio
@@ -1804,6 +1808,45 @@ void kernel_main(void) {
             g_dhcp_started = 1;
             serial_print("[net] starting DHCP\n");
             net_dhcp_discover();
+        }
+
+        // DNS-резолв: один раз через 3 секунды после старта.
+        if (virtio_net_ready() && !g_dns_started && timer_ticks() > 300) {
+            g_dns_started = 1;
+            net_dns_resolve("example.com", g_dns_ip);
+        }
+
+        // TCP connect + HTTP GET: через 5 секунд после старта.
+        if (virtio_net_ready() && !g_tcp_started && g_dns_ip[0] != 0 && timer_ticks() > 500) {
+            g_tcp_started = 1;
+            extern int net_tcp_connect(tcp_conn_t*, const unsigned char*, unsigned short);
+            extern int net_tcp_send(tcp_conn_t*, const void*, unsigned int);
+            extern int net_tcp_recv(tcp_conn_t*, void*, unsigned int);
+            extern void net_tcp_close(tcp_conn_t*);
+            tcp_conn_t conn;
+            serial_print("[http] connecting to ");
+            for (int i = 0; i < 4; i++) { serial_print_int(g_dns_ip[i]); if (i<3) serial_print("."); }
+            serial_print(":80\n");
+            if (net_tcp_connect(&conn, g_dns_ip, 80) == 0) {
+                const char* req = "GET / HTTP/1.0\r\nHost: example.com\r\n\r\n";
+                int reqlen = 0; while (req[reqlen]) reqlen++;
+                net_tcp_send(&conn, req, (unsigned int)reqlen);
+                char buf[512];
+                int n = net_tcp_recv(&conn, buf, sizeof(buf) - 1);
+                if (n > 0) {
+                    buf[n] = 0;
+                    serial_print("[http] received "); serial_print_int(n); serial_print(" bytes:\n");
+                    // Печатаем первые 200 байт (с "." на непечатаемых).
+                    for (int i = 0; i < n && i < 200; i++) {
+                        char c = buf[i];
+                        if (c == '\r' || c == '\n') serial_print("\n");
+                        else if (c >= 32 && c < 127) { char s[2] = {c, 0}; serial_print(s); }
+                        else serial_print(".");
+                    }
+                    serial_print("\n[http] done\n");
+                }
+                net_tcp_close(&conn);
+            }
         }
 
         // Автопинг: один раз через 2 секунды после старта.
