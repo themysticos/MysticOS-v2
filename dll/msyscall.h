@@ -63,4 +63,9 @@
 #define SYS_GET_ARG          302  // () -> const char*
 #define SYS_SET_WALLPAPER    303  // (path*) -> 1/0
 
+// ============================================================
+// Сеть (v3)
+// ============================================================
+#define SYS_NET_STATUS       400  // (net_status_t* out) -> 0
+
 #endif // MSYSCALL_H

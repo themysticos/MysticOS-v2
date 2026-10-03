@@ -22,5 +22,6 @@
 #include "ms/fs.h"
 #include "ms/input.h"
 #include "ms/system.h"
+#include "ms/net.h"
 
 #endif

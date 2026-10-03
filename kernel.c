@@ -911,6 +911,7 @@ static int msys_dispatch(unsigned int n,
     case SYS_RUN_PROGRAM:   return run_program((const char*)a0);
     case SYS_GET_ARG:       return (int)api_get_arg();
     case SYS_SET_WALLPAPER: return api_set_wallpaper((const char*)a0);
+    case SYS_NET_STATUS:    net_get_status((net_status_t*)a0); return 0;
     default: return 0;
     }
 }
@@ -1388,6 +1389,28 @@ static void draw_window(window_t* w, int rx, int ry, int rw, int rh) {
     (void)round_corners;
 }
 
+// Wi-Fi / network icon в таскбаре (12x12). 1 = рисовать точку.
+static const unsigned char WIFI_ICON[12][12] = {
+    {0,0,1,1,1,1,1,1,0,0,0,0},
+    {0,1,0,0,0,0,0,0,1,0,0,0},
+    {1,0,0,0,0,0,0,0,0,1,0,0},
+    {0,0,0,0,0,0,0,0,0,0,0,0},
+    {0,0,0,1,1,1,1,0,0,0,0,0},
+    {0,0,1,0,0,0,0,1,0,0,0,0},
+    {0,0,0,0,0,0,0,0,0,0,0,0},
+    {0,0,0,0,1,1,0,0,0,0,0,0},
+    {0,0,0,0,0,0,0,0,0,0,0,0},
+    {0,0,0,0,1,1,0,0,0,0,0,0},
+    {0,0,0,0,1,1,0,0,0,0,0,0},
+    {0,0,0,0,0,0,0,0,0,0,0,0},
+};
+
+static void draw_wifi_icon(int x, int y, unsigned int color) {
+    for (int r = 0; r < 12; r++)
+        for (int c = 0; c < 12; c++)
+            if (WIFI_ICON[r][c]) fb_backbuffer_pixel(x + c, y + r, color);
+}
+
 static void draw_taskbar_region(int rx,int ry,int rw,int rh) {
     int y = (int)vbe_height() - TASKBAR_H;
     int sw = (int)vbe_width();
@@ -1412,6 +1435,20 @@ static void draw_taskbar_region(int rx,int ry,int rw,int rh) {
         fb_backbuffer_fill(bx, y + 4, 100, TASKBAR_H - 8, bc);
         bb_text(bx + 8, y + 10, wins[i].title, COL_TEXT, bc);
         bx += 106;
+    }
+
+    // Иконка Wi-Fi/сети перед часами. Цвет — по состоянию:
+    //   зелёный — есть IP (сеть работает)
+    //   жёлтый — драйвер есть, IP ещё нет (DHCP в процессе)
+    //   серый — нет драйвера
+    {
+        net_status_t ns;
+        net_get_status(&ns);
+        unsigned int wc;
+        if (ns.have_ip) wc = FB_RGB(0x40, 0xE0, 0x60);
+        else if (ns.ready) wc = FB_RGB(0xE0, 0xC0, 0x40);
+        else wc = FB_RGB(0x70, 0x70, 0x78);
+        draw_wifi_icon(sw - 90, y + (TASKBAR_H - 12) / 2, wc);
     }
 
     // Счётчик секунд справа (тики / 100). Позже — RTC-часы.

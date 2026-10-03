@@ -146,7 +146,7 @@ examples/%.elf: examples/%.c api.h
 	gcc $(ELFCFLAGS) $< -o $@
 
 
-$(IMAGE): $(BOOT) $(BIN) $(WINAPP_ELF) $(SYSPR_ELFS)
+$(IMAGE): $(BOOT) $(BIN) $(WINAPP_ELF) $(SYSPR_ELFS) tools/mbr.py tools/fatput.py
 	# Один FAT16-образ: 64 зарезервированных сектора под загрузчик+ядро.
 	rm -f $@
 	mkfs.fat -C $@ -F 16 -s 4 -R 256 131072

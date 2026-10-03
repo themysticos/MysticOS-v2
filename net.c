@@ -11,6 +11,10 @@ static unsigned char g_ip[4]  = {10, 0, 2, 15};    // QEMU по умолчани
 static unsigned char g_gw[4]  = {10, 0, 2, 2};
 static unsigned char g_mask[4]= {255, 255, 255, 0};
 
+// Счётчики для net_get_status (для UI/программ).
+static unsigned int g_rx_count = 0;
+static unsigned int g_tx_count = 0;
+
 // ARP-таблица (упрощённая, 8 записей)
 #define ARP_TABLE_SIZE 8
 typedef struct {
@@ -102,6 +106,7 @@ static int eth_send(const unsigned char* dst_mac, n_u16 ethertype,
         for (unsigned int i = total; i < 60; i++) g_txbuf[i] = 0;
         total = 60;
     }
+    g_tx_count++;
     return virtio_net_send(g_txbuf, total);
 }
 
@@ -616,6 +621,7 @@ int net_poll(void) {
     }
     int n = virtio_net_recv(g_rxbuf, sizeof(g_rxbuf));
     if (n <= 0) return 0;
+    g_rx_count++;
     serial_print("[net] rx ");
     serial_print_int(n);
     serial_print(" bytes\n");
@@ -626,6 +632,22 @@ int net_poll(void) {
 // ============================================================
 // Public
 // ============================================================
+void net_set_dns(const unsigned char* dns) {
+    for (int i = 0; i < 4; i++) g_dns_server[i] = dns[i];
+}
+
+void net_get_status(net_status_t* out) {
+    if (!out) return;
+    out->ready       = virtio_net_ready();
+    out->dhcp_done   = net_dhcp_done();
+    out->have_ip     = g_ip[0] || g_ip[1] || g_ip[2] || g_ip[3];
+    for (int i = 0; i < 4; i++) out->ip[i]  = g_ip[i];
+    for (int i = 0; i < 4; i++) out->gw[i]  = g_gw[i];
+    for (int i = 0; i < 4; i++) out->dns[i] = g_dns_server[i];
+    out->rx_packets  = g_rx_count;
+    out->tx_packets  = g_tx_count;
+}
+
 void net_set_mac(const unsigned char* mac) {
     for (int i = 0; i < 6; i++) g_mac[i] = mac[i];
 }

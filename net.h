@@ -118,6 +118,26 @@ int net_udp_send(const unsigned char* dst_ip, unsigned short src_port,
 // Блокирующий: ждёт ответа до 3 секунд (polling).
 int net_dns_resolve(const char* name, unsigned char* out_ip);
 
+// ============================================================
+// Статус сети — для программ и UI (иконка в таскбаре)
+// ============================================================
+typedef struct {
+    int ready;                  // 1 = драйвер + IP готовы
+    int dhcp_done;              // 1 = DHCP ACK получен
+    int have_ip;                // 1 = IP не 0.0.0.0
+    unsigned char ip[4];
+    unsigned char gw[4];
+    unsigned char dns[4];
+    unsigned int rx_packets;    // счётчик принятых
+    unsigned int tx_packets;    // счётчик отправленных
+} net_status_t;
+
+// Заполнить структуру текущим состоянием сети.
+void net_get_status(net_status_t* out);
+
+// Установить DNS-сервер (используется DHCP, но можно и вручную).
+void net_set_dns(const unsigned char* dns);
+
 // Запустить DHCP: отправить DISCOVER. Результат придёт в обработчике
 // UDP (handle_udp) — по получении ACK установятся g_ip/g_gw/g_mask.
 // Возвращает 0 или -1.
