@@ -55,8 +55,13 @@ static int tcp_send_segment(tcp_conn_t* c, n_u8 flags,
     const unsigned char* p = (const unsigned char*)data;
     for (unsigned int i = 0; i < len; i++) pkt[20 + i] = p[i];
     unsigned int total = 20 + len;
-    t->checksum = tcp_checksum((const unsigned char*)net_our_ip(),
-                                c->dst_ip, pkt, total);
+    // tcp_checksum возвращает значение в BE-пространстве. При записи в
+    // u16-поле на little-endian компилятор записывает low byte первым —
+    // на проводе получается LE-порядок байт. Надо byteswap, чтобы на
+    // проводе был корректный BE-порядок. Без этого QEMU молча дропает
+    // пакет (TCP уходил в никуда, SYN-ACK не приходил).
+    t->checksum = be16(tcp_checksum((const unsigned char*)net_our_ip(),
+                                     c->dst_ip, pkt, total));
     return net_ip_send(c->dst_ip, 6, pkt, total);
 }
 

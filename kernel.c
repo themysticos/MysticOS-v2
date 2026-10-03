@@ -1813,7 +1813,7 @@ void kernel_main(void) {
         // DNS-резолв: один раз через 3 секунды после старта.
         if (virtio_net_ready() && !g_dns_started && timer_ticks() > 300) {
             g_dns_started = 1;
-            net_dns_resolve("example.com", g_dns_ip);
+            net_dns_resolve("info.cern.ch", g_dns_ip);
         }
 
         // TCP connect + HTTP GET: через 5 секунд после старта.
@@ -1828,7 +1828,7 @@ void kernel_main(void) {
             for (int i = 0; i < 4; i++) { serial_print_int(g_dns_ip[i]); if (i<3) serial_print("."); }
             serial_print(":80\n");
             if (net_tcp_connect(&conn, g_dns_ip, 80) == 0) {
-                const char* req = "GET / HTTP/1.0\r\nHost: example.com\r\n\r\n";
+                const char* req = "GET / HTTP/1.0\r\nHost: info.cern.ch\r\nConnection: close\r\n\r\n";
                 int reqlen = 0; while (req[reqlen]) reqlen++;
                 net_tcp_send(&conn, req, (unsigned int)reqlen);
                 char buf[512];
