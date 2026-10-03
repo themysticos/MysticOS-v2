@@ -1625,6 +1625,9 @@ static void diag_mark(int pos, char c) {
     vga[pos * 2 + 1] = 0x0F;   // белый на чёрном
 }
 
+static int g_ping_sent = 0;
+static int g_dhcp_started = 0;
+
 void kernel_main(void) {
     serial_init();       // COM1 — отладочный вывод в -serial stdio
     serial_print("=== MysticOS 2 kernel_main ===\n");
@@ -1794,6 +1797,24 @@ void kernel_main(void) {
         // Много раз: если в RX-очереди есть пачка — обработаем за кадр.
         for (int _n = 0; _n < 8; _n++) {
             if (!net_poll()) break;
+        }
+
+        // DHCP: один раз через 1 секунду после старта.
+        if (virtio_net_ready() && !g_dhcp_started && timer_ticks() > 100) {
+            g_dhcp_started = 1;
+            serial_print("[net] starting DHCP\n");
+            net_dhcp_discover();
+        }
+
+        // Автопинг: один раз через 2 секунды после старта.
+        if (virtio_net_ready() && !g_ping_sent && timer_ticks() > 200) {
+            g_ping_sent = 1;
+            unsigned char gw[4] = {10, 0, 2, 2};
+            serial_print("[net] ping 10.0.2.2 (auto)\n");
+            int rc = net_ping(gw);
+            serial_print("[net] net_ping returned ");
+            serial_print_int(rc);
+            serial_print("\n");
         }
 
         // Уступить CPU задачам-программам (кооперативно). Вернёмся сюда,

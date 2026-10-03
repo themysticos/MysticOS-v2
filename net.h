@@ -79,6 +79,16 @@ typedef struct {
 } __attribute__((packed)) icmp_hdr_t;
 
 // ============================================================
+// UDP (8 байт заголовок)
+// ============================================================
+typedef struct {
+    n_u16 src_port;    // big-endian
+    n_u16 dst_port;    // big-endian
+    n_u16 length;      // big-endian: 8 + payload_len
+    n_u16 checksum;    // big-endian; 0 = не считать (IPv4 разрешает)
+} __attribute__((packed)) udp_hdr_t;
+
+// ============================================================
 // Наш IP/MAC
 // ============================================================
 
@@ -99,6 +109,24 @@ int net_poll(void);
 
 // Отправить ICMP echo (ping). Возвращает 0 при успехе.
 int net_ping(const unsigned char* ip);
+
+// Отправить UDP-датаграмму. Возвращает 0 или -1.
+int net_udp_send(const unsigned char* dst_ip, unsigned short src_port,
+                 unsigned short dst_port, const void* data, unsigned int len);
+
+// Запустить DHCP: отправить DISCOVER. Результат придёт в обработчике
+// UDP (handle_udp) — по получении ACK установятся g_ip/g_gw/g_mask.
+// Возвращает 0 или -1.
+int net_dhcp_discover(void);
+
+// Готов ли DHCP (получен ACK).
+int net_dhcp_done(void);
+
+// Забрать следующий принятый UDP-пакет. Возвращает длину или -1.
+// src_ip — куда положить IP отправителя (4 байта), src_port — порт.
+// Идёт поверх очереди из 4 слотов, приёмник читает в порядке FIFO.
+int net_udp_recv(unsigned char* src_ip, unsigned short* src_port,
+                 void* buf, unsigned int max);
 
 // Наш MAC/IP (для отладки).
 const unsigned char* net_our_mac(void);

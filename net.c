@@ -222,6 +222,233 @@ int net_ip_send(const unsigned char* dst_ip, n_u8 proto,
     return eth_send(e->mac, ETH_TYPE_IP, pkt, 20 + plen);
 }
 
+// ============================================================
+// UDP: очередь из 4 слотов FIFO
+// ============================================================
+#define UDPQ_SIZE 4
+#define UDPQ_MAX 1472   // типичный MTU 1500 - 20 IP - 8 UDP
+
+typedef struct {
+    unsigned char src_ip[4];
+    unsigned short src_port;
+    unsigned int len;
+    unsigned char data[UDPQ_MAX];
+} udpq_slot_t;
+
+static udpq_slot_t g_udpq[UDPQ_SIZE];
+static int g_udpq_head = 0;   // читаем отсюда
+static int g_udpq_tail = 0;   // пишем сюда
+static int g_udpq_count = 0;
+
+static void udpq_push(const unsigned char* ip, unsigned short port,
+                      const unsigned char* data, unsigned int len) {
+    if (len > UDPQ_MAX) len = UDPQ_MAX;
+    if (g_udpq_count >= UDPQ_SIZE) {
+        // Очередь полная — выкидываем старый (head++).
+        g_udpq_head = (g_udpq_head + 1) % UDPQ_SIZE;
+        g_udpq_count--;
+    }
+    udpq_slot_t* s = &g_udpq[g_udpq_tail];
+    for (int i = 0; i < 4; i++) s->src_ip[i] = ip[i];
+    s->src_port = port;
+    s->len = len;
+    for (unsigned int i = 0; i < len; i++) s->data[i] = data[i];
+    g_udpq_tail = (g_udpq_tail + 1) % UDPQ_SIZE;
+    g_udpq_count++;
+}
+
+int net_udp_recv(unsigned char* src_ip, unsigned short* src_port,
+                 void* buf, unsigned int max) {
+    if (g_udpq_count <= 0) return -1;
+    udpq_slot_t* s = &g_udpq[g_udpq_head];
+    if (src_ip) for (int i = 0; i < 4; i++) src_ip[i] = s->src_ip[i];
+    if (src_port) *src_port = s->src_port;
+    unsigned int n = s->len;
+    if (n > max) n = max;
+    unsigned char* d = (unsigned char*)buf;
+    for (unsigned int i = 0; i < n; i++) d[i] = s->data[i];
+    g_udpq_head = (g_udpq_head + 1) % UDPQ_SIZE;
+    g_udpq_count--;
+    return (int)n;
+}
+
+int net_udp_send(const unsigned char* dst_ip, unsigned short src_port,
+                 unsigned short dst_port, const void* data, unsigned int len) {
+    if (len > UDPQ_MAX) return -1;
+    unsigned char pkt[1600];
+    udp_hdr_t* u = (udp_hdr_t*)pkt;
+    u->src_port = be16(src_port);
+    u->dst_port = be16(dst_port);
+    u->length   = be16((n_u16)(8 + len));
+    u->checksum = 0;   // IPv4 разрешает 0 = не считать
+    const unsigned char* p = (const unsigned char*)data;
+    for (unsigned int i = 0; i < len; i++) pkt[8 + i] = p[i];
+    return net_ip_send(dst_ip, IP_PROTO_UDP, pkt, 8 + len);
+}
+
+static void handle_dhcp(const unsigned char* p, unsigned int len);
+
+static void handle_udp(const unsigned char* ip_src,
+                       const unsigned char* p, unsigned int len) {
+    if (len < 8) return;
+    const udp_hdr_t* u = (const udp_hdr_t*)p;
+    unsigned short dst_port = be16(u->dst_port);
+    unsigned int ulen = be16(u->length);
+    if (ulen < 8 || ulen > len) ulen = len;
+    unsigned int payload_len = ulen - 8;
+    const unsigned char* payload = p + 8;
+    // DHCP: dst_port == 68 (клиент).
+    if (dst_port == 68) {
+        handle_dhcp(payload, payload_len);
+        return;
+    }
+    (void)dst_port;
+    unsigned short sport = be16(u->src_port);
+    udpq_push(ip_src, sport, payload, payload_len);
+    serial_print("[net] UDP ");
+    serial_print_int((int)sport);
+    serial_print(" -> ");
+    serial_print_int((int)be16(u->dst_port));
+    serial_print(" ");
+    serial_print_int((int)payload_len);
+    serial_print(" bytes\n");
+}
+
+// ============================================================
+// DHCP (RFC 2131). Упрощённый клиент.
+// ============================================================
+typedef struct {
+    n_u8  op, htype, hlen, hops;
+    n_u32 xid;
+    n_u16 secs, flags;
+    n_u8  ciaddr[4], yiaddr[4], siaddr[4], giaddr[4];
+    n_u8  chaddr[16];
+    n_u8  sname[64];
+    n_u8  file[128];
+    n_u8  magic[4];
+    n_u8  options[308];
+} __attribute__((packed)) dhcp_msg_t;
+
+static n_u32 g_dhcp_xid = 0x12345678;
+static int  g_dhcp_done = 0;
+static int  g_dhcp_state = 0;
+#define DHCP_OP_REQUEST   1
+#define DHCP_OP_REPLY     2
+#define DHCP_MSG_DISCOVER 1
+#define DHCP_MSG_OFFER    2
+#define DHCP_MSG_REQUEST  3
+#define DHCP_MSG_ACK      5
+#define DHCP_OPT_MSG_TYPE 53
+#define DHCP_OPT_SUBNET   1
+#define DHCP_OPT_ROUTER   3
+#define DHCP_OPT_DNS      6
+#define DHCP_OPT_REQIP    50
+#define DHCP_OPT_SERVERID 54
+#define DHCP_OPT_PARAM    55
+#define DHCP_OPT_END      255
+
+static int g_dhcp_offer_ip[4]  = {0,0,0,0};
+static int g_dhcp_server[4]    = {0,0,0,0};
+
+int net_dhcp_done(void) { return g_dhcp_done; }
+
+int net_dhcp_discover(void) {
+    unsigned char pkt[600];
+    for (unsigned int i = 0; i < sizeof(pkt); i++) pkt[i] = 0;
+    dhcp_msg_t* m = (dhcp_msg_t*)pkt;
+    m->op = DHCP_OP_REQUEST;
+    m->htype = 1; m->hlen = 6; m->hops = 0;
+    m->xid = be32(g_dhcp_xid);
+    m->secs = be16(0);
+    m->flags = be16(0x8000);
+    for (int i = 0; i < 6; i++) m->chaddr[i] = g_mac[i];
+    m->magic[0] = 63; m->magic[1] = 82; m->magic[2] = 53; m->magic[3] = 63;
+    int o = 0;
+    m->options[o++] = DHCP_OPT_MSG_TYPE; m->options[o++] = 1;
+    m->options[o++] = DHCP_MSG_DISCOVER;
+    m->options[o++] = DHCP_OPT_PARAM; m->options[o++] = 3;
+    m->options[o++] = DHCP_OPT_SUBNET; m->options[o++] = DHCP_OPT_ROUTER;
+    m->options[o++] = DHCP_OPT_DNS;
+    m->options[o++] = DHCP_OPT_END;
+    unsigned int hdr = 240 + 4 + o;
+    if (hdr < 300) hdr = 300;
+    unsigned char bcast[4] = {255,255,255,255};
+    serial_print("[dhcp] sending DISCOVER\n");
+    g_dhcp_state = 1;
+    return net_udp_send(bcast, 68, 67, pkt, hdr);
+}
+
+static void handle_dhcp(const unsigned char* p, unsigned int len) {
+    if (len < 240) return;
+    const dhcp_msg_t* m = (const dhcp_msg_t*)p;
+    if (m->op != DHCP_OP_REPLY) return;
+    int msg_type = 0;
+    const unsigned char* opt = m->options;
+    unsigned int opt_len = len - 240;
+    unsigned int i = 0;
+    while (i < opt_len) {
+        n_u8 code = opt[i++];
+        if (code == 0) continue;
+        if (code == 255) break;
+        if (i >= opt_len) break;
+        n_u8 olen = opt[i++];
+        if (i + olen > opt_len) break;
+        if (code == DHCP_OPT_MSG_TYPE && olen == 1) msg_type = opt[i];
+        else if (code == DHCP_OPT_SERVERID && olen == 4)
+            for (int k = 0; k < 4; k++) g_dhcp_server[k] = opt[i+k];
+        else if (code == DHCP_OPT_ROUTER && olen >= 4)
+            for (int k = 0; k < 4; k++) g_gw[k] = opt[i+k];
+        else if (code == DHCP_OPT_SUBNET && olen == 4)
+            for (int k = 0; k < 4; k++) g_mask[k] = opt[i+k];
+        i += olen;
+    }
+    serial_print("[dhcp] reply msg_type=");
+    serial_print_int(msg_type);
+    serial_print(" yiaddr=");
+    for (int k = 0; k < 4; k++) { serial_print_int(m->yiaddr[k]); if (k<3) serial_print("."); }
+    serial_print("\n");
+
+    if (msg_type == DHCP_MSG_OFFER && g_dhcp_state == 1) {
+        for (int k = 0; k < 4; k++) g_dhcp_offer_ip[k] = m->yiaddr[k];
+        unsigned char pkt[600];
+        for (unsigned int j = 0; j < sizeof(pkt); j++) pkt[j] = 0;
+        dhcp_msg_t* r = (dhcp_msg_t*)pkt;
+        r->op = DHCP_OP_REQUEST;
+        r->htype = 1; r->hlen = 6; r->hops = 0;
+        r->xid = be32(g_dhcp_xid);
+        r->flags = be16(0x8000);
+        for (int k = 0; k < 6; k++) r->chaddr[k] = g_mac[k];
+        r->magic[0] = 63; r->magic[1] = 82; r->magic[2] = 53; r->magic[3] = 63;
+        int o = 0;
+        r->options[o++] = DHCP_OPT_MSG_TYPE; r->options[o++] = 1;
+        r->options[o++] = DHCP_MSG_REQUEST;
+        r->options[o++] = DHCP_OPT_REQIP; r->options[o++] = 4;
+        for (int k = 0; k < 4; k++) r->options[o++] = m->yiaddr[k];
+        r->options[o++] = DHCP_OPT_SERVERID; r->options[o++] = 4;
+        for (int k = 0; k < 4; k++) r->options[o++] = g_dhcp_server[k];
+        r->options[o++] = DHCP_OPT_END;
+        unsigned int hdr = 240 + 4 + o;
+        if (hdr < 300) hdr = 300;
+        unsigned char bcast[4] = {255,255,255,255};
+        serial_print("[dhcp] sending REQUEST\n");
+        g_dhcp_state = 2;
+        net_udp_send(bcast, 68, 67, pkt, hdr);
+    } else if (msg_type == DHCP_MSG_ACK) {
+        // QEMU user-mode может ответить ACK сразу на DISCOVER (без OFFER).
+        // Принимаем ACK в любом состоянии.
+        for (int k = 0; k < 4; k++) g_ip[k] = m->yiaddr[k];
+        g_dhcp_done = 1;
+        g_dhcp_state = 3;
+        serial_print("[dhcp] ACK. our IP ");
+        for (int k = 0; k < 4; k++) { serial_print_int(g_ip[k]); if (k<3) serial_print("."); }
+        serial_print(" gw ");
+        for (int k = 0; k < 4; k++) { serial_print_int(g_gw[k]); if (k<3) serial_print("."); }
+        serial_print(" mask ");
+        for (int k = 0; k < 4; k++) { serial_print_int(g_mask[k]); if (k<3) serial_print("."); }
+        serial_print("\n");
+    }
+}
+
 static void handle_ip(const unsigned char* p, unsigned int len) {
     if (len < 20) return;
     const ip_hdr_t* ip = (const ip_hdr_t*)p;
@@ -238,6 +465,7 @@ static void handle_ip(const unsigned char* p, unsigned int len) {
     unsigned int plen = total - ihl;
     switch (ip->proto) {
     case IP_PROTO_ICMP: handle_icmp(ip->src, payload, plen); break;
+    case IP_PROTO_UDP:  handle_udp(ip->src, payload, plen);  break;
     default: break;
     }
 }
