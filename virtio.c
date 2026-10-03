@@ -89,10 +89,18 @@ static int virtio_map_caps(virtio_dev_t* dev) {
                 dev->common_bar = bar;  dev->common_off = off; dev->common_len = len;
                 dev->cfg = (volatile virtio_pci_common_cfg_t*)addr;
                 break;
-            case VIRTIO_PCI_CAP_NOTIFY:
+            case VIRTIO_PCI_CAP_NOTIFY: {
                 dev->notify_bar = bar;  dev->notify_off = off; dev->notify_len = len;
                 dev->notify_base = (volatile v_u8*)addr;
+                // notify_off_multiplier идёт СРАЗУ за length (по смещению 16
+                // от начала cap). См. VirtIO 1.2, 4.1.4.4.
+                unsigned int mult = pci_read32(bus, slot, func, cap_off + 16);
+                dev->notify_off_multiplier = mult;
+                serial_print("[virtio] notify off_mult=");
+                serial_print_int((int)mult);
+                serial_print("\n");
                 break;
+            }
             case VIRTIO_PCI_CAP_DEVICE:
                 dev->device_bar = bar;  dev->device_off = off; dev->device_len = len;
                 dev->device_cfg = (volatile v_u8*)addr;
@@ -163,10 +171,19 @@ int virtio_init(virtio_dev_t* dev, v_u64 wanted_features) {
     serial_print_hex((unsigned int)((agreed >> 32) & 0xFFFFFFFFu));
     serial_print("\n");
 
-    // 7. DRIVER_OK.
-    s |= VIRTIO_STATUS_DRIVER_OK;
-    set_status(dev, s);
+    // 7. DRIVER_OK НЕ ставим тут! По спецификации VirtIO 1.2 (§3.1.1):
+    // "The driver MUST configure the device's virtqueues before setting
+    //  the DRIVER_OK status bit." Иначе QEMU не обрабатывает RX.
+    // DRIVER_OK ставится отдельным вызовом virtio_driver_ok() после
+    // настройки всех очередей.
     return 1;
+}
+
+void virtio_driver_ok(virtio_dev_t* dev) {
+    v_u8 s = get_status(dev);
+    s |= VIRTIO_STATUS_DRIVER_OK;
+    dev->cfg->device_status = s;
+    __asm__ volatile ("mfence" ::: "memory");
 }
 
 // ============================================================
@@ -245,25 +262,24 @@ int virtio_queue_add(virtio_dev_t* dev, int idx,
 void virtio_queue_notify(virtio_dev_t* dev, int idx) {
     virtqueue_t* q = &dev->queues[idx];
     if (!q->in_use) return;
-    v_u16 off = q->queue_notify_off * 2;   // notify_off * 2 для всех типов (не packed)
+    // notify_off_multiplier из PCI cap (обычно 2 или 4). Раньше был хардкод
+    // * 2 — неверно для QEMU (там обычно 4), notify не доходил.
+    v_u32 mult = dev->notify_off_multiplier ? dev->notify_off_multiplier : 2;
+    v_u32 off = q->queue_notify_off * mult;
     *(volatile v_u16*)(dev->notify_base + off) = (v_u16)idx;
 }
 
+// НЕБЛОКИРУЮЩИЙ: вернуть -1 если пакета нет.
+// Раньше тут было 100M итераций pause — это вешало ядро на секунды.
+// Правильно: poll в главном цикле или IRQ.
 int virtio_queue_wait(virtio_dev_t* dev, int idx, v_u32* out_len) {
     virtqueue_t* q = &dev->queues[idx];
     if (!q->in_use) return -1;
-    // Ждать, пока used->idx != last_used_idx.
-    for (unsigned int spin = 0; spin < 100000000u; spin++) {
-        v_u16 used_idx = q->used->idx;
-        if (used_idx != q->last_used_idx) {
-            v_u16 slot = q->last_used_idx & (q->queue_size - 1);
-            v_u32 id = q->used->ring[slot].id;
-            v_u32 len = q->used->ring[slot].len;
-            q->last_used_idx++;
-            if (out_len) *out_len = len;
-            return (int)id;
-        }
-        __asm__ volatile ("pause");
-    }
-    return -2;   // timeout
+    if (q->used->idx == q->last_used_idx) return -1;   // нет данных
+    v_u16 slot = q->last_used_idx & (q->queue_size - 1);
+    v_u32 id = q->used->ring[slot].id;
+    v_u32 len = q->used->ring[slot].len;
+    q->last_used_idx++;
+    if (out_len) *out_len = len;
+    return (int)id;
 }

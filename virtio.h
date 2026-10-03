@@ -152,6 +152,7 @@ typedef struct {
     v_u8            notify_bar;
     v_u32           notify_off;
     v_u32           notify_len;
+    v_u32           notify_off_multiplier;   // из NOTIFY cap (обычно 2 или 4)
     v_u8            device_bar;
     v_u32           device_off;
     v_u32           device_len;
@@ -176,8 +177,13 @@ typedef struct {
 // Возвращает 1 если найдено и записано в *out.
 int  virtio_find_pci(v_u16 device_id, virtio_dev_t* out);
 
-// Инициализировать устройство (ACK/DRIVER, negotiate features, FEATURES_OK, DRIVER_OK).
+// Инициализировать устройство (ACK/DRIVER, negotiate features, FEATURES_OK).
+// DRIVER_OK НЕ ставится — вызывающий должен настроить очереди и затем
+// вызвать virtio_driver_ok(). Это требование спецификации VirtIO.
 int  virtio_init(virtio_dev_t* dev, v_u64 wanted_features);
+
+// Установить DRIVER_OK. Звать ПОСЛЕ virtio_queue_setup для всех очередей.
+void virtio_driver_ok(virtio_dev_t* dev);
 
 // Настроить очередь #idx, размер size. Возвращает 1 при успехе.
 // desc/avail/used должны быть в уже выделенной памяти (например, pmem).

@@ -50,7 +50,7 @@ vbe_fail:
 vbe_done:
 
     ; --- Загрузка ядра: сектор 2 и далее (LBA 1+) на 0x10000 ---
-    mov word [kern_sectors], 240
+    mov word [kern_sectors], 400
     mov byte [chs_sector], 2
     mov byte [chs_head], 0
     mov byte [chs_cyl], 0

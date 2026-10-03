@@ -14,6 +14,19 @@ _start:
     mov ss, ax
     mov esp, 0x90000
 
+    ; Обнулить .bss. Загрузчик грузит только .text+.data (kernel.bin);
+    ; .bss в файле не хранится, но ОБЯЗАНА быть нулём к моменту старта.
+    ; Без этого статические буферы (включая rx_desc_buf, net-буферы)
+    ; содержат мусор от BIOS/QEMU -> необъяснимые баги.
+    extern __bss_start
+    extern __bss_end
+    mov edi, __bss_start
+    mov ecx, __bss_end
+    sub ecx, edi
+    xor eax, eax
+    cld
+    rep stosb
+
     call kernel_main
 
     cli

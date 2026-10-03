@@ -23,6 +23,7 @@
 #include "serial.h"
 #include "virtio.h"
 #include "virtio_net.h"
+#include "net.h"
 
 // ============================================================
 // SYSCALL (int 0x80) — заглушка в начале файла (настоящий диспетчер
@@ -1663,13 +1664,10 @@ void kernel_main(void) {
     serial_print_int(probes);
     serial_print("\n");
     if (virtio_net_ready()) {
-        serial_print("[net] virtio-net ready, MAC ");
-        const unsigned char* mac = virtio_net_mac();
-        for (int i = 0; i < 6; i++) {
-            serial_print_hex(mac[i]);
-            if (i < 5) serial_print(":");
-        }
-        serial_print("\n");
+        net_init();
+        // НИКАКИХ блокирующих poll'ов до старта UI! net_init отправит ARP,
+        // а ответы будут обработаны в главном цикле через net_poll.
+        serial_print("[net] init done, polling in main loop\n");
     }
 
     icons_init();
@@ -1790,6 +1788,12 @@ void kernel_main(void) {
             }
             old_mx = mx; old_my = my;
             dirty_w = 0; dirty_h = 0;
+        }
+
+        // Сетевой опрос (неблокирующий): принять и обработать пакеты.
+        // Много раз: если в RX-очереди есть пачка — обработаем за кадр.
+        for (int _n = 0; _n < 8; _n++) {
+            if (!net_poll()) break;
         }
 
         // Уступить CPU задачам-программам (кооперативно). Вернёмся сюда,

@@ -19,7 +19,11 @@
 #define VIRTIO_NET_F_MRG_RXBUF   15
 // VIRTIO_F_VERSION_1 (bit 32) — обязательный.
 
-// virtio_net_hdr (12 байт, без mrg_rxbuf).
+// virtio_net_hdr_mrg_rxbuf (12 байт). Linux: sizeof(struct
+// virtio_net_hdr_mrg_rxbuf) = 10 (virtio_net_hdr) + 2 (num_buffers).
+// ВАЖНО: для modern (VIRTIO_F_VERSION_1 negotiated) QEMU ТРЕБУЕТ
+// 12-байтный hdr даже без MRG_RXBUF (см. virtio_net.c:6928-6930).
+// Раньше тут было 10 байт — QEMU получал ARP со сдвигом на 2 -> игнор.
 typedef struct {
     v_u8  flags;
     v_u8  gso_type;
@@ -27,6 +31,7 @@ typedef struct {
     v_u16 gso_size;
     v_u16 csum_start;
     v_u16 csum_offset;
+    v_u16 num_buffers;   // 12-й байт, для modern всегда 0
 } __attribute__((packed)) virtio_net_hdr_t;
 
 // ============================================================
@@ -120,6 +125,23 @@ int virtio_net_probe(device_t* dev) {
     rx_next_free = 0;
     rx_fill_all();
 
+    // DRIVER_OK — ТОЛЬКО теперь, после настройки всех очередей и pre-fill RX.
+    virtio_driver_ok(&g_dev);
+    serial_print("[virtio-net] DRIVER_OK set\n");
+
+    // ВАЖНО: notify RX ПОСЛЕ DRIVER_OK. Спецификация VirtIO (§3.1.1):
+    // device НЕ обрабатывает буферы до DRIVER_OK. Наш первый notify (в
+    // rx_fill_all) был проигнорирован QEMU. Переуведомляем — теперь
+    // device увидит 16 pre-fill'нутых буферов.
+    virtio_queue_notify(&g_dev, VQ_RX);
+    serial_print("[virtio-net] re-notified RX after DRIVER_OK\n");
+
+    serial_print("[virtio-net] RX notify_off=");
+    serial_print_int((int)g_dev.queues[VQ_RX].queue_notify_off);
+    serial_print(" TX notify_off=");
+    serial_print_int((int)g_dev.queues[VQ_TX].queue_notify_off);
+    serial_print("\n");
+
     g_ready = 1;
     serial_print("[virtio-net] ready\n");
     return 0;
@@ -139,6 +161,8 @@ int virtio_net_send(const void* data, unsigned int len) {
     virtio_net_hdr_t* h = (virtio_net_hdr_t*)tx_pkt_buf;
     h->flags = 0; h->gso_type = 0; h->hdr_len = 0;
     h->gso_size = 0; h->csum_start = 0; h->csum_offset = 0;
+    h->num_buffers = 0;   // modern: всегда 0 (нет mergeable buffers)
+
     unsigned char* dst = tx_pkt_buf + sizeof(virtio_net_hdr_t);
     const unsigned char* src = (const unsigned char*)data;
     for (unsigned int i = 0; i < len; i++) dst[i] = src[i];
@@ -150,11 +174,21 @@ int virtio_net_send(const void* data, unsigned int len) {
                              0);   // 0 = device читает
     if (d < 0) return -2;
 
+    serial_print("[virtio-net] send ");
+    serial_print_int((int)len);
+    serial_print(" bytes, desc=");
+    serial_print_int(d);
+    serial_print(" avail_idx=");
+    serial_print_int((int)g_dev.queues[VQ_TX].avail->idx);
+    serial_print("\n");
+
     virtio_queue_notify(&g_dev, VQ_TX);
-    // Ждём used (устройство обработало).
+    serial_print("[virtio-net] notified TX\n");
+    // НЕ ждём used — QEMU обработает асинхронно, но нам не надо ждать.
+    // Проверим used при следующем send (или в net_poll). Это не критично:
+    // если TX-очередь переполнится, следующий send вернёт ошибку.
     v_u32 used_len = 0;
-    int rc = virtio_queue_wait(&g_dev, VQ_TX, &used_len);
-    if (rc < 0) return -3;
+    (void)virtio_queue_wait(&g_dev, VQ_TX, &used_len);   // «убрать» used, если уже есть
     return (int)len;
 }
 
@@ -180,6 +214,67 @@ int virtio_net_recv(void* buf, unsigned int max) {
     virtio_queue_notify(&g_dev, VQ_RX);
 
     return (int)data_len;
+}
+
+// Расширенная диагностика: что QEMU видит в common_cfg и config.
+void virtio_net_debug2(void) {
+    serial_print("[dbg2] status=");
+    serial_print_hex(g_dev.cfg->device_status);
+    serial_print("\n");
+
+    g_dev.cfg->queue_select = VQ_RX;
+    __asm__ volatile ("mfence" ::: "memory");
+    serial_print("[dbg2] RX en=");
+    serial_print_hex(g_dev.cfg->queue_enable);
+    serial_print(" drv=");
+    serial_print_hex((unsigned int)g_dev.cfg->queue_driver);
+    serial_print(" dev=");
+    serial_print_hex((unsigned int)g_dev.cfg->queue_device);
+    serial_print(" desc=");
+    serial_print_hex((unsigned int)g_dev.cfg->queue_desc);
+    serial_print("\n");
+
+    serial_print("[dbg2] RX desc[0] addr=");
+    serial_print_hex((unsigned int)g_dev.queues[VQ_RX].desc[0].addr);
+    serial_print(" len=");
+    serial_print_int((int)g_dev.queues[VQ_RX].desc[0].len);
+    serial_print(" flags=");
+    serial_print_hex(g_dev.queues[VQ_RX].desc[0].flags);
+    serial_print("\n");
+    serial_print("[dbg2] RX avail idx=");
+    serial_print_int((int)g_dev.queues[VQ_RX].avail->idx);
+    serial_print(" ring[0]=");
+    serial_print_int((int)g_dev.queues[VQ_RX].avail->ring[0]);
+    serial_print(" ring[15]=");
+    serial_print_int((int)g_dev.queues[VQ_RX].avail->ring[15]);
+    serial_print("\n");
+}
+
+// Диагностика: напечатать в serial адреса и индексы очередей.
+void virtio_net_debug(void) {
+    serial_print("[dbg] cfg=");
+    serial_print_hex((unsigned int)g_dev.cfg);
+    serial_print(" notify_base=");
+    serial_print_hex((unsigned int)g_dev.notify_base);
+    serial_print(" mult=");
+    serial_print_int((int)g_dev.notify_off_multiplier);
+    serial_print(" device_cfg=");
+    serial_print_hex((unsigned int)g_dev.device_cfg);
+    serial_print("\n");
+    serial_print("[dbg] RX avail_idx=");
+    serial_print_int((int)g_dev.queues[VQ_RX].avail->idx);
+    serial_print(" used_idx=");
+    serial_print_int((int)g_dev.queues[VQ_RX].used->idx);
+    serial_print(" last_used=");
+    serial_print_int((int)g_dev.queues[VQ_RX].last_used_idx);
+    serial_print("\n");
+    serial_print("[dbg] TX avail_idx=");
+    serial_print_int((int)g_dev.queues[VQ_TX].avail->idx);
+    serial_print(" used_idx=");
+    serial_print_int((int)g_dev.queues[VQ_TX].used->idx);
+    serial_print(" last_used=");
+    serial_print_int((int)g_dev.queues[VQ_TX].last_used_idx);
+    serial_print("\n");
 }
 
 // ============================================================

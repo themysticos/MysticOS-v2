@@ -29,4 +29,8 @@ int virtio_net_recv(void* buf, unsigned int max);
 // Готов ли драйвер (probe прошёл успешно).
 int virtio_net_ready(void);
 
+// Диагностика в serial: адреса, индексы очередей.
+void virtio_net_debug(void);
+void virtio_net_debug2(void);
+
 #endif // VIRTIO_NET_H
