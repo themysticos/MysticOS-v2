@@ -9,6 +9,7 @@ static unsigned int g_fb = 0;
 static unsigned int g_pitch = 0;
 static int g_w = 0, g_h = 0;
 static int g_active = 0;
+static int g_lfb_bpp = 24;   // реальный формат LFB: 24 или 32
 
 unsigned int vbe_fb_addr(void) { return g_fb; }
 unsigned int vbe_width(void) { return (unsigned int)g_w; }
@@ -24,18 +25,36 @@ int vbe_init(void) {
     g_pitch = (unsigned int)(*(volatile unsigned short*)(VBE_PARAM_ADDR + 4));
     g_w = (int)(*(volatile unsigned short*)(VBE_PARAM_ADDR + 6));
     g_h = (int)(*(volatile unsigned short*)(VBE_PARAM_ADDR + 8));
+    // BPP: загрузчик пишет в 0x900A. Принимаем 24 (3 байта/пиксель)
+    // и 32 (4 байта, старший байт — X/alpha, обычно 0 или 0xFF).
+    // Backbuffer всё равно остаётся 24bpp — конвертация только в
+    // fb_flip/fb_flip_rect/fb_put_pixel.
+    unsigned int bpp = *(volatile unsigned char*)(VBE_PARAM_ADDR + 10);
+    if (bpp == 0) bpp = 24;   // старый образ без 0x900A — считаем 24
+    if (bpp != 24 && bpp != 32) {
+        g_active = 0;
+        return 0;
+    }
+    g_lfb_bpp = (int)bpp;
     g_active = 1;
     return 1;
 }
 
-// Пиксель (24bpp: 3 байта B,G,R).
+// Пиксель. Формат задаётся g_lfb_bpp (24 или 32).
 void fb_put_pixel(int x, int y, unsigned int color) {
     if (!g_active) return;
     if (x < 0 || y < 0 || x >= g_w || y >= g_h) return;
-    unsigned char* p = (unsigned char*)(g_fb + (unsigned int)y * g_pitch + (unsigned int)x * 3u);
-    p[0] = (unsigned char)(color & 0xFF);
-    p[1] = (unsigned char)((color >> 8) & 0xFF);
-    p[2] = (unsigned char)((color >> 16) & 0xFF);
+    if (g_lfb_bpp == 32) {
+        // XRGB8888 little-endian: байты B,G,R,X.
+        unsigned int* p = (unsigned int*)(g_fb + (unsigned int)y * g_pitch + (unsigned int)x * 4u);
+        *p = color & 0x00FFFFFFu;
+    } else {
+        // BGR888
+        unsigned char* p = (unsigned char*)(g_fb + (unsigned int)y * g_pitch + (unsigned int)x * 3u);
+        p[0] = (unsigned char)(color & 0xFF);
+        p[1] = (unsigned char)((color >> 8) & 0xFF);
+        p[2] = (unsigned char)((color >> 16) & 0xFF);
+    }
 }
 
 void fb_fill_rect(int x, int y, int w, int h, unsigned int color) {
@@ -291,59 +310,53 @@ void fb_backbuffer_rect(int x, int y, int w, int h, unsigned int color) {
     fb_backbuffer_line(x + w - 1, y, x + w - 1, y + h - 1, color);
 }
 
-// Копирует только прямоугольник backbuffer на экран.
+// Копирует прямоугольник backbuffer на экран с конвертацией в формат LFB.
 void fb_flip_rect(int x, int y, int w, int h) {
     if (!g_bb || !g_active) return;
-    // Обрезаем строго, затем ПОВТОРНО проверяем границы.
-    // Иначе при x>=g_w или y>=g_h после вычитания w/h уходят в минус,
-    // а (unsigned)(w*3) даёт огромное число -> запись за пределы буфера.
     if (x < 0) { w += x; x = 0; }
     if (y < 0) { h += y; y = 0; }
     if (x >= g_w || y >= g_h) return;
     if (x + w > g_w) w = g_w - x;
     if (y + h > g_h) h = g_h - y;
     if (w <= 0 || h <= 0) return;
+    int bytes_pp = g_lfb_bpp / 8;
     for (int yy = y; yy < y + h; yy++) {
-        unsigned char* dst = (unsigned char*)(g_fb + (unsigned int)yy * g_pitch + (unsigned int)x * 3u);
-        unsigned char* src = g_bb + ((unsigned int)yy * (unsigned int)g_w + (unsigned int)x) * 3u;
-        unsigned int bytes = (unsigned int)w * 3u;
-        unsigned int dwords = bytes / 4u;
-        unsigned int tail = bytes % 4u;
-        // ВАЖНО: сохранить исходные указатели — rep movsl их СДВИГАЕТ,
-        // иначе хвост (tail байт) скопировался бы со сдвигом (баг!).
-        unsigned char* src0 = src;
-        unsigned char* dst0 = dst;
-        __asm__ volatile (
-            "cld\n\t"
-            "rep movsl\n\t"
-            : "+S"(src), "+D"(dst), "+c"(dwords)
-            :
-            : "memory"
-        );
-        for (unsigned int i = 0; i < tail; i++) dst0[dwords * 4u + i] = src0[dwords * 4u + i];
+        const unsigned char* src = g_bb + ((unsigned int)yy * (unsigned int)g_w + (unsigned int)x) * 3u;
+        unsigned char* dst = (unsigned char*)(g_fb + (unsigned int)yy * g_pitch + (unsigned int)x * (unsigned int)bytes_pp);
+        if (g_lfb_bpp == 32) {
+            unsigned int* d32 = (unsigned int*)dst;
+            for (int i = 0; i < w; i++) {
+                unsigned int b = src[0], g = src[1], r = src[2];
+                d32[i] = b | (g << 8) | (r << 16);
+                src += 3;
+            }
+        } else {
+            for (int i = 0; i < w; i++) { dst[0]=src[0]; dst[1]=src[1]; dst[2]=src[2]; src+=3; dst+=3; }
+        }
     }
 }
 
-// Копирует backbuffer на экран. Быстро: rep movsd (32-битными словами).
 void fb_flip(void) {
     if (!g_bb || !g_active) return;
-    // Строки могут иметь разный pitch, поэтому построчно.
     for (int y = 0; y < g_h; y++) {
+        const unsigned char* src = g_bb + (unsigned int)y * (unsigned int)g_w * 3u;
         unsigned char* dst = (unsigned char*)(g_fb + (unsigned int)y * g_pitch);
-        unsigned char* src = g_bb + (unsigned int)y * (unsigned int)g_w * 3u;
-        unsigned int bytes = (unsigned int)g_w * 3u;
-        unsigned int dwords = bytes / 4u;
-        unsigned int tail = bytes % 4u;
-        unsigned char* src0 = src;
-        unsigned char* dst0 = dst;
-        __asm__ volatile (
-            "cld\n\t"
-            "rep movsl\n\t"
-            : "+S"(src), "+D"(dst), "+c"(dwords)
-            :
-            : "memory"
-        );
-        // Хвост строки (1-3 байта). Используем ИСХОДНЫЕ указатели (rep их сдвинул).
-        for (unsigned int i = 0; i < tail; i++) dst0[dwords * 4u + i] = src0[dwords * 4u + i];
+        if (g_lfb_bpp == 32) {
+            unsigned int* d32 = (unsigned int*)dst;
+            for (int x = 0; x < g_w; x++) {
+                unsigned int b = src[0], g = src[1], r = src[2];
+                d32[x] = b | (g << 8) | (r << 16);
+                src += 3;
+            }
+        } else {
+            unsigned int bytes = (unsigned int)g_w * 3u;
+            unsigned int dwords = bytes / 4u;
+            unsigned int tail = bytes % 4u;
+            const unsigned char* src0 = src;
+            unsigned char* dst0 = dst;
+            unsigned char* sd = (unsigned char*)src;
+            __asm__ volatile ("cld\n\trep movsl\n\t" : "+S"(sd), "+D"(dst), "+c"(dwords) :: "memory");
+            for (unsigned int i = 0; i < tail; i++) dst0[dwords * 4u + i] = src0[dwords * 4u + i];
+        }
     }
 }

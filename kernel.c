@@ -1673,11 +1673,16 @@ void kernel_main(void) {
     serial_init();       // COM1 — отладочный вывод в -serial stdio
     serial_print("=== MysticOS 2 kernel_main ===\n");
     diag_mark(0, 'A');   // ядро стартовало (до vbe_init)
-    if (!vbe_init()) {
-        serial_print("[FATAL] vbe_init failed\n");
-        for (;;) __asm__ volatile ("hlt");
+    int graphics_ok = vbe_init();
+    if (!graphics_ok) {
+        // НЕ падаем. Дальше работаем без графики — на реальном железе
+        // это значит, что VBE нет (или BPP != 24) — идём в fallback.
+        // Сейчас: дальнейший UI станет no-op (все fb_* проверяют g_active),
+        // но ядро продолжит инициализацию (сеть, ФС, задачи).
+        diag_mark(1, 'v');   // VBE failed marker
+    } else {
+        diag_mark(1, 'B');
     }
-    diag_mark(1, 'B');   // vbe_init вернул успех
     fb_backbuffer_init();
     // console_init ОБЯЗАТЕЛЕН: без него console.cols/rows = 0, и первый же
     // console_putc сделает while(cy>=0) scroll() — сдвинет ВЕСЬ LFB вверх
