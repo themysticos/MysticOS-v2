@@ -911,7 +911,6 @@ static int msys_dispatch(unsigned int n,
     case SYS_RUN_PROGRAM:   return run_program((const char*)a0);
     case SYS_GET_ARG:       return (int)api_get_arg();
     case SYS_SET_WALLPAPER: return api_set_wallpaper((const char*)a0);
-    case SYS_NET_STATUS:    net_get_status((net_status_t*)a0); return 0;
     default: return 0;
     }
 }
@@ -1389,28 +1388,6 @@ static void draw_window(window_t* w, int rx, int ry, int rw, int rh) {
     (void)round_corners;
 }
 
-// Wi-Fi / network icon в таскбаре (12x12). 1 = рисовать точку.
-static const unsigned char WIFI_ICON[12][12] = {
-    {0,0,1,1,1,1,1,1,0,0,0,0},
-    {0,1,0,0,0,0,0,0,1,0,0,0},
-    {1,0,0,0,0,0,0,0,0,1,0,0},
-    {0,0,0,0,0,0,0,0,0,0,0,0},
-    {0,0,0,1,1,1,1,0,0,0,0,0},
-    {0,0,1,0,0,0,0,1,0,0,0,0},
-    {0,0,0,0,0,0,0,0,0,0,0,0},
-    {0,0,0,0,1,1,0,0,0,0,0,0},
-    {0,0,0,0,0,0,0,0,0,0,0,0},
-    {0,0,0,0,1,1,0,0,0,0,0,0},
-    {0,0,0,0,1,1,0,0,0,0,0,0},
-    {0,0,0,0,0,0,0,0,0,0,0,0},
-};
-
-static void draw_wifi_icon(int x, int y, unsigned int color) {
-    for (int r = 0; r < 12; r++)
-        for (int c = 0; c < 12; c++)
-            if (WIFI_ICON[r][c]) fb_backbuffer_pixel(x + c, y + r, color);
-}
-
 static void draw_taskbar_region(int rx,int ry,int rw,int rh) {
     int y = (int)vbe_height() - TASKBAR_H;
     int sw = (int)vbe_width();
@@ -1435,20 +1412,6 @@ static void draw_taskbar_region(int rx,int ry,int rw,int rh) {
         fb_backbuffer_fill(bx, y + 4, 100, TASKBAR_H - 8, bc);
         bb_text(bx + 8, y + 10, wins[i].title, COL_TEXT, bc);
         bx += 106;
-    }
-
-    // Иконка Wi-Fi/сети перед часами. Цвет — по состоянию:
-    //   зелёный — есть IP (сеть работает)
-    //   жёлтый — драйвер есть, IP ещё нет (DHCP в процессе)
-    //   серый — нет драйвера
-    {
-        net_status_t ns;
-        net_get_status(&ns);
-        unsigned int wc;
-        if (ns.have_ip) wc = FB_RGB(0x40, 0xE0, 0x60);
-        else if (ns.ready) wc = FB_RGB(0xE0, 0xC0, 0x40);
-        else wc = FB_RGB(0x70, 0x70, 0x78);
-        draw_wifi_icon(sw - 90, y + (TASKBAR_H - 12) / 2, wc);
     }
 
     // Счётчик секунд справа (тики / 100). Позже — RTC-часы.
@@ -1673,36 +1636,11 @@ void kernel_main(void) {
     serial_init();       // COM1 — отладочный вывод в -serial stdio
     serial_print("=== MysticOS 2 kernel_main ===\n");
     diag_mark(0, 'A');   // ядро стартовало (до vbe_init)
-    int graphics_ok = vbe_init();
-    // Диагностика VBE: пишем фактические разрешение и BPP в VGA-текст
-    // (видно в первые секунды, если что-то пойдёт не так).
-    {
-        unsigned int vw = vbe_width(), vh = vbe_height();
-        // 800 -> '8' '0' '0'
-        volatile unsigned char* vga = (volatile unsigned char*)0xB8000;
-        vga[40 * 2] = 'W'; vga[41 * 2] = '=';
-        vga[42 * 2] = (char)('0' + (vw / 100) % 10);
-        vga[43 * 2] = (char)('0' + (vw / 10) % 10);
-        vga[44 * 2] = (char)('0' + vw % 10);
-        vga[45 * 2] = 'H'; vga[46 * 2] = '=';
-        vga[47 * 2] = (char)('0' + (vh / 100) % 10);
-        vga[48 * 2] = (char)('0' + (vh / 10) % 10);
-        vga[49 * 2] = (char)('0' + vh % 10);
-        unsigned int bpp = 0;
-        bpp = *(volatile unsigned char*)(0x900A);
-        vga[50 * 2] = 'B'; vga[51 * 2] = '=';
-        vga[52 * 2] = (char)('0' + (bpp / 10) % 10);
-        vga[53 * 2] = (char)('0' + bpp % 10);
+    if (!vbe_init()) {
+        serial_print("[FATAL] vbe_init failed\n");
+        for (;;) __asm__ volatile ("hlt");
     }
-    if (!graphics_ok) {
-        // НЕ падаем. Дальше работаем без графики — на реальном железе
-        // это значит, что VBE нет (или BPP != 24) — идём в fallback.
-        // Сейчас: дальнейший UI станет no-op (все fb_* проверяют g_active),
-        // но ядро продолжит инициализацию (сеть, ФС, задачи).
-        diag_mark(1, 'v');   // VBE failed marker
-    } else {
-        diag_mark(1, 'B');
-    }
+    diag_mark(1, 'B');   // vbe_init вернул успех
     fb_backbuffer_init();
     // console_init ОБЯЗАТЕЛЕН: без него console.cols/rows = 0, и первый же
     // console_putc сделает while(cy>=0) scroll() — сдвинет ВЕСЬ LFB вверх

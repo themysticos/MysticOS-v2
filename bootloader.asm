@@ -20,53 +20,19 @@ boot_code:
     mov al, '1'
     call putc_bios
 
-    ; --- VBE: перебрать режимы по убыванию, взять первый с LFB ---
-    ; Таблица режимов. Каждый: 2 байта номер, 2 байта "BPP check":
-    ;   0 = не проверять BPP (доверяем BIOS), 8/16/24 = требуемый BPP.
-    ; Терминатор: 0xFFFF.
+    ; --- VBE: установить режим 800x600x24 с линейным framebuffer ---
     mov dword [0x9000], 0
-    mov si, vbe_modes
-.vbe_try:
-    mov cx, [si]
-    cmp cx, 0xFFFF
-    je vbe_fail
-    add si, 2
-    mov bx, cx
-
-    ; 1) Получить инфу о режиме (0x4F01).
     mov ax, 0x4F01
+    mov cx, 0x115
     mov di, 0x8000
-    push si
-    push bx
     int 0x10
-    pop bx
-    pop si
     cmp ax, 0x004F
-    jne .vbe_next              ; режим не поддерживается
-
-    ; 2) Проверить ModeAttributes: бит 7 (0x80) = LinearFramebuffer доступен.
-    mov ax, [0x8000 + 0x00]
-    test ax, 0x0080
-    jz .vbe_next               ; LFB недоступен
-
-    ; 3) Проверить BPP (если указан):
-    ;    MemoryModel (offset 0x1B) = 4 (packed pixel) или 6 (direct color).
-    ;    BitsPerPixel (offset 0x19).
-    ;    Простой случай: сравнить с ожидаемым, если в таблице задан.
-
-    ; 4) Установить режим (0x4F02). Старший бит BX = использовать LFB.
+    jne vbe_fail
     mov ax, 0x4F02
-    or bx, 0x4000              ; bit 14 = LinearFramebuffer
+    mov bx, 0x4115
     int 0x10
     cmp ax, 0x004F
-    jne .vbe_next
-
-    ; 5) Записать параметры в 0x9000:
-    ;    +0x00: PhysBasePtr (dword)
-    ;    +0x04: BytesPerScanLine (word, pitch)
-    ;    +0x06: XResolution (word)
-    ;    +0x08: YResolution (word)
-    ;    +0x0A: BitsPerPixel (byte)
+    jne vbe_fail
     mov eax, [0x8000 + 0x28]
     mov [0x9000], eax
     mov ax, [0x8000 + 0x10]
@@ -75,18 +41,11 @@ boot_code:
     mov [0x9006], ax
     mov ax, [0x8000 + 0x14]
     mov [0x9008], ax
-    mov al, [0x8000 + 0x19]
-    mov [0x900A], al
-
-    mov al, 'V'
+    mov al, 'V'           ; маркер: VBE ok
     call putc_bios
     jmp vbe_done
-
-.vbe_next:
-    jmp .vbe_try
-
 vbe_fail:
-    mov al, 'v'
+    mov al, 'v'           ; маркер: VBE провал (текстовый режим)
     call putc_bios
 vbe_done:
 
@@ -176,23 +135,6 @@ chs_sector db 2
 chs_head db 0
 chs_cyl db 0
 msg_err db 'Disk Error!', 0
-
-; Таблица VBE-режимов, по убыванию предпочтения.
-; Первый, для которого BIOS отдаст LFB, будет использован.
-; 0xFFFF — терминатор.
-vbe_modes:
-    dw 0x115
-    dw 0x11B
-    dw 0x11A
-    dw 0x118
-    dw 0x11D
-    dw 0x14A
-    dw 0x112
-    dw 0x11C
-    dw 0x14B
-    dw 0x160
-    dw 0x165
-    dw 0xFFFF
 
 gdt_start:
     dq 0
