@@ -20,19 +20,38 @@ boot_code:
     mov al, '1'
     call putc_bios
 
-    ; --- VBE: установить режим 800x600x24 с линейным framebuffer ---
+    ; --- VBE: 800x600, сначала 24bpp (0x115), потом 32bpp (0x11B) ---
+    ; Без цикла и без push/pop — минимальная правка старого кода.
     mov dword [0x9000], 0
+    ; Попытка 1: 0x115 (800x600x24)
     mov ax, 0x4F01
     mov cx, 0x115
     mov di, 0x8000
     int 0x10
     cmp ax, 0x004F
-    jne vbe_fail
+    jne .try_11B
     mov ax, 0x4F02
     mov bx, 0x4115
     int 0x10
     cmp ax, 0x004F
+    jne .try_11B
+    mov byte [0x900A], 24
+    jmp .vbe_ok
+.try_11B:
+    ; Попытка 2: 0x11B (800x600x32)
+    mov ax, 0x4F01
+    mov cx, 0x11B
+    mov di, 0x8000
+    int 0x10
+    cmp ax, 0x004F
     jne vbe_fail
+    mov ax, 0x4F02
+    mov bx, 0x411B
+    int 0x10
+    cmp ax, 0x004F
+    jne vbe_fail
+    mov byte [0x900A], 32
+.vbe_ok:
     mov eax, [0x8000 + 0x28]
     mov [0x9000], eax
     mov ax, [0x8000 + 0x10]
