@@ -71,6 +71,18 @@ static inline void ms_text(int id, int x, int y, const char* s, unsigned int fg)
              (unsigned int)y, (unsigned int)s, fg, MS_TRANSPARENT);
 }
 
+// Статичный текст в НИЖНИЙ слой окна: анимация в buf его не затирает.
+// Где buf залит MS_TRANSPARENT — виден этот текст.
+static inline void ms_static_text(int id, int x, int y, const char* s, unsigned int fg) {
+    __ms_sc5(SYS_WINDOW_STATIC_TEXT, (unsigned int)id, (unsigned int)x,
+             (unsigned int)y, (unsigned int)s, fg);
+}
+
+// Очистить нижний (статичный) слой окна.
+static inline void ms_static_clear(int id) {
+    __ms_sc1(SYS_WINDOW_STATIC_CLEAR, (unsigned int)id);
+}
+
 // Картинка (BMP), масштабируется до w x h.
 static inline int ms_image(int id, int x, int y, int w, int h, const char* path) {
     return __ms_sc6(SYS_WINDOW_IMAGE, (unsigned int)id, (unsigned int)x,

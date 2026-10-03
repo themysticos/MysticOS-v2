@@ -97,6 +97,14 @@ int fb_backbuffer_init(void) {
     return 1;
 }
 
+// Сменить текущий backbuffer (для композитинга в отдельный буфер,
+// например bg_cache). Возвращает старый — чтобы восстановить.
+unsigned char* fb_backbuffer_set_target(unsigned char* new_buf) {
+    unsigned char* old = g_bb;
+    g_bb = new_buf;
+    return old;
+}
+
 void fb_backbuffer_clear(unsigned int color) {
     if (!g_bb) return;
     // Заполняем по одному пикселю (3 байта). Цвет уже в формате 0xRRGGBB.
@@ -192,6 +200,85 @@ void fb_backbuffer_blit_key(int dx, int dy, const unsigned char* src, int w, int
         for (int x = 0; x < w; x++) {
             if (s[0] == kb && s[1] == kg && s[2] == kr) { s += 3; d += 3; continue; }
             d[0] = s[0]; d[1] = s[1]; d[2] = s[2];
+            s += 3; d += 3;
+        }
+    }
+}
+
+// ============================================================
+// blit_key_alpha: блит с key-прозрачностью И общей альфой окна.
+// ============================================================
+// src — RGB, key — цвет, который НЕ рисуется (как в blit_key).
+// alpha — общая непрозрачность 0..255, применяется ко всем
+// НЕ-key пикселям. Если alpha == 255, ведёт себя как blit_key.
+void fb_backbuffer_blit_key_alpha(int dx, int dy, const unsigned char* src,
+                                  int w, int h, int stride, unsigned int key,
+                                  unsigned int alpha) {
+    if (!g_bb) return;
+    unsigned char kb = key & 0xFF, kg = (key >> 8) & 0xFF, kr = (key >> 16) & 0xFF;
+    if (alpha > 255) alpha = 255;
+    unsigned int ia = 255 - alpha;
+    int sy0 = 0, sx0 = 0;
+    if (dx < 0) { sx0 = -dx; w += dx; dx = 0; }
+    if (dy < 0) { sy0 = -dy; h += dy; dy = 0; }
+    if (dx + w > g_w) w = g_w - dx;
+    if (dy + h > g_h) h = g_h - dy;
+    if (w <= 0 || h <= 0) return;
+    for (int y = 0; y < h; y++) {
+        unsigned char* d = g_bb + ((unsigned int)(dy + y) * (unsigned int)g_w + (unsigned int)dx) * 3u;
+        const unsigned char* s = src + (unsigned int)(sy0 + y) * (unsigned int)stride + (unsigned int)sx0 * 3u;
+        for (int x = 0; x < w; x++) {
+            if (s[0] == kb && s[1] == kg && s[2] == kr) { s += 3; d += 3; continue; }
+            if (alpha >= 255) { d[0] = s[0]; d[1] = s[1]; d[2] = s[2]; }
+            else {
+                d[0] = (unsigned char)((s[0] * alpha + d[0] * ia) / 255);
+                d[1] = (unsigned char)((s[1] * alpha + d[1] * ia) / 255);
+                d[2] = (unsigned char)((s[2] * alpha + d[2] * ia) / 255);
+            }
+            s += 3; d += 3;
+        }
+    }
+}
+
+// ============================================================
+// blit_alpha: блит с ПОПИКСЕЛЬНОЙ альфой (композитинг).
+// ============================================================
+// Каждый пиксель src смешивается с тем, что уже лежит в backbuffer:
+//     dst = (src * a + dst * (255 - a)) / 255
+//
+// ВАЖНО: в src хранятся RGB (B,G,R), альфа — отдельным массивом
+// (или через специальный формат — см. draw_window с маской).
+// Здесь — упрощённый вариант: alpha как 4-й байт в src (RGBA),
+// но наш формат 24bpp. Поэтому альфа передаётся как 4-й параметр-массив.
+//
+// Для практики используется так: у окна есть buf (RGB 24bpp) и
+// mask (1 байт на пиксель, 0..255). Если mask == 0 — пиксель прозрачен
+// полностью (как key в blit_key). Если 255 — плотный.
+void fb_backbuffer_blit_alpha(int dx, int dy,
+                              const unsigned char* src,
+                              const unsigned char* mask,
+                              int w, int h, int src_stride, int mask_stride) {
+    if (!g_bb) return;
+    int sy0 = 0, sx0 = 0;
+    if (dx < 0) { sx0 = -dx; w += dx; dx = 0; }
+    if (dy < 0) { sy0 = -dy; h += dy; dy = 0; }
+    if (dx + w > g_w) w = g_w - dx;
+    if (dy + h > g_h) h = g_h - dy;
+    if (w <= 0 || h <= 0) return;
+    for (int y = 0; y < h; y++) {
+        unsigned char* d = g_bb + ((unsigned int)(dy + y) * (unsigned int)g_w + (unsigned int)dx) * 3u;
+        const unsigned char* s = src + (unsigned int)(sy0 + y) * (unsigned int)src_stride + (unsigned int)sx0 * 3u;
+        const unsigned char* m = mask ? (mask + (unsigned int)(sy0 + y) * (unsigned int)mask_stride + (unsigned int)sx0) : 0;
+        for (int x = 0; x < w; x++) {
+            unsigned int a = m ? m[x] : 255;
+            if (a == 0) { s += 3; d += 3; continue; }
+            if (a == 255) { d[0] = s[0]; d[1] = s[1]; d[2] = s[2]; }
+            else {
+                unsigned int ia = 255 - a;
+                d[0] = (unsigned char)((s[0] * a + d[0] * ia) / 255);
+                d[1] = (unsigned char)((s[1] * a + d[1] * ia) / 255);
+                d[2] = (unsigned char)((s[2] * a + d[2] * ia) / 255);
+            }
             s += 3; d += 3;
         }
     }

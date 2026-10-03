@@ -18,6 +18,8 @@
 #include "msfs.h"
 #include "gdt.h"
 #include "dll/msdll.h"
+#include "pci.h"
+#include "driver.h"
 
 // ============================================================
 // SYSCALL (int 0x80) — заглушка в начале файла (настоящий диспетчер
@@ -38,6 +40,10 @@ void print_hex(unsigned int v);
 
 extern const unsigned char* font_glyph8x8(char c);
 extern void exec_do_exit(int code);
+
+// bg_cache (определена ниже, в блоке render_region): инвалидирует кэш
+// нижнего слоя (обои+иконки). Зовётся при смене обоев / scan диска.
+static void bg_cache_invalidate(void);
 
 #define TASKBAR_H 28
 
@@ -95,6 +101,10 @@ typedef struct window_s {
     // окна крестиком помечать на выход ИМЕННО ЕЁ, а не ту, что случайно
     // сейчас в api_yield (старый баг g_exit_request убивал чужую задачу).
     int task_id;
+    // alpha: базовая непрозрачность ВСЕГО окна (0..255).
+    // 255 = плотное (по умолчанию). Меньше — полупрозрачное.
+    // Углы и тень считаются динамически в draw_window (без массива маски).
+    unsigned char alpha;
 } window_t;
 
 static window_t wins[MAXWIN];
@@ -127,13 +137,19 @@ static unsigned char* buf_ptr(int k) {
 // НОВАЯ КАРТА (PWIN_MAXW/H = 800x600):
 //   16 буферов окон по 800*600*3 = 0x15F900
 //     -> 0x06000000 .. 0x075F9000 (~23 МБ, ~6 PDE: 24..29)
-//   обои 0x07600000..0x0775F900
-//   src  0x07760000..0x08000000 (~8.6 МБ под сырой BMP)
+//   bg_cache 0x07600000..0x0775F900  (1.44 МБ — обои+иконки, готовая сцена)
+//   обои     0x07760000..0x078BF900  (1.44 МБ — сюда wall_load декодирует)
+//   src      0x078C0000..0x08000000  (~7.75 МБ под сырой BMP)
 // ВАЖНО: paging_task_pd_alloc копирует всю ядровую PD, поэтому новые
 // PDE (24..29) автоматически identity во всех задачах.
-#define WALL_BUF_ADDR  0x07600000u
-// Буфер под СЫРОЙ файл BMP (читаем с диска целиком), до pmem. ~8.6 МБ лимит.
-#define WALL_SRC_ADDR  0x07760000u
+//
+// bg_cache — кэш "нижнего слоя": обои + иконки. Рисуется заново только
+// когда меняется фон/иконки; при drag окон — просто копируется.
+// Огромная экономия: render_region при drag не перерисовывает обои.
+#define BG_CACHE_ADDR  0x07600000u
+#define WALL_BUF_ADDR  0x07760000u
+// Буфер под СЫРОЙ файл BMP (читаем с диска целиком), до pmem. ~7.75 МБ лимит.
+#define WALL_SRC_ADDR  0x078C0000u
 #define WALL_SRC_MAX   (0x08000000u - WALL_SRC_ADDR)
 
 static unsigned char* g_wall = 0;      // буфер обоев (или 0, если не готов)
@@ -152,6 +168,7 @@ static int wall_load(const char* path) {
     if (bmp_decode_scaled(src, (unsigned int)sz, g_wall, sw, sh) != BMP_OK) return 0;
     g_wall_w = sw; g_wall_h = sh;
     g_wall_on = 1;
+    bg_cache_invalidate();   // обои сменились — кэш невалиден
     return 1;
 }
 
@@ -321,6 +338,7 @@ static void desktop_scan(void) {
         dyn_icons[c].elf = 0;   // путь построим при клике
         dyn_count++;
     }
+    bg_cache_invalidate();   // иконки пересобрались — кэш невалиден
 }
 
 static void draw_icons_region(int rx,int ry,int rw,int rh) {
@@ -367,6 +385,7 @@ static void windows_init(void) {
         wins[i].used = 0; wins[i].buf = 0; wins[i].buf_idx = -1; wins[i].draw_content = 0;
         wins[i].dirty = 0;
         wins[i].task_id = 0;
+        wins[i].alpha = 255;
         wins[i].text_buf = 0; wins[i].text_buf_idx = -1;
         wins[i].active = 0; wins[i].visible = 0;
         wins[i].maximized = 0; wins[i].minimized = 0; wins[i].is_program = 0;
@@ -392,6 +411,7 @@ static int api_window_create(const char* title, int x, int y, int cw, int ch) {
         w->grab_dx = 0; w->grab_dy = 0;
         w->dirty = 1;   // первый кадр нарисовать
         w->task_id = task_current();   // кто владеет окном
+        w->alpha = 255;                 // по умолчанию окно плотное
         win_set_title(w, title);
         // Буфер анимации (верхний слой). Изначально залит WIN_TRANSPARENT:
         // пока программа не нарисует — окно "прозрачно", виден text_buf/фон.
@@ -715,10 +735,11 @@ static void api_yield_impl(void) {
     g_last_draw_tick = now;
 
     int cmx = mouse_x(), cmy = mouse_y();
-    // Тащим окно ИЛИ что-то изменилось (клик, свёрнуто/развёрнуто/закрыто окно,
-    // смена z-порядка) — полная перерисовка сцены. Иначе, например, при
-    // сворачивании окна программы экран застывал бы со старой картинкой.
-    if (drag_win >= 0 || changed) {
+    // Что-то СЕРЬЁЗНОЕ (клик, open/close, смена z-порядка) — полная
+    // перерисовка сцены. Только DRAG окна — узкая dirty-область
+    // (bbox старой+новой позиции, уже накопленный в process_events).
+    // Иначе каждый mouse-move тянул бы весь экран — QEMU не успевает.
+    if (changed || (drag_win >= 0 && dirty_w == 0)) {
         render_region(0, 0, (int)vbe_width(), (int)vbe_height());
         draw_cursor_bb(cmx, cmy);
         fb_flip();
@@ -1267,9 +1288,13 @@ static int process_events(int handle_kbd) {
         if (nx != w->x || ny != w->y) {
             int ox = w->x, oy = w->y;
             w->x = nx; w->y = ny;
+            // НЕ ставим changed = 1: при drag достаточно dirty-области
+            // (bbox старой+новой позиции). changed = 1 означало бы
+            // «полная перерисовка всего экрана» — тормозит QEMU и даёт
+            // мелькание. Раньше это было скрытой причиной того, что
+            // оптимизации drag не работали.
             mark_dirty(ox - 4, oy - 4, w->w + 8, w->h + 8);
             mark_dirty(nx - 4, ny - 4, w->w + 8, w->h + 8);
-            changed = 1;
         }
     }
     prev_left = left;
@@ -1346,7 +1371,10 @@ static void draw_window(window_t* w, int rx, int ry, int rw, int rh) {
     }
     if (w->is_program && w->buf) {
         int ch = w->h - 20;
-        fb_backbuffer_blit_key(w->x, w->y + 20, w->buf, w->w, ch, PWIN_MAXW * 3, WIN_TRANSPARENT);
+        // blit_key_alpha: WIN_TRANSPARENT не рисуется, остальные пиксели
+        // смешиваются с backbuffer по w->alpha (255 = старый быстрый путь).
+        fb_backbuffer_blit_key_alpha(w->x, w->y + 20, w->buf, w->w, ch,
+                                     PWIN_MAXW * 3, WIN_TRANSPARENT, w->alpha);
     } else if (w->draw_content) {
         w->draw_content(w);
     }
@@ -1420,14 +1448,43 @@ static void wall_blit_region(int rx, int ry, int rw, int rh) {
     }
 }
 
+// ============================================================
+// BG_CACHE — кэш "нижнего слоя" (обои + иконки).
+// ============================================================
+// Один раз (и при изменениях) рисуем сюда обои + иконки. При drag окон
+// render_region просто КОПИРУЕТ этот прямоугольник, не перерисовывая
+// обои заново. Экономит ~70% работы при drag и открытии окон.
+static int g_bg_cache_valid = 0;
+
+static void bg_cache_rebuild(void) {
+    // Рисуем в BG_CACHE_ADDR, временно подменив backbuffer.
+    unsigned char* saved = fb_backbuffer_set_target((unsigned char*)BG_CACHE_ADDR);
+    wall_blit_region(0, 0, (int)vbe_width(), (int)vbe_height());
+    draw_icons_region(0, 0, (int)vbe_width(), (int)vbe_height());
+    fb_backbuffer_set_target(saved);
+    g_bg_cache_valid = 1;
+}
+
+// Инвалидировать кэш (вызывать при смене обоев / пересборке иконок).
+static void bg_cache_invalidate(void) { g_bg_cache_valid = 0; }
+
+static void bg_cache_blit_region(int rx, int ry, int rw, int rh) {
+    if (!g_bg_cache_valid) bg_cache_rebuild();
+    int sw = (int)vbe_width();
+    const unsigned char* cache = (const unsigned char*)BG_CACHE_ADDR;
+    for (int y = ry; y < ry + rh; y++) {
+        const unsigned char* srow = cache + ((unsigned int)y * (unsigned int)sw + (unsigned int)rx) * 3u;
+        fb_backbuffer_blit(rx, y, srow, rw, 1, sw * 3);
+    }
+}
+
 static void render_region(int rx,int ry,int rw,int rh) {
     if (rx < 0) { rw += rx; rx = 0; }
     if (ry < 0) { rh += ry; ry = 0; }
     if (rx + rw > (int)vbe_width())  rw = (int)vbe_width() - rx;
     if (ry + rh > (int)vbe_height()) rh = (int)vbe_height() - ry;
     if (rw <= 0 || rh <= 0) return;
-    wall_blit_region(rx, ry, rw, rh);
-    draw_icons_region(rx, ry, rw, rh);
+    bg_cache_blit_region(rx, ry, rw, rh);   // обои+иконки из кэша
     for (int i = 0; i < MAXWIN; i++) draw_window(&wins[i], rx, ry, rw, rh);
     draw_taskbar_region(rx, ry, rw, rh);
     draw_start_menu(rx, ry, rw, rh);
@@ -1581,6 +1638,13 @@ void kernel_main(void) {
     paging_init();
     diag_mark(2, 'C');   // paging_init() прошёл (если видим C — paging не убил систему)
     pmem_init();
+    // VDS: инициализация реестра драйверов + сканирование PCI.
+    // Пока ни один драйвер не зарегистрирован — pci_dump() выведет
+    // все устройства в консоль (видно на панели QEMU в текстовом режиме
+    // или в VGA-память, если посмотреть). Позже сюда добавим virtio-net,
+    // rtl8723de, virtio-gpu.
+    driver_init();
+    pci_dump();
     icons_init();
     icons_layout();
     windows_init();

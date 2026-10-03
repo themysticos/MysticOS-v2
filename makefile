@@ -96,7 +96,13 @@ exec.o: exec.c
 msdll.o: dll/msdll.c dll/msdll.h
 	$(GCC) $(CFLAGS) -c $< -o $@
 
-$(ELF): entry.o switch.o kernel.o task.o paging.o paging_asm.o pmem.o vbe.o bmp.o vfs.o msfs.o gdt.o font.o console.o idt.o pic.o io.o cursor.o icons.o icons_gen.o ata.o fat.o kprint.o term.o exec.o msdll.o
+pci.o: pci.c pci.h io.h console.h
+	$(GCC) $(CFLAGS) -c $< -o $@
+
+driver.o: driver.c driver.h pci.h console.h
+	$(GCC) $(CFLAGS) -c $< -o $@
+
+$(ELF): entry.o switch.o kernel.o task.o paging.o paging_asm.o pmem.o vbe.o bmp.o vfs.o msfs.o gdt.o font.o console.o idt.o pic.o io.o cursor.o icons.o icons_gen.o ata.o fat.o kprint.o term.o exec.o msdll.o pci.o driver.o
 	$(LD) $(LDFLAGS) -o $@ $^
 
 $(BIN): $(ELF)
@@ -108,18 +114,14 @@ WINAPP_ELF = examples/winapp.elf
 ELFCFLAGS = -m32 -ffreestanding -nostdlib -static -no-pie -fno-pic \
             -Wl,-Ttext-segment=0x4000000 -Wl,-e,_start -Wl,--build-id=none
 
-# Тестовая ELF-программа: всегда собирается и кладётся в образ как WINAPP.ELF.
-$(WINAPP_ELF): examples/winapp.c api.h
-	gcc $(ELFCFLAGS) $< -o $@
-
 # Системные программы (SYSPR): кладутся в /kernel/SYSPR/ образа.
 SYSPR = about files term wpick imgview editor
 SYSPR_ELFS = $(addprefix examples/,$(addsuffix .elf,$(SYSPR)))
 
 # Программы на новом API (include/mysticos.h): все вызовы — static inline
 # в заголовках, каждый делает int 0x80 напрямую. msyscall.c больше не нужен.
-# Список — MSYS_PROGS.
-MSYS_PROGS = about
+# Список — MSYS_PROGS. WINAPP_ELF тоже сюда (он использует новый API).
+MSYS_PROGS = about winapp
 
 $(addprefix examples/,$(addsuffix .elf,$(MSYS_PROGS))): examples/%.elf: examples/%.c include/mysticos.h dll/msyscall.h
 	gcc $(ELFCFLAGS) -Iinclude $< -o $@

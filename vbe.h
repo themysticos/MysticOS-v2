@@ -34,7 +34,27 @@ void fb_backbuffer_blit(int dx, int dy, const unsigned char* src, int w, int h, 
 // Блит с "прозрачностью": пиксели, чей цвет (BGR) == key, НЕ копируются —
 // сквозь них виден нижний слой backbuffer. key задаётся как 0xRRGGBB.
 void fb_backbuffer_blit_key(int dx, int dy, const unsigned char* src, int w, int h, int stride, unsigned int key);
+
+// Блит с ПОПИКСЕЛЬНОЙ альфой (композитинг): src смешивается с тем, что
+// уже в backbuffer. mask — 1 байт на пиксель (0..255), может быть 0
+// (тогда всё считается непрозрачным). Позволяет полупрозрачные окна,
+// скруглённые углы, тени и т.п.
+void fb_backbuffer_blit_alpha(int dx, int dy,
+                              const unsigned char* src,
+                              const unsigned char* mask,
+                              int w, int h, int src_stride, int mask_stride);
+
+// blit_key_alpha: key-прозрачность + общая альфа окна.
+// Пиксели цвета key НЕ рисуются. Остальные смешиваются с backbuffer
+// по alpha (0..255). При alpha == 255 — обычный blit_key.
+void fb_backbuffer_blit_key_alpha(int dx, int dy, const unsigned char* src,
+                                  int w, int h, int stride, unsigned int key,
+                                  unsigned int alpha);
 void fb_flip(void);
 void fb_flip_rect(int x, int y, int w, int h);
+
+// Сменить текущий backbuffer (для композитинга в отдельный буфер,
+// например bg_cache). Возвращает старый — чтобы восстановить.
+unsigned char* fb_backbuffer_set_target(unsigned char* new_buf);
 
 #endif
