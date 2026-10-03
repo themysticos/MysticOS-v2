@@ -20,7 +20,13 @@ int vbe_active(void) { return g_active; }
 int vbe_init(void) {
     volatile unsigned int* p = (volatile unsigned int*)VBE_PARAM_ADDR;
     unsigned int fb = p[0];
-    if (fb == 0) { g_active = 0; return 0; }
+    if (fb == 0) {
+        // VBE не отдал адрес LFB — сброс в дефолт, чтобы буферы
+        // (backbuffer, обои) не переполнились при g_w/g_h из BIOS.
+        g_fb = 0; g_w = 800; g_h = 600; g_pitch = 800 * 3; g_lfb_bpp = 24;
+        g_active = 0;
+        return 0;
+    }
     g_fb = fb;
     g_pitch = (unsigned int)(*(volatile unsigned short*)(VBE_PARAM_ADDR + 4));
     g_w = (int)(*(volatile unsigned short*)(VBE_PARAM_ADDR + 6));
@@ -32,12 +38,16 @@ int vbe_init(void) {
     unsigned int bpp = *(volatile unsigned char*)(VBE_PARAM_ADDR + 10);
     if (bpp == 0) bpp = 24;   // старый образ без 0x900A — считаем 24
     if (bpp != 24 && bpp != 32) {
+        // Отказ: сброс в дефолт — иначе буферы (backbuffer, обои),
+        // рассчитанные на 800x600, переполнятся.
+        g_fb = 0; g_w = 800; g_h = 600; g_pitch = 800 * 3; g_lfb_bpp = 24;
         g_active = 0;
         return 0;
     }
-    // UI MysticOS рассчитан на 800x600. Любое другое разрешение — либо
-    // отказ от графики, либо переполнение буферов (обои, окна).
+    // UI MysticOS рассчитан на 800x600. Любое другое разрешение —
+    // отказ от графики (иначе переполнение буферов).
     if (g_w != 800 || g_h != 600) {
+        g_fb = 0; g_w = 800; g_h = 600; g_pitch = 800 * 3; g_lfb_bpp = 24;
         g_active = 0;
         return 0;
     }
