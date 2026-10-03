@@ -35,6 +35,12 @@ int vbe_init(void) {
         g_active = 0;
         return 0;
     }
+    // UI MysticOS рассчитан на 800x600. Любое другое разрешение — либо
+    // отказ от графики, либо переполнение буферов (обои, окна).
+    if (g_w != 800 || g_h != 600) {
+        g_active = 0;
+        return 0;
+    }
     g_lfb_bpp = (int)bpp;
     g_active = 1;
     return 1;

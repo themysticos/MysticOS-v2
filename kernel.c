@@ -1674,6 +1674,26 @@ void kernel_main(void) {
     serial_print("=== MysticOS 2 kernel_main ===\n");
     diag_mark(0, 'A');   // ядро стартовало (до vbe_init)
     int graphics_ok = vbe_init();
+    // Диагностика VBE: пишем фактические разрешение и BPP в VGA-текст
+    // (видно в первые секунды, если что-то пойдёт не так).
+    {
+        unsigned int vw = vbe_width(), vh = vbe_height();
+        // 800 -> '8' '0' '0'
+        volatile unsigned char* vga = (volatile unsigned char*)0xB8000;
+        vga[40 * 2] = 'W'; vga[41 * 2] = '=';
+        vga[42 * 2] = (char)('0' + (vw / 100) % 10);
+        vga[43 * 2] = (char)('0' + (vw / 10) % 10);
+        vga[44 * 2] = (char)('0' + vw % 10);
+        vga[45 * 2] = 'H'; vga[46 * 2] = '=';
+        vga[47 * 2] = (char)('0' + (vh / 100) % 10);
+        vga[48 * 2] = (char)('0' + (vh / 10) % 10);
+        vga[49 * 2] = (char)('0' + vh % 10);
+        unsigned int bpp = 0;
+        bpp = *(volatile unsigned char*)(0x900A);
+        vga[50 * 2] = 'B'; vga[51 * 2] = '=';
+        vga[52 * 2] = (char)('0' + (bpp / 10) % 10);
+        vga[53 * 2] = (char)('0' + bpp % 10);
+    }
     if (!graphics_ok) {
         // НЕ падаем. Дальше работаем без графики — на реальном железе
         // это значит, что VBE нет (или BPP != 24) — идём в fallback.
