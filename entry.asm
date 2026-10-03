@@ -14,6 +14,19 @@ _start:
     mov ss, ax
     mov esp, 0x90000
 
+    ; Обнулить .bss. Загрузчик грузит только .text+.data (kernel.bin);
+    ; .bss в файле не хранится, но ОБЯЗАНА быть нулём к моменту старта.
+    ; Без этого статические буферы (включая rx_desc_buf, net-буферы)
+    ; содержат мусор от BIOS/QEMU -> необъяснимые баги.
+    extern __bss_start
+    extern __bss_end
+    mov edi, __bss_start
+    mov ecx, __bss_end
+    sub ecx, edi
+    xor eax, eax
+    cld
+    rep stosb
+
     call kernel_main
 
     cli
@@ -52,6 +65,91 @@ global exec_do_exit
 exec_do_exit:
     mov eax, [esp+4]
     mov esp, [g_exec_ret_esp]
+    ret
+
+; ============================================================
+; RING3: НАСТОЯЩИЙ iret в ring3.
+; task_enter_ring3 строит iret-кадр на стеке задачи и делает iret.
+; Возврата нет — программа уходит в ring3.
+;
+; void task_enter_ring3(unsigned int entry, unsigned int ustack_top,
+;                       unsigned int api)
+;
+; Раскладка стека задачи после iret (ring3 esp = ustack_top - 8):
+;   [esp+0] = 0        (фиктивный return addr: если _start сделает ret —
+;                       прыгнет на 0 и получит page fault; программа
+;                       ДОЛЖНА завершаться через api->exit())
+;   [esp+4] = api      (cdecl: _start(const mystic_api_t* api))
+global task_enter_ring3
+task_enter_ring3:
+    ; cdecl: [esp+4]=entry [esp+8]=ustack_top [esp+12]=api
+    mov eax, [esp+4]      ; entry
+    mov ecx, [esp+8]      ; U = ustack_top
+    mov edx, [esp+12]     ; api
+
+    ; [U-4] = api
+    mov [ecx - 4], edx
+    ; [U-8] = 0 (фиктивный return addr)
+    mov dword [ecx - 8], 0
+
+    ; esp_ring3 после iret = U - 8
+    lea ebx, [ecx - 8]
+
+    ; Переключаемся на стек задачи (пока в ring0) и строим iret-кадр.
+    ; iret снимает: eip, cs, eflags, esp, ss (5 dword, сверху вниз).
+    mov esp, ebx
+    push 0x23             ; ss    = ring3 data | RPL=3
+    push ebx              ; esp   = U-8
+    push 0x202            ; eflags IF=1
+    push 0x1B             ; cs    = ring3 code | RPL=3
+    push eax              ; eip   = entry
+    iret
+
+; ============ GDT (ring0 + ring3 + TSS) ============
+; Перезагружаем GDT из ядра (загрузчик дал только ring0).
+; Селекторы: 0x08=ring0 code, 0x10=ring0 data, 0x18=ring3 code,
+;            0x20=ring3 data, 0x28=TSS.
+global gdt_init
+section .data
+gdt_start:
+    dq 0                                    ; 0x00 null
+    dw 0xFFFF, 0x0000, 0x9A00, 0x00CF       ; 0x08 ring0 code
+    dw 0xFFFF, 0x0000, 0x9200, 0x00CF       ; 0x10 ring0 data
+    dw 0xFFFF, 0x0000, 0xFA00, 0x00CF       ; 0x18 ring3 code (DPL=3)
+    dw 0xFFFF, 0x0000, 0xF200, 0x00CF       ; 0x20 ring3 data (DPL=3)
+    ; TSS descriptor (0x28) — заполним базой/лимитом в gdt_init
+    dw 0, 0, 0x8900, 0x0000
+gdt_end:
+gdt_desc:
+    dw gdt_end - gdt_start - 1
+    dd gdt_start
+section .text
+
+; void gdt_init(unsigned int tss_base, unsigned int tss_limit)
+gdt_init:
+    mov eax, [esp+4]        ; tss_base
+    mov edx, [esp+8]        ; tss_limit
+    ; Заполняем TSS-дескриптор (смещение 0x28 от gdt_start, 8-й байт = 5*8=40)
+    mov ecx, gdt_start + 40
+    mov [ecx], dx           ; limit low (2 байта)
+    shr edx, 16
+    and edx, 0x0F
+    mov [ecx+6], dl         ; limit high (4 бита, гранулярность 0)
+    mov [ecx+2], ax         ; base low
+    shr eax, 16
+    mov [ecx+4], al         ; base mid
+    shr eax, 8
+    mov [ecx+7], al         ; base high
+    ; Загрузить GDT и перезагрузить сегменты.
+    lgdt [gdt_desc]
+    mov ax, 0x10
+    mov ds, ax
+    mov es, ax
+    mov fs, ax
+    mov gs, ax
+    mov ss, ax
+    jmp 0x08:.reload
+.reload:
     ret
 
 ; ============ IDT ============
@@ -131,6 +229,32 @@ ISR_NOERR 28
 ISR_NOERR 29
 ISR_NOERR 30
 ISR_NOERR 31
+
+; ============ SYSCALL (int 0x80) ============
+; Вход: eax=номер, ebx/ecx/edx/esi/edi = аргументы. Выход: eax.
+; Пока — заглушка (передаёт в C-обработчик syscall_handler).
+extern syscall_handler
+global isr128
+isr128:
+    pusha
+    push ds
+    push es
+    push fs
+    push gs
+    mov ax, 0x10
+    mov ds, ax
+    mov es, ax
+    mov fs, ax
+    mov gs, ax
+    push esp
+    call syscall_handler
+    add esp, 4
+    pop gs
+    pop fs
+    pop es
+    pop ds
+    popa
+    iret
 
 ; ============ IRQ ============
 global irq_common

@@ -6,6 +6,7 @@
 // а не правкой каждой функции.
 #include "fs.h"
 #include "fat.h"
+#include "msfs.h"
 
 // --- Прототипы FAT (fat.c) в терминах VFS ---
 int  fat_find(int base_dir, const char* path);
@@ -16,15 +17,17 @@ int  fat_mkdir(int base_dir, const char* path);
 void fat_write_path(int base_dir, const char* path, const char* content);
 void fat_list(int base_dir, const char* path);
 
+void ata_select(int drive);
 extern void ata_read_sector(unsigned int lba, unsigned char* buffer);
 
 // ============================================================
-// Состояние
+// Состояние: какая ФС на каждом диске (0/1)
 // ============================================================
 #define VFS_MAX_DRIVERS 4
 static const fs_driver_t* g_drivers[VFS_MAX_DRIVERS];
 static int g_driver_count = 0;
-static const fs_driver_t* g_active = 0;   // активный драйвер
+// g_drive_fs[d] — драйвер, определённый на диске d (или 0).
+static const fs_driver_t* g_drive_fs[2] = {0, 0};
 
 int vfs_register(const fs_driver_t* drv) {
     if (!drv || g_driver_count >= VFS_MAX_DRIVERS) return 0;
@@ -72,26 +75,67 @@ static const fs_driver_t FAT16_DRIVER = {
 };
 
 // ============================================================
-// Инициализация: выбрать активный драйвер
+// Драйвер MSFS (обёртки над msfs.c)
+// ============================================================
+static int msfs_probe_drv(void) { return msfs_probe(); }
+static int msfs_drv_find(const char* path)               { return msfs_find(path); }
+static int msfs_drv_read_dir(const char* path, char* names, int* is_dir,
+                             unsigned int* sizes, int max) {
+    return msfs_read_dir(path, names, is_dir, sizes, max);
+}
+static int msfs_drv_read_file(const char* path, unsigned char* buf, unsigned int max) {
+    return msfs_read_file(path, buf, max);
+}
+static int msfs_drv_size(const char* path) { (void)path; return -1; }
+static int msfs_drv_mkdir(const char* path)              { return msfs_mkdir(path); }
+static int msfs_drv_write(const char* path, const char* content) {
+    return msfs_write(path, content);
+}
+
+static const fs_driver_t MSFS_DRIVER = {
+    "msfs", FS_MSFS, msfs_probe_drv,
+    msfs_drv_find, msfs_drv_read_dir, msfs_drv_read_file,
+    msfs_drv_size, msfs_drv_mkdir, msfs_drv_write
+};
+
+// ============================================================
+// Инициализация: определить ФС на КАЖДОМ диске
 // ============================================================
 void vfs_init(void) {
     g_driver_count = 0;
-    g_active = 0;
     vfs_register(&FAT16_DRIVER);
-    for (int i = 0; i < g_driver_count; i++) {
-        if (g_drivers[i]->probe && g_drivers[i]->probe()) {
-            g_active = g_drivers[i];
-            break;
+    vfs_register(&MSFS_DRIVER);
+    // Диск 0 — системный. Диск 1 — второй.
+    for (int d = 0; d < 2; d++) {
+        ata_select(d);
+        fat_use_drive(d);
+        msfs_use_drive(d);
+        g_drive_fs[d] = 0;
+        for (int i = 0; i < g_driver_count; i++) {
+            if (g_drivers[i]->probe && g_drivers[i]->probe()) {
+                g_drive_fs[d] = g_drivers[i];
+                break;
+            }
         }
     }
+    // Вернуть текущий диск 0.
+    ata_select(0); fat_use_drive(0); msfs_use_drive(0);
+}
+
+// Драйвер для диска d (0/1).
+static const fs_driver_t* drv_for(int d) {
+    if (d < 0 || d > 1) d = 0;
+    return g_drive_fs[d];
 }
 
 fs_type_t vfs_get_type(void) {
-    return g_active ? g_active->type : FS_UNKNOWN;
+    const fs_driver_t* drv = drv_for(0);
+    return drv ? drv->type : FS_UNKNOWN;
 }
 
 const char* vfs_type_name(void) {
-    return g_active ? g_active->name : "Unknown";
+    const fs_driver_t* drv = drv_for(0);
+    return drv ? drv->name : "Unknown";
 }
 
 // ============================================================
@@ -112,56 +156,72 @@ void vfs_resolve_drive(const char* path, int* drive, char* out) {
     if (drive) *drive = d;
 }
 
+// Подготовить диск d для работы его драйвера.
+static void vfs_switch(int d) {
+    ata_select(d);
+    fat_use_drive(d);
+    msfs_use_drive(d);
+}
+
 int vfs_find(const char* path) {
-    if (!g_active) return 0;
     int d; char clean[FS_PATH_MAX];
     vfs_resolve_drive(path, &d, clean);
-    fat_use_drive(d);
-    return g_active->find ? g_active->find(clean) : 0;
+    const fs_driver_t* drv = drv_for(d);
+    if (!drv) return 0;
+    vfs_switch(d);
+    return drv->find ? drv->find(clean) : 0;
 }
 
 int vfs_read_dir(const char* path, char* names, int* is_dir,
                  unsigned int* sizes, int max) {
-    if (!g_active) return -1;
     int d; char clean[FS_PATH_MAX];
     vfs_resolve_drive(path, &d, clean);
-    fat_use_drive(d);
-    return g_active->read_dir ? g_active->read_dir(clean, names, is_dir, sizes, max) : -1;
+    const fs_driver_t* drv = drv_for(d);
+    if (!drv) return -1;
+    vfs_switch(d);
+    return drv->read_dir ? drv->read_dir(clean, names, is_dir, sizes, max) : -1;
 }
 
 int vfs_read_file(const char* path, unsigned char* buf, unsigned int max) {
-    if (!g_active) return -1;
     int d; char clean[FS_PATH_MAX];
     vfs_resolve_drive(path, &d, clean);
-    fat_use_drive(d);
-    return g_active->read_file ? g_active->read_file(clean, buf, max) : -1;
+    const fs_driver_t* drv = drv_for(d);
+    if (!drv) return -1;
+    vfs_switch(d);
+    return drv->read_file ? drv->read_file(clean, buf, max) : -1;
 }
 
 int vfs_mkdir(const char* path) {
-    if (!g_active) return 0;
     int d; char clean[FS_PATH_MAX];
     vfs_resolve_drive(path, &d, clean);
-    fat_use_drive(d);
-    return g_active->mkdir ? g_active->mkdir(clean) : 0;
+    const fs_driver_t* drv = drv_for(d);
+    if (!drv) return 0;
+    vfs_switch(d);
+    return drv->mkdir ? drv->mkdir(clean) : 0;
 }
 
 int vfs_write(const char* path, const char* content) {
-    if (!g_active) return 0;
     int d; char clean[FS_PATH_MAX];
     vfs_resolve_drive(path, &d, clean);
-    fat_use_drive(d);
-    return g_active->write ? g_active->write(clean, content) : 0;
+    const fs_driver_t* drv = drv_for(d);
+    if (!drv) return 0;
+    vfs_switch(d);
+    return drv->write ? drv->write(clean, content) : 0;
 }
 
 // Размер файла: реализуем через драйвер, если он умеет; для FAT — через
 // перечисление каталога (как делал api_fs_size в kernel.c).
 int vfs_size(const char* path) {
-    if (!g_active) return -1;
-    if (g_active->size && g_active->type != FS_FAT16) return g_active->size(path);
-    // FAT: перечисляем корень и ищем запись (совместимо со старой api_fs_size).
     int d; char clean[FS_PATH_MAX];
     vfs_resolve_drive(path, &d, clean);
-    fat_use_drive(d);
+    // Если драйвер умеет size (MSFS — нет, вернёт -1) — используем.
+    const fs_driver_t* drv = drv_for(d);
+    if (drv && drv->size && drv->type != FS_FAT16) {
+        vfs_switch(d);
+        return drv->size(clean);
+    }
+    // FAT: перечисляем корень и ищем запись.
+    vfs_switch(d);
     char names[64 * 13]; int isdir[64]; unsigned int sizes[64];
     int n = vfs_read_dir("/", names, isdir, sizes, 64);
     if (n <= 0) return -1;
@@ -233,11 +293,14 @@ void vfs_normalize(const char* path, char* out) {
 // Печать каталога (для терминала). Сейчас делегируем FAT; при появлении
 // других ФС — расширим vtable полем list.
 void vfs_list_print(const char* path) {
-    if (!g_active) { return; }
     int d; char clean[FS_PATH_MAX];
     vfs_resolve_drive(path, &d, clean);
-    fat_use_drive(d);
-    if (g_active->type == FS_FAT16 || g_active->type == FS_FAT12) {
+    const fs_driver_t* drv = drv_for(d);
+    if (!drv) return;
+    vfs_switch(d);
+    if (drv->type == FS_FAT16 || drv->type == FS_FAT12) {
         fat_list(0, clean);
+    } else if (drv->type == FS_MSFS) {
+        msfs_list_print(clean);
     }
 }

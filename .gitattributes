@@ -1,0 +1,9 @@
+# Хранить исходники с LF в репозитории (ядро — freestanding, LF безопаснее
+# и не даёт ложных whole-file diff'ов при правках).
+*.c   text eol=lf
+*.h   text eol=lf
+*.asm text eol=lf
+*.py  text eol=lf
+*.md  text eol=lf
+*.bat text eol=crlf
+makefile text eol=lf

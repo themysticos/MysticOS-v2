@@ -9,6 +9,7 @@ static unsigned int g_fb = 0;
 static unsigned int g_pitch = 0;
 static int g_w = 0, g_h = 0;
 static int g_active = 0;
+static int g_lfb_bpp = 24;   // реальный формат LFB: 24 или 32
 
 unsigned int vbe_fb_addr(void) { return g_fb; }
 unsigned int vbe_width(void) { return (unsigned int)g_w; }
@@ -24,18 +25,42 @@ int vbe_init(void) {
     g_pitch = (unsigned int)(*(volatile unsigned short*)(VBE_PARAM_ADDR + 4));
     g_w = (int)(*(volatile unsigned short*)(VBE_PARAM_ADDR + 6));
     g_h = (int)(*(volatile unsigned short*)(VBE_PARAM_ADDR + 8));
+    // BPP: загрузчик пишет в 0x900A. Принимаем 24 (3 байта/пиксель)
+    // и 32 (4 байта, старший байт — X/alpha, обычно 0 или 0xFF).
+    // Backbuffer всё равно остаётся 24bpp — конвертация только в
+    // fb_flip/fb_flip_rect/fb_put_pixel.
+    unsigned int bpp = *(volatile unsigned char*)(VBE_PARAM_ADDR + 10);
+    if (bpp == 0) bpp = 24;   // старый образ без 0x900A — считаем 24
+    if (bpp != 24 && bpp != 32) {
+        g_active = 0;
+        return 0;
+    }
+    // UI MysticOS рассчитан на 800x600. Любое другое разрешение — либо
+    // отказ от графики, либо переполнение буферов (обои, окна).
+    if (g_w != 800 || g_h != 600) {
+        g_active = 0;
+        return 0;
+    }
+    g_lfb_bpp = (int)bpp;
     g_active = 1;
     return 1;
 }
 
-// Пиксель (24bpp: 3 байта B,G,R).
+// Пиксель. Формат задаётся g_lfb_bpp (24 или 32).
 void fb_put_pixel(int x, int y, unsigned int color) {
     if (!g_active) return;
     if (x < 0 || y < 0 || x >= g_w || y >= g_h) return;
-    unsigned char* p = (unsigned char*)(g_fb + (unsigned int)y * g_pitch + (unsigned int)x * 3u);
-    p[0] = (unsigned char)(color & 0xFF);
-    p[1] = (unsigned char)((color >> 8) & 0xFF);
-    p[2] = (unsigned char)((color >> 16) & 0xFF);
+    if (g_lfb_bpp == 32) {
+        // XRGB8888 little-endian: байты B,G,R,X.
+        unsigned int* p = (unsigned int*)(g_fb + (unsigned int)y * g_pitch + (unsigned int)x * 4u);
+        *p = color & 0x00FFFFFFu;
+    } else {
+        // BGR888
+        unsigned char* p = (unsigned char*)(g_fb + (unsigned int)y * g_pitch + (unsigned int)x * 3u);
+        p[0] = (unsigned char)(color & 0xFF);
+        p[1] = (unsigned char)((color >> 8) & 0xFF);
+        p[2] = (unsigned char)((color >> 16) & 0xFF);
+    }
 }
 
 void fb_fill_rect(int x, int y, int w, int h, unsigned int color) {
@@ -95,6 +120,14 @@ int fb_backbuffer_init(void) {
     if (!g_active) return 0;
     g_bb = (unsigned char*)BB_ADDR;
     return 1;
+}
+
+// Сменить текущий backbuffer (для композитинга в отдельный буфер,
+// например bg_cache). Возвращает старый — чтобы восстановить.
+unsigned char* fb_backbuffer_set_target(unsigned char* new_buf) {
+    unsigned char* old = g_bb;
+    g_bb = new_buf;
+    return old;
 }
 
 void fb_backbuffer_clear(unsigned int color) {
@@ -174,6 +207,108 @@ void fb_backbuffer_blit(int dx, int dy, const unsigned char* src, int w, int h, 
     }
 }
 
+// Блит с key-цветом (прозрачность). Пиксели источника, совпадающие с key,
+// НЕ копируются — на их месте остаётся то, что уже было в backbuffer
+// (нижний слой). key — 0xRRGGBB, в источнике байты идут B,G,R.
+void fb_backbuffer_blit_key(int dx, int dy, const unsigned char* src, int w, int h, int stride, unsigned int key) {
+    if (!g_bb) return;
+    unsigned char kb = key & 0xFF, kg = (key >> 8) & 0xFF, kr = (key >> 16) & 0xFF;
+    int sy0 = 0, sx0 = 0;
+    if (dx < 0) { sx0 = -dx; w += dx; dx = 0; }
+    if (dy < 0) { sy0 = -dy; h += dy; dy = 0; }
+    if (dx + w > g_w) w = g_w - dx;
+    if (dy + h > g_h) h = g_h - dy;
+    if (w <= 0 || h <= 0) return;
+    for (int y = 0; y < h; y++) {
+        unsigned char* d = g_bb + ((unsigned int)(dy + y) * (unsigned int)g_w + (unsigned int)dx) * 3u;
+        const unsigned char* s = src + (unsigned int)(sy0 + y) * (unsigned int)stride + (unsigned int)sx0 * 3u;
+        for (int x = 0; x < w; x++) {
+            if (s[0] == kb && s[1] == kg && s[2] == kr) { s += 3; d += 3; continue; }
+            d[0] = s[0]; d[1] = s[1]; d[2] = s[2];
+            s += 3; d += 3;
+        }
+    }
+}
+
+// ============================================================
+// blit_key_alpha: блит с key-прозрачностью И общей альфой окна.
+// ============================================================
+// src — RGB, key — цвет, который НЕ рисуется (как в blit_key).
+// alpha — общая непрозрачность 0..255, применяется ко всем
+// НЕ-key пикселям. Если alpha == 255, ведёт себя как blit_key.
+void fb_backbuffer_blit_key_alpha(int dx, int dy, const unsigned char* src,
+                                  int w, int h, int stride, unsigned int key,
+                                  unsigned int alpha) {
+    if (!g_bb) return;
+    unsigned char kb = key & 0xFF, kg = (key >> 8) & 0xFF, kr = (key >> 16) & 0xFF;
+    if (alpha > 255) alpha = 255;
+    unsigned int ia = 255 - alpha;
+    int sy0 = 0, sx0 = 0;
+    if (dx < 0) { sx0 = -dx; w += dx; dx = 0; }
+    if (dy < 0) { sy0 = -dy; h += dy; dy = 0; }
+    if (dx + w > g_w) w = g_w - dx;
+    if (dy + h > g_h) h = g_h - dy;
+    if (w <= 0 || h <= 0) return;
+    for (int y = 0; y < h; y++) {
+        unsigned char* d = g_bb + ((unsigned int)(dy + y) * (unsigned int)g_w + (unsigned int)dx) * 3u;
+        const unsigned char* s = src + (unsigned int)(sy0 + y) * (unsigned int)stride + (unsigned int)sx0 * 3u;
+        for (int x = 0; x < w; x++) {
+            if (s[0] == kb && s[1] == kg && s[2] == kr) { s += 3; d += 3; continue; }
+            if (alpha >= 255) { d[0] = s[0]; d[1] = s[1]; d[2] = s[2]; }
+            else {
+                d[0] = (unsigned char)((s[0] * alpha + d[0] * ia) / 255);
+                d[1] = (unsigned char)((s[1] * alpha + d[1] * ia) / 255);
+                d[2] = (unsigned char)((s[2] * alpha + d[2] * ia) / 255);
+            }
+            s += 3; d += 3;
+        }
+    }
+}
+
+// ============================================================
+// blit_alpha: блит с ПОПИКСЕЛЬНОЙ альфой (композитинг).
+// ============================================================
+// Каждый пиксель src смешивается с тем, что уже лежит в backbuffer:
+//     dst = (src * a + dst * (255 - a)) / 255
+//
+// ВАЖНО: в src хранятся RGB (B,G,R), альфа — отдельным массивом
+// (или через специальный формат — см. draw_window с маской).
+// Здесь — упрощённый вариант: alpha как 4-й байт в src (RGBA),
+// но наш формат 24bpp. Поэтому альфа передаётся как 4-й параметр-массив.
+//
+// Для практики используется так: у окна есть buf (RGB 24bpp) и
+// mask (1 байт на пиксель, 0..255). Если mask == 0 — пиксель прозрачен
+// полностью (как key в blit_key). Если 255 — плотный.
+void fb_backbuffer_blit_alpha(int dx, int dy,
+                              const unsigned char* src,
+                              const unsigned char* mask,
+                              int w, int h, int src_stride, int mask_stride) {
+    if (!g_bb) return;
+    int sy0 = 0, sx0 = 0;
+    if (dx < 0) { sx0 = -dx; w += dx; dx = 0; }
+    if (dy < 0) { sy0 = -dy; h += dy; dy = 0; }
+    if (dx + w > g_w) w = g_w - dx;
+    if (dy + h > g_h) h = g_h - dy;
+    if (w <= 0 || h <= 0) return;
+    for (int y = 0; y < h; y++) {
+        unsigned char* d = g_bb + ((unsigned int)(dy + y) * (unsigned int)g_w + (unsigned int)dx) * 3u;
+        const unsigned char* s = src + (unsigned int)(sy0 + y) * (unsigned int)src_stride + (unsigned int)sx0 * 3u;
+        const unsigned char* m = mask ? (mask + (unsigned int)(sy0 + y) * (unsigned int)mask_stride + (unsigned int)sx0) : 0;
+        for (int x = 0; x < w; x++) {
+            unsigned int a = m ? m[x] : 255;
+            if (a == 0) { s += 3; d += 3; continue; }
+            if (a == 255) { d[0] = s[0]; d[1] = s[1]; d[2] = s[2]; }
+            else {
+                unsigned int ia = 255 - a;
+                d[0] = (unsigned char)((s[0] * a + d[0] * ia) / 255);
+                d[1] = (unsigned char)((s[1] * a + d[1] * ia) / 255);
+                d[2] = (unsigned char)((s[2] * a + d[2] * ia) / 255);
+            }
+            s += 3; d += 3;
+        }
+    }
+}
+
 void fb_backbuffer_rect(int x, int y, int w, int h, unsigned int color) {
     fb_backbuffer_line(x, y, x + w - 1, y, color);
     fb_backbuffer_line(x, y + h - 1, x + w - 1, y + h - 1, color);
@@ -181,54 +316,53 @@ void fb_backbuffer_rect(int x, int y, int w, int h, unsigned int color) {
     fb_backbuffer_line(x + w - 1, y, x + w - 1, y + h - 1, color);
 }
 
-// Копирует только прямоугольник backbuffer на экран.
+// Копирует прямоугольник backbuffer на экран с конвертацией в формат LFB.
 void fb_flip_rect(int x, int y, int w, int h) {
     if (!g_bb || !g_active) return;
-    // Обрезаем строго, затем ПОВТОРНО проверяем границы.
-    // Иначе при x>=g_w или y>=g_h после вычитания w/h уходят в минус,
-    // а (unsigned)(w*3) даёт огромное число -> запись за пределы буфера.
     if (x < 0) { w += x; x = 0; }
     if (y < 0) { h += y; y = 0; }
     if (x >= g_w || y >= g_h) return;
     if (x + w > g_w) w = g_w - x;
     if (y + h > g_h) h = g_h - y;
     if (w <= 0 || h <= 0) return;
+    int bytes_pp = g_lfb_bpp / 8;
     for (int yy = y; yy < y + h; yy++) {
-        unsigned char* dst = (unsigned char*)(g_fb + (unsigned int)yy * g_pitch + (unsigned int)x * 3u);
-        unsigned char* src = g_bb + ((unsigned int)yy * (unsigned int)g_w + (unsigned int)x) * 3u;
-        unsigned int bytes = (unsigned int)w * 3u;
-        unsigned int dwords = bytes / 4u;
-        unsigned int tail = bytes % 4u;
-        __asm__ volatile (
-            "cld\n\t"
-            "rep movsl\n\t"
-            : "+S"(src), "+D"(dst), "+c"(dwords)
-            :
-            : "memory"
-        );
-        for (unsigned int i = 0; i < tail; i++) dst[i] = src[i];
+        const unsigned char* src = g_bb + ((unsigned int)yy * (unsigned int)g_w + (unsigned int)x) * 3u;
+        unsigned char* dst = (unsigned char*)(g_fb + (unsigned int)yy * g_pitch + (unsigned int)x * (unsigned int)bytes_pp);
+        if (g_lfb_bpp == 32) {
+            unsigned int* d32 = (unsigned int*)dst;
+            for (int i = 0; i < w; i++) {
+                unsigned int b = src[0], g = src[1], r = src[2];
+                d32[i] = b | (g << 8) | (r << 16);
+                src += 3;
+            }
+        } else {
+            for (int i = 0; i < w; i++) { dst[0]=src[0]; dst[1]=src[1]; dst[2]=src[2]; src+=3; dst+=3; }
+        }
     }
 }
 
-// Копирует backbuffer на экран. Быстро: rep movsd (32-битными словами).
 void fb_flip(void) {
     if (!g_bb || !g_active) return;
-    // Строки могут иметь разный pitch, поэтому построчно.
     for (int y = 0; y < g_h; y++) {
+        const unsigned char* src = g_bb + (unsigned int)y * (unsigned int)g_w * 3u;
         unsigned char* dst = (unsigned char*)(g_fb + (unsigned int)y * g_pitch);
-        unsigned char* src = g_bb + (unsigned int)y * (unsigned int)g_w * 3u;
-        unsigned int bytes = (unsigned int)g_w * 3u;
-        unsigned int dwords = bytes / 4u;
-        unsigned int tail = bytes % 4u;
-        __asm__ volatile (
-            "cld\n\t"
-            "rep movsl\n\t"
-            : "+S"(src), "+D"(dst), "+c"(dwords)
-            :
-            : "memory"
-        );
-        // Хвост строки (1-3 байта), если ширина*3 не кратна 4.
-        // Без этого правый край строки не копируется (мусор на экране).
-        for (unsigned int i = 0; i < tail; i++) dst[i] = src[i];
+        if (g_lfb_bpp == 32) {
+            unsigned int* d32 = (unsigned int*)dst;
+            for (int x = 0; x < g_w; x++) {
+                unsigned int b = src[0], g = src[1], r = src[2];
+                d32[x] = b | (g << 8) | (r << 16);
+                src += 3;
+            }
+        } else {
+            unsigned int bytes = (unsigned int)g_w * 3u;
+            unsigned int dwords = bytes / 4u;
+            unsigned int tail = bytes % 4u;
+            const unsigned char* src0 = src;
+            unsigned char* dst0 = dst;
+            unsigned char* sd = (unsigned char*)src;
+            __asm__ volatile ("cld\n\trep movsl\n\t" : "+S"(sd), "+D"(dst), "+c"(dwords) :: "memory");
+            for (unsigned int i = 0; i < tail; i++) dst0[dwords * 4u + i] = src0[dwords * 4u + i];
+        }
     }
 }

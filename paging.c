@@ -9,6 +9,14 @@
 #define PDE_PRESENT 0x1
 #define PDE_RW      0x2
 #define PDE_PS      0x80        // 4 МБ страница
+// PDE_USER: разрешить доступ из ring3. БЕЗ него ring3 получит page fault
+// на первой же попытке выполнить свою инструкцию (CS DPL=3, PDE — supervisor).
+// Ставим ТОЛЬКО на task-страницы (stack+code), не на ядро — это даёт
+// настоящую изоляцию: ring3 не может писать в память ядра.
+// (Общие страницы — окна, DLL-регион — пока остаются supervisor: чтобы
+// ring3 мог рисовать в буфер окна, нужно будет добавить PDE_USER и туда.
+// Но это отдельный шаг, а пока проверяем только сам iret.)
+#define PDE_USER    0x4
 
 // Разместим PD статически, выровняв на 4 КБ.
 static unsigned int g_pd[1024] __attribute__((aligned(4096)));
@@ -32,8 +40,11 @@ unsigned int paging_task_pd_alloc(unsigned int code_phys, unsigned int stack_phy
 
     unsigned int* pd = g_task_pd[slot];
     for (int i = 0; i < 1024; i++) pd[i] = g_pd[i];
-    pd[PDE_IDX_STACK] = stack_phys | PDE_PRESENT | PDE_RW | PDE_PS;
-    pd[PDE_IDX_CODE]  = code_phys  | PDE_PRESENT | PDE_RW | PDE_PS;
+    // PDE_USER — иначе ring3 не сможет выполнить свою же инструкцию.
+    // Шаг 2: только stack+code. Ядру и shared-страницам (окна, DLL) —
+    // пока НЕ ставим user: ring3 не должен писать в ядро.
+    pd[PDE_IDX_STACK] = stack_phys | PDE_PRESENT | PDE_RW | PDE_USER | PDE_PS;
+    pd[PDE_IDX_CODE]  = code_phys  | PDE_PRESENT | PDE_RW | PDE_USER | PDE_PS;
     return (unsigned int)pd;
 }
 

@@ -532,11 +532,8 @@ void fat_write_path(int base_dir, const char* path, const char* content) {
     ent->first_cluster_high = (unsigned short)((chain[0] >> 16) & 0xFFFF);
     ent->file_size = len2;
     ata_write_sector(ws, buf);
-    print_string("OK: wrote ");
-    print_int(len2);
-    print_string(" bytes to ");
-    print_string(fname);
-    print_string("\n");
+    // Успешная запись НЕ печатает: вывод в консоль (LFB) скроллил экран
+    // (баг «рабочий стол улетает вверх»). Ошибки ниже — печатаются.
 }
 
 // Читает файл целиком в буфер. Возвращает размер или -1.
@@ -632,5 +629,87 @@ int fat_cd(const char* path, unsigned int* out_cluster) {
     unsigned int dir, fc; unsigned char at;
     if (!fat_resolve(0, path, &dir, &fc, 0, &at) || !(at & 0x10)) return 0;
     *out_cluster = fc;
+    return 1;
+}
+
+// ============================================================
+// ФОРМАТИРОВАНИЕ FAT (создание ФС с нуля)
+// ============================================================
+// Параметры по умолчанию — под наши образы (512 б/сек, 4 сект/кластер,
+// 2 FAT, 512 записей корня). total_sectors задаётся вызывающим (mofsf).
+// Сейчас поддержан только FAT16. Возвращает 1 при успехе.
+int fat_format(int version) {
+    if (version != 16) return 0;   // TODO: 12/32
+
+    ata_select(g_fat_drive);
+
+    // Сбросить кэш геометрии для этого диска (после форматирования — перечитать).
+    g_geom[g_fat_drive].valid = 0;
+
+    unsigned int total_sectors = 65536;   // 32 МБ по умолчанию (как disk2.img)
+    unsigned int spc = 4;                 // секторов на кластер
+    unsigned int reserved = 256;          // зарезерв. секторов под загрузчик/ядро
+    unsigned int nfats = 2;
+    unsigned int root_ents = 512;
+
+    // Размер одной FAT (секторов). Формула FAT16: spf = (total_clusters*2 + 2 + sps-1)/sps
+    // Упрощённо итерируем: подбираем spf так, чтобы data_clusters влезли в FAT16.
+    unsigned int spf = 0;
+    for (unsigned int cand = 1; cand < 256; cand++) {
+        unsigned int data_sec = total_sectors - (reserved + nfats * cand + (root_ents * 32) / SECTOR_SIZE);
+        unsigned int clusters = data_sec / spc;
+        unsigned int fat_capacity = (cand * SECTOR_SIZE) / 2;   // записей FAT16
+        if (clusters + 2 <= fat_capacity) { spf = cand; break; }
+    }
+    if (spf == 0) return 0;
+
+    // --- 1. BPB (сектор 0) ---
+    unsigned char buf[SECTOR_SIZE];
+    for (int k = 0; k < SECTOR_SIZE; k++) buf[k] = 0;
+    fat_bpb_t* bpb = (fat_bpb_t*)buf;
+    bpb->jmp[0] = 0xEB; bpb->jmp[1] = 0x3C; bpb->jmp[2] = 0x90;
+    const char* oem = "MSYS2.0 ";
+    for (int k = 0; k < 8; k++) bpb->oem_name[k] = (unsigned char)oem[k];
+    bpb->bytes_per_sector = SECTOR_SIZE;
+    bpb->sectors_per_cluster = (unsigned char)spc;
+    bpb->reserved_sectors = (unsigned short)reserved;
+    bpb->fat_count = (unsigned char)nfats;
+    bpb->root_entry_count = (unsigned short)root_ents;
+    bpb->total_sectors_16 = (total_sectors < 0x10000) ? (unsigned short)total_sectors : 0;
+    bpb->media_descriptor = 0xF8;
+    bpb->sectors_per_fat_16 = (unsigned short)spf;
+    bpb->sectors_per_track = 32;
+    bpb->head_count = 64;
+    bpb->hidden_sectors = 0;
+    bpb->total_sectors_32 = (total_sectors >= 0x10000) ? total_sectors : 0;
+    // Сигнатура 0x55AA
+    buf[510] = 0x55; buf[511] = 0xAA;
+    ata_write_sector(0, buf);
+
+    // --- 2. FAT-таблицы (2 копии). Первые 2 записи: media + EOF ---
+    // FAT16: entry0 = 0xFFF8, entry1 = 0xFFFF.
+    unsigned char fbuf[SECTOR_SIZE];
+    for (int k = 0; k < SECTOR_SIZE; k++) fbuf[k] = 0;
+    fbuf[0] = 0xF8; fbuf[1] = 0xFF;   // entry 0 = 0xFFF8
+    fbuf[2] = 0xFF; fbuf[3] = 0xFF;   // entry 1 = 0xFFFF
+    unsigned int fat_start = reserved;
+    for (unsigned int f = 0; f < nfats; f++) {
+        unsigned int base = fat_start + f * spf;
+        ata_write_sector(base, fbuf);   // первый сектор FAT
+        // Остальные сектора FAT — нули.
+        unsigned char zb[SECTOR_SIZE];
+        for (int k = 0; k < SECTOR_SIZE; k++) zb[k] = 0;
+        for (unsigned int s = 1; s < spf; s++) ata_write_sector(base + s, zb);
+    }
+
+    // --- 3. Корневой каталог (нули) ---
+    unsigned int root_start = reserved + nfats * spf;
+    unsigned int root_secs = (root_ents * 32) / SECTOR_SIZE;
+    unsigned char eb[SECTOR_SIZE];
+    for (int k = 0; k < SECTOR_SIZE; k++) eb[k] = 0;
+    for (unsigned int s = 0; s < root_secs; s++) ata_write_sector(root_start + s, eb);
+
+    // Перечитать геометрию.
+    fat_load_geom();
     return 1;
 }

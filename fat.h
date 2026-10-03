@@ -12,6 +12,10 @@
 void fat_use_drive(int d);
 int  fat_current_drive(void);
 
+// Форматировать текущий диск как FAT заданной версии.
+// version: 12, 16 или 32 (сейчас поддерживается 16). Возвращает 1 при успехе.
+int  fat_format(int version);
+
 int  fat_find(int base_dir, const char* path);      // 1 если найден, 0 если нет
 void fat_list(int base_dir, const char* path);      // печатает содержимое каталога
 void fat_read(int base_dir, const char* path);      // печатает содержимое файла

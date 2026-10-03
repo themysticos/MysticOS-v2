@@ -42,7 +42,13 @@ vbe.o: vbe.c
 bmp.o: bmp.c bmp.h
 	$(GCC) $(CFLAGS) -c $< -o $@
 
-vfs.o: vfs.c fs.h fat.h
+vfs.o: vfs.c fs.h fat.h msfs.h
+	$(GCC) $(CFLAGS) -c $< -o $@
+
+msfs.o: msfs.c msfs.h ata.h
+	$(GCC) $(CFLAGS) -c $< -o $@
+
+gdt.o: gdt.c gdt.h
 	$(GCC) $(CFLAGS) -c $< -o $@
 
 font.o: font.c
@@ -87,7 +93,31 @@ term.o: term.c
 exec.o: exec.c
 	$(GCC) $(CFLAGS) -c $< -o $@
 
-$(ELF): entry.o switch.o kernel.o task.o paging.o paging_asm.o pmem.o vbe.o bmp.o vfs.o font.o console.o idt.o pic.o io.o cursor.o icons.o icons_gen.o ata.o fat.o kprint.o term.o exec.o
+msdll.o: dll/msdll.c dll/msdll.h
+	$(GCC) $(CFLAGS) -c $< -o $@
+
+pci.o: pci.c pci.h io.h console.h
+	$(GCC) $(CFLAGS) -c $< -o $@
+
+driver.o: driver.c driver.h pci.h console.h
+	$(GCC) $(CFLAGS) -c $< -o $@
+
+serial.o: serial.c serial.h io.h
+	$(GCC) $(CFLAGS) -c $< -o $@
+
+virtio.o: virtio.c virtio.h pci.h serial.h io.h
+	$(GCC) $(CFLAGS) -c $< -o $@
+
+virtio_net.o: virtio_net.c virtio_net.h virtio.h driver.h serial.h
+	$(GCC) $(CFLAGS) -c $< -o $@
+
+net.o: net.c net.h virtio_net.h serial.h
+	$(GCC) $(CFLAGS) -c $< -o $@
+
+tcp.o: tcp.c tcp.h net.h serial.h
+	$(GCC) $(CFLAGS) -c $< -o $@
+
+$(ELF): entry.o switch.o kernel.o task.o paging.o paging_asm.o pmem.o vbe.o bmp.o vfs.o msfs.o gdt.o font.o console.o idt.o pic.o io.o cursor.o icons.o icons_gen.o ata.o fat.o kprint.o term.o exec.o msdll.o pci.o driver.o serial.o virtio.o virtio_net.o net.o tcp.o
 	$(LD) $(LDFLAGS) -o $@ $^
 
 $(BIN): $(ELF)
@@ -99,24 +129,32 @@ WINAPP_ELF = examples/winapp.elf
 ELFCFLAGS = -m32 -ffreestanding -nostdlib -static -no-pie -fno-pic \
             -Wl,-Ttext-segment=0x4000000 -Wl,-e,_start -Wl,--build-id=none
 
-# Тестовая ELF-программа: всегда собирается и кладётся в образ как WINAPP.ELF.
-$(WINAPP_ELF): examples/winapp.c api.h
-	gcc $(ELFCFLAGS) $< -o $@
-
 # Системные программы (SYSPR): кладутся в /kernel/SYSPR/ образа.
 SYSPR = about files term wpick imgview editor
 SYSPR_ELFS = $(addprefix examples/,$(addsuffix .elf,$(SYSPR)))
 
+# Программы на новом API (include/mysticos.h): все вызовы — static inline
+# в заголовках, каждый делает int 0x80 напрямую. msyscall.c больше не нужен.
+# Список — MSYS_PROGS. WINAPP_ELF тоже сюда (он использует новый API).
+MSYS_PROGS = about winapp
+
+$(addprefix examples/,$(addsuffix .elf,$(MSYS_PROGS))): examples/%.elf: examples/%.c include/mysticos.h dll/msyscall.h
+	gcc $(ELFCFLAGS) -Iinclude $< -o $@
+
+# Старые программы (api->): пока работают в ring0, в ring3 упадут.
 examples/%.elf: examples/%.c api.h
 	gcc $(ELFCFLAGS) $< -o $@
 
-$(IMAGE): $(BOOT) $(BIN) $(WINAPP_ELF) $(SYSPR_ELFS)
+
+$(IMAGE): $(BOOT) $(BIN) $(WINAPP_ELF) $(SYSPR_ELFS) tools/mbr.py tools/fatput.py
 	# Один FAT16-образ: 64 зарезервированных сектора под загрузчик+ядро.
 	rm -f $@
 	mkfs.fat -C $@ -F 16 -s 4 -R 256 131072
 	dd if=$@ of=$(BOOT) bs=1 count=59 skip=3 seek=3 conv=notrunc 2>/dev/null
 	dd if=$(BOOT) of=$@ conv=notrunc 2>/dev/null
 	dd if=$(BIN) of=$@ bs=512 seek=1 conv=notrunc 2>/dev/null
+	# Таблица разделов MBR — чтобы BIOS видел флешку загрузочной.
+	python3 tools/mbr.py $@
 	echo 'MysticOS 2 file system' > /tmp/readme.txt
 	python3 tools/fatput.py $@ /tmp/readme.txt README.TXT 2>/dev/null || true
 	echo 'hello world' > /tmp/hi.txt
@@ -131,7 +169,7 @@ $(IMAGE): $(BOOT) $(BIN) $(WINAPP_ELF) $(SYSPR_ELFS)
 	python3 tools/fatput.py $@ examples/editor.elf EDITOR.ELF kernel/SYSPR 2>/dev/null || true
 	# Дефолтные обои: BG.BMP (если файл подготовлен в корне проекта).
 	# Отсутствие файла НЕ ломает сборку (|| true) — фон останется fallback.
-	python3 tools/fatput.py $@ BG.BMP BG.BMP kernel/BG 2>/dev/null || true
+	python3 tools/fatput.py $@ BG.BMP BG.BMP kernel/BG/ 2>/dev/null || true
 
 # Второй диск (D1): простой FAT16-образ с парой тестовых файлов.
 $(IMAGE2):
@@ -150,6 +188,7 @@ run: $(IMAGE) $(IMAGE2)
 
 clean:
 	rm -f *.o *.elf *.bin *.img
+	rm -f msdll.o
 	rm -f examples/*.elf disk2.img
 
 .PHONY: all clean run
