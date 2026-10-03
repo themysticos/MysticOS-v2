@@ -2,6 +2,7 @@
 #include "pci.h"
 #include "io.h"
 #include "console.h"
+#include "serial.h"
 
 // ============================================================
 // Config space через IO-порты (legacy)
@@ -161,4 +162,41 @@ void pci_dump(void) {
         }
     }
     console_print("(end)\n");
+}
+
+// То же, но в serial — видно в -serial stdio без мелькания на экране.
+void pci_dump_serial(void) {
+    int n = 0;
+    serial_print("[pci] scanning...\n");
+    for (int bus = 0; bus < 256; bus++) {
+        for (int slot = 0; slot < 32; slot++) {
+            for (int func = 0; func < 8; func++) {
+                unsigned int cfg0 = pci_read32(bus, slot, func, 0);
+                unsigned int vendor = cfg0 & 0xFFFF;
+                if (vendor == 0xFFFF || vendor == 0x0000) {
+                    if (func == 0) break;
+                    continue;
+                }
+                unsigned int device = (cfg0 >> 16) & 0xFFFF;
+                unsigned int cls = (pci_read32(bus, slot, func, 8) >> 16) & 0xFFFF;
+                serial_print("  ");
+                serial_print_int(bus);
+                serial_print(":");
+                serial_print_int(slot);
+                serial_print(".");
+                serial_print_int(func);
+                serial_print(" vendor=");
+                serial_print_hex(vendor);
+                serial_print(" device=");
+                serial_print_hex(device);
+                serial_print(" class=");
+                serial_print_hex(cls);
+                serial_print("\n");
+                n++;
+            }
+        }
+    }
+    serial_print("[pci] total: ");
+    serial_print_int(n);
+    serial_print(" device(s)\n");
 }

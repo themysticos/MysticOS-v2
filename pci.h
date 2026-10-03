@@ -41,4 +41,7 @@ void pci_enumerate(pci_enum_cb_t cb);
 // Для отладки: печатать все устройства через console_print.
 void pci_dump(void);
 
+// То же, но в COM1 (serial) — видно в QEMU -serial stdio без мелькания.
+void pci_dump_serial(void);
+
 #endif // PCI_H

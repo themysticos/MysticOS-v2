@@ -20,6 +20,7 @@
 #include "dll/msdll.h"
 #include "pci.h"
 #include "driver.h"
+#include "serial.h"
 
 // ============================================================
 // SYSCALL (int 0x80) — заглушка в начале файла (настоящий диспетчер
@@ -1622,8 +1623,13 @@ static void diag_mark(int pos, char c) {
 }
 
 void kernel_main(void) {
+    serial_init();       // COM1 — отладочный вывод в -serial stdio
+    serial_print("=== MysticOS 2 kernel_main ===\n");
     diag_mark(0, 'A');   // ядро стартовало (до vbe_init)
-    if (!vbe_init()) { for (;;) __asm__ volatile ("hlt"); }
+    if (!vbe_init()) {
+        serial_print("[FATAL] vbe_init failed\n");
+        for (;;) __asm__ volatile ("hlt");
+    }
     diag_mark(1, 'B');   // vbe_init вернул успех
     fb_backbuffer_init();
     // console_init ОБЯЗАТЕЛЕН: без него console.cols/rows = 0, и первый же
@@ -1644,7 +1650,8 @@ void kernel_main(void) {
     // или в VGA-память, если посмотреть). Позже сюда добавим virtio-net,
     // rtl8723de, virtio-gpu.
     driver_init();
-    pci_dump();
+    serial_print("=== MysticOS 2 boot ===\n");
+    pci_dump_serial();
     icons_init();
     icons_layout();
     windows_init();
