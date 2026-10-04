@@ -39,7 +39,12 @@ static const char* exc_name(unsigned int n) {
     }
 }
 
+// MMDCM: обработчик исключений из V86 (по флагу g_v86_active).
+extern int mmdcm_handle_v86_exc(registers_t* r);
+
 void isr_handler(registers_t* r) {
+    // Любое исключение во время исполнения V86-кода — отдать MMDCM.
+    if (mmdcm_handle_v86_exc(r)) return;   // обработано (выход из V86)
     unsigned int cr2;
     __asm__ volatile ("mov %%cr2, %0" : "=r"(cr2));
     console_set_color(FB_RGB(0xFF,0x44,0x44), FB_RGB(0,0,0));

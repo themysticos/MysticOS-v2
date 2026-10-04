@@ -17,6 +17,12 @@ extern void paging_load_cr3(unsigned int pd_phys);
 // Создать PD задачи: копия ядра + подстановка физ. блоков кода (virt 0x04000000)
 // и стека (virt 0x00800000). Возвращает физ. адрес PD (для CR3) или 0.
 unsigned int paging_task_pd_alloc(unsigned int code_phys, unsigned int stack_phys);
+
+// PD для V86 (DOS): PDE[0] -> dos_phys, остальное identity (как ядро).
+unsigned int paging_v86_pd_alloc(unsigned int dos_phys);
+
+// Разрешить/запретить USER-доступ к низким 4 МБ (PDE[0]) — на время V86.
+void paging_low_user(int on);
 void paging_task_pd_free(unsigned int pd_phys);
 
 #endif

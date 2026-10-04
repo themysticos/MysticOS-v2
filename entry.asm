@@ -256,6 +256,9 @@ isr128:
     popa
     iret
 
+; (MMDCM перехватывает int из V86 через IVT-ловушки + #GP, а не через
+;  отдельные IDT-гейты — поэтому заглушки isr10h/isr20h/isr30h не нужны.)
+
 ; ============ IRQ ============
 global irq_common
 extern irq_handler

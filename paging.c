@@ -48,10 +48,41 @@ unsigned int paging_task_pd_alloc(unsigned int code_phys, unsigned int stack_phy
     return (unsigned int)pd;
 }
 
+// Выделить PD для V86-задачи: PDE[0] (0..4 МБ) -> DOS-память (dos_phys),
+// остальное — копия ядровой PD (identity: ядро, буферы, LFB).
+// V86 обращается к 0..1 МБ по физическим адресам seg*16+off, поэтому
+// подменяя PDE[0], мы даём DOS-программе «свои» 0..1 МБ, не трогая ядро.
+unsigned int paging_v86_pd_alloc(unsigned int dos_phys) {
+    int slot = -1;
+    for (int i = 0; i < PMAX_TASK_PD; i++) {
+        if (!(g_pd_used_mask & (1u << i))) { slot = i; break; }
+    }
+    if (slot < 0) return 0;
+    g_pd_used_mask |= (1u << slot);
+    unsigned int* pd = g_task_pd[slot];
+    for (int i = 0; i < 1024; i++) pd[i] = g_pd[i];
+    // PDE[0]: 0..4 МБ -> DOS-память. RW, present, PS (4 МБ). Без USER:
+    // V86 работает с привилегиями ring0 (это не ring3!).
+    pd[0] = dos_phys | PDE_PRESENT | PDE_RW | PDE_PS;
+    return (unsigned int)pd;
+}
+
 void paging_task_pd_free(unsigned int pd_phys) {
     for (int i = 0; i < PMAX_TASK_PD; i++) {
         if ((unsigned int)g_task_pd[i] == pd_phys) { g_pd_used_mask &= ~(1u << i); return; }
     }
+}
+
+// Включить/выключить USER-доступ к низким 4 МБ (PDE[0]).
+// Нужно на время V86: V86 работает на CPL=3, а низкая память — supervisor.
+// Без USER V86 падает #PF на выборке первой же инструкции.
+void paging_low_user(int on) {
+    if (on) g_pd[0] |= PDE_USER;
+    else    g_pd[0] &= ~PDE_USER;
+    // Сбросить TLB: перезагрузить CR3.
+    unsigned int cr3;
+    __asm__ volatile ("mov %%cr3, %0" : "=r"(cr3));
+    __asm__ volatile ("mov %0, %%cr3" :: "r"(cr3));
 }
 
 void paging_init(void) {
