@@ -1,10 +1,19 @@
-// msfs.c - MSFS (Mystic Soft File System) для MysticOS 2.
+// msfs.c - MSFS: Mystic Soft File System (ПРОКЛЯТОЕ ИЗДАНИЕ).
 //
-// Порт из MysticOS 1. Изменения под M2:
-//   - per-drive: g_msfs_drive, msfs_use_drive(d) (как fat_use_drive);
-//   - путь-ориентированный API: нет base/cwd, всё от корня (inode 0);
-//   - msfs_read_dir (массивы) для VFS; печать каталога — msfs_list_print;
-//   - нет print_int/print_string-зависимостей в логике (только для печати).
+//   Я придумал эту ФС сам. Поэтому никто, кроме меня, не сможет
+//   написать под неё драйвер с первого раза. И это МОЯ МЕСТЬ.
+//
+//   Правила выживания для того, кто пишет драйвер MSFS:
+//     1. ИНОДЫ ЛЕЖАТ НЕ ПО ПОРЯДКУ. Логический inode i хранится в
+//        физическом слоте bit_reverse(i). Удачи в отладке.
+//     2. КЛАСТЕРЫ ДАННЫХ ТОЖЕ ПЕРЕМЕШАНЫ (bit_reverse 13 бит).
+//     3. ИМЕНА ФАЙЛОВ ЗАШИФРОВАНЫ XOR'ом. Ключ зависит от номера inode.
+//     4. КАЖДЫЙ INODE ИМЕЕТ КОНТРОЛЬНУЮ СУММУ. Не посчитаешь — не прочтёшь.
+//     5. МАГИЯ НА ДИСКЕ ЗАПИСАНА ЗАДОМ НАПЕРЁД: "SFSM", не "MSFS".
+//
+//   Почему так? Потому что могу. Это моя ОС, моя ФС, мои правила.
+//   Другие программисты должны СТРАДАТЬ. (привет, будущий я, который
+//   через год забыл, как это работает.)
 #include "msfs.h"
 #include "ata.h"
 
@@ -26,6 +35,12 @@ void print_int(int num);
 #define MSFS_TYPE_DIR    2
 #define MSFS_PATH_MAX    128
 
+// Ключ шифрования имён (зависит от номера inode).
+#define MSFS_NAME_KEY(i)  ((unsigned char)(((i) * 73u + 0x5Au) & 0xFF))
+
+// Контрольная сумма inode лежит в поле reserved (offset 33).
+#define MSFS_CHK_OFF 33
+
 typedef struct {
     char          magic[4];
     unsigned int  version;
@@ -41,7 +56,7 @@ typedef struct {
 typedef struct {
     char          name[MSFS_NAME_LEN];
     unsigned char type;
-    unsigned char reserved;
+    unsigned char reserved;       // тут контрольная сумма
     unsigned int  size;
     unsigned int  first_cluster;
     unsigned int  parent;
@@ -49,7 +64,6 @@ typedef struct {
     unsigned char pad[16];
 } __attribute__((packed)) msfs_inode_t;
 
-// Состояние — per-drive (два диска).
 static msfs_super_t g_super[2];
 static msfs_inode_t g_inodes[2][MSFS_MAX_INODES];
 static int g_loaded[2] = {0, 0};
@@ -57,6 +71,30 @@ static int g_msfs_drive = 0;
 
 #define S (&g_super[g_msfs_drive])
 #define INODES (g_inodes[g_msfs_drive])
+
+// ============================================================
+// ПРОКЛЯТИЕ #1 и #2: перемешивание. bit-reverse — биекция,
+// значит всё честно, просто выглядит как хаос.
+// ============================================================
+static unsigned int msfs_perm6(unsigned int i) {
+    unsigned int r = 0;
+    for (int b = 0; b < 6; b++) { r = (r << 1) | (i & 1); i >>= 1; }
+    return r;
+}
+static unsigned int msfs_perm_cluster(unsigned int c) {
+    unsigned int r = 0;
+    for (int b = 0; b < 13; b++) { r = (r << 1) | (c & 1); c >>= 1; }
+    return r;
+}
+
+// ============================================================
+// ПРОКЛЯТИЕ #4: контрольная сумма inode.
+// ============================================================
+static unsigned char msfs_inode_chk(const unsigned char* b) {
+    unsigned int s = 0;
+    for (int i = 0; i < MSFS_INODE_SIZE; i++) if (i != MSFS_CHK_OFF) s += b[i];
+    return (unsigned char)(s & 0xFF);
+}
 
 void msfs_use_drive(int d) {
     g_msfs_drive = d & 1;
@@ -81,8 +119,9 @@ static int msfs_read_super(void) {
     unsigned char buf[SECTOR_SIZE];
     ata_read_sector(0, buf);
     msfs_super_t* s = (msfs_super_t*)buf;
-    if (s->magic[0] != 'M' || s->magic[1] != 'S' ||
-        s->magic[2] != 'F' || s->magic[3] != 'S') return 0;
+    // ПРОКЛЯТИЕ #5: магия задом наперёд.
+    if (s->magic[0] != 'S' || s->magic[1] != 'F' ||
+        s->magic[2] != 'S' || s->magic[3] != 'M') return 0;
     S->version       = s->version;
     S->sector_size   = s->sector_size;
     S->inode_start   = s->inode_start;
@@ -91,47 +130,57 @@ static int msfs_read_super(void) {
     S->cluster_size  = s->cluster_size;
     S->cluster_count = s->cluster_count;
     S->next_start    = s->next_start;
-    S->magic[0]='M'; S->magic[1]='S'; S->magic[2]='F'; S->magic[3]='S';
+    for (int k = 0; k < 4; k++) S->magic[k] = s->magic[k];
     return 1;
 }
 
+// Загрузка всех inode с расшифровкой, проверкой суммы и снятием перемешивания.
 static void msfs_load_inodes(void) {
     unsigned int total = S->inode_count;
+    if (total > MSFS_MAX_INODES) total = MSFS_MAX_INODES;
     unsigned int per_sector = SECTOR_SIZE / MSFS_INODE_SIZE;
-    unsigned int loaded = 0;
-    unsigned int lba = S->inode_start;
-    while (loaded < total) {
+    ata_select(g_msfs_drive);
+    for (unsigned int i = 0; i < total; i++) {
+        unsigned int p   = msfs_perm6(i);
+        unsigned int lba = S->inode_start + p / per_sector;
+        unsigned int slt = p % per_sector;
         unsigned char buf[SECTOR_SIZE];
-        ata_select(g_msfs_drive);
         ata_read_sector(lba, buf);
-        for (unsigned int i = 0; i < per_sector && loaded < total; i++) {
-            unsigned char* src = &buf[i * MSFS_INODE_SIZE];
-            unsigned char* d = (unsigned char*)&INODES[loaded];
-            for (unsigned int k = 0; k < MSFS_INODE_SIZE; k++) d[k] = src[k];
-            loaded++;
+        unsigned char* src = &buf[slt * MSFS_INODE_SIZE];
+        unsigned char* d   = (unsigned char*)&INODES[i];
+        for (unsigned int k = 0; k < MSFS_INODE_SIZE; k++) d[k] = src[k];
+        if (d[MSFS_CHK_OFF] != msfs_inode_chk(d)) {
+            for (unsigned int k = 0; k < MSFS_INODE_SIZE; k++) d[k] = 0;
+            continue;
         }
-        lba++;
+        unsigned char key = MSFS_NAME_KEY(i);
+        for (int k = 0; k < MSFS_NAME_LEN; k++) d[k] ^= key;
     }
     g_loaded[g_msfs_drive] = 1;
 }
 
+// Сохранение inode: шифруем имя, считаем сумму, кладём в перемешанный слот.
 static void msfs_save_inodes(void) {
     unsigned int total = S->inode_count;
+    if (total > MSFS_MAX_INODES) total = MSFS_MAX_INODES;
     unsigned int per_sector = SECTOR_SIZE / MSFS_INODE_SIZE;
-    unsigned int saved = 0;
-    unsigned int lba = S->inode_start;
     ata_select(g_msfs_drive);
-    while (saved < total) {
+    for (unsigned int i = 0; i < total; i++) {
+        unsigned char tmp[MSFS_INODE_SIZE];
+        unsigned char* s = (unsigned char*)&INODES[i];
+        for (unsigned int k = 0; k < MSFS_INODE_SIZE; k++) tmp[k] = s[k];
+        unsigned char key = MSFS_NAME_KEY(i);
+        for (int k = 0; k < MSFS_NAME_LEN; k++) tmp[k] ^= key;
+        tmp[MSFS_CHK_OFF] = 0;
+        tmp[MSFS_CHK_OFF] = msfs_inode_chk(tmp);
+        unsigned int p   = msfs_perm6(i);
+        unsigned int lba = S->inode_start + p / per_sector;
+        unsigned int slt = p % per_sector;
         unsigned char buf[SECTOR_SIZE];
-        for (unsigned int k = 0; k < SECTOR_SIZE; k++) buf[k] = 0;
-        for (unsigned int i = 0; i < per_sector && saved < total; i++) {
-            unsigned char* s = (unsigned char*)&INODES[saved];
-            unsigned char* d = &buf[i * MSFS_INODE_SIZE];
-            for (unsigned int k = 0; k < MSFS_INODE_SIZE; k++) d[k] = s[k];
-            saved++;
-        }
+        ata_read_sector(lba, buf);
+        unsigned char* dst = &buf[slt * MSFS_INODE_SIZE];
+        for (unsigned int k = 0; k < MSFS_INODE_SIZE; k++) dst[k] = tmp[k];
         ata_write_sector(lba, buf);
-        lba++;
     }
 }
 
@@ -159,7 +208,7 @@ void msfs_format(void) {
     ata_select(g_msfs_drive);
     for (int k = 0; k < SECTOR_SIZE; k++) buf[k] = 0;
     msfs_super_t* s = (msfs_super_t*)buf;
-    s->magic[0]='M'; s->magic[1]='S'; s->magic[2]='F'; s->magic[3]='S';
+    s->magic[0]='S'; s->magic[1]='F'; s->magic[2]='S'; s->magic[3]='M';
     s->version=S->version; s->sector_size=S->sector_size;
     s->inode_start=S->inode_start; s->inode_count=S->inode_count;
     s->data_start=S->data_start; s->cluster_size=S->cluster_size;
@@ -296,7 +345,8 @@ int msfs_read_file(const char* path, unsigned char* out, unsigned int max) {
     unsigned int pos = 0;
     unsigned char buf[SECTOR_SIZE];
     while (remaining > 0 && cluster != 0xFFFFFFFF) {
-        ata_read_sector(S->data_start + cluster, buf);
+        // ПРОКЛЯТИЕ #2: физический сектор кластера — перемешанный.
+        ata_read_sector(S->data_start + msfs_perm_cluster(cluster), buf);
         unsigned int chunk = remaining < SECTOR_SIZE ? remaining : SECTOR_SIZE;
         for (unsigned int i = 0; i < chunk; i++) out[pos++] = buf[i];
         remaining -= chunk;
@@ -446,7 +496,8 @@ int msfs_write(const char* path, const char* content) {
         for (int k = 0; k < SECTOR_SIZE; k++) data[k] = 0;
         unsigned int chunk = len - written < SECTOR_SIZE ? len - written : SECTOR_SIZE;
         for (unsigned int k = 0; k < chunk; k++) data[k] = content[written + k];
-        ata_write_sector(S->data_start + cluster, data);
+        // ПРОКЛЯТИЕ #2: пишем кластер по перемешанному адресу.
+        ata_write_sector(S->data_start + msfs_perm_cluster(cluster), data);
         written += chunk;
         prev = cluster;
     }
