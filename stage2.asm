@@ -104,6 +104,32 @@ vbe_search:
     test ax, 0x0080
     jz .try_no_lfb            ; нет LFB — попробуем всё равно
 
+    ; --- ДИАГНОСТИКА (до 4F02, мы ещё в VGA-тексте!): показать параметры ---
+    mov si, msg_diag
+    call puts
+    mov si, msg_bpp
+    call puts
+    mov al, [0x5000 + 0x19]       ; BitsPerPixel
+    call put_hex8
+    mov si, msg_pitch
+    call puts
+    mov ax, [0x5000 + 0x10]       ; BytesPerScanLine
+    call put_hex16
+    mov si, msg_wh
+    call puts
+    mov ax, [0x5000 + 0x12]       ; Xres
+    call put_dec16
+    mov al, 'x'
+    call putc
+    mov ax, [0x5000 + 0x14]       ; Yres
+    call put_dec16
+    mov si, msg_nl
+    call puts
+    mov si, msg_pause
+    call puts
+    mov ah, 0x00
+    int 0x16
+
     ; --- Попытка с LFB (bit14 = 0x4000) ---
     mov si, msg_try_lfb
     call puts
@@ -231,6 +257,71 @@ puts:
     jmp .l
 .d: ret
 
+; --- Вывод одного символа AL (VGA + serial). ---
+putc:
+    push ax
+    mov ah, 0x0E
+    int 0x10
+    pop ax
+    call serial_putc
+    ret
+
+; --- Вывести AL как 2 hex-цифры. ---
+put_hex8:
+    push ax
+    push ax
+    shr al, 4
+    call hex_digit
+    call putc
+    pop ax
+    and al, 0x0F
+    call hex_digit
+    call putc
+    pop ax
+    ret
+hex_digit:
+    cmp al, 10
+    jb .d
+    add al, 'A' - 10
+    ret
+.d: add al, '0'
+    ret
+
+; --- Вывести AX как 4 hex-цифры. ---
+put_hex16:
+    push ax
+    mov al, ah
+    call put_hex8
+    pop ax
+    call put_hex8
+    ret
+
+; --- Вывести AX как десятичное (0..65535). ---
+put_dec16:
+    push ax
+    push bx
+    push cx
+    push dx
+    mov cx, 0
+    mov bx, 10
+.div:
+    xor dx, dx
+    div bx              ; ax / 10 -> ax=частное, dx=остаток
+    push dx
+    inc cx
+    test ax, ax
+    jnz .div
+.prn:
+    pop ax
+    add al, '0'
+    call putc
+    loop .prn
+    pop dx
+    pop cx
+    pop bx
+    pop ax
+    ret
+
 ; Вывести AL в COM1 (0x3F8), без инициализации (BIOS уже настроил).
 serial_putc:
     push dx
@@ -262,6 +353,11 @@ cur_mode    dw 0
 loop_ctr    dw 0
 
 msg_stage2    db 'MysticOS stage2', 13, 10, 0
+msg_diag      db '[DIAG] mode params:', 13, 10, 0
+msg_bpp       db '  bpp=', 0
+msg_pitch     db '  pitch=0x', 0
+msg_wh        db '  res=', 0
+msg_nl        db 13, 10, 0
 msg_vbe_ok    db '[OK] VBE 2.0+ found', 13, 10, 0
 msg_vbe_err   db '[ERR] no VBE (4F00 failed)', 13, 10, 0
 msg_try_lfb   db '[..] trying 800x600 with LFB...', 13, 10, 0
@@ -273,6 +369,7 @@ msg_vbe_fail  db '[ERR] no 800x600 mode matched!', 13, 10, 0
 msg_load_kern db '[..] loading kernel...', 13, 10, 0
 msg_kern_ok   db '[OK] kernel loaded, jumping to protected mode', 13, 10, 0
 msg_disk_err  db '[ERR] disk read error!', 13, 10, 0
+msg_pause     db 'Press any key...', 13, 10, 0
 
 ; GDT для перехода в protected mode.
 gdt_start:

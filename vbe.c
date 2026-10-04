@@ -29,13 +29,15 @@ int vbe_init(void) {
     unsigned int fb = p[0];
     if (fb == 0) { g_active = 0; return 0; }
     g_fb = fb;
-    g_pitch = (unsigned int)(*(volatile unsigned short*)(VBE_PARAM_ADDR + 4));
     g_w = (int)(*(volatile unsigned short*)(VBE_PARAM_ADDR + 6));
     g_h = (int)(*(volatile unsigned short*)(VBE_PARAM_ADDR + 8));
-    // BPP из 0x900A (пишет bootloader). 24 = 3 байта, 32 = 4 байта.
+    // BPP из 0x900A (пишет bootloader). 16/24/32.
     unsigned int bpp = *(volatile unsigned char*)(VBE_PARAM_ADDR + 10);
-    if (bpp != 16 && bpp != 24 && bpp != 32) bpp = 24;   // старый образ без 0x900A — 24
+    if (bpp != 16 && bpp != 24 && bpp != 32) bpp = 24;
     g_lfb_bpp = (int)bpp;
+    // PITCH из ModeInfo (BytesPerScanLine). Проверено на ноуте: 1664 — ВЕРНЫЙ.
+    // (Попытка вычислить w*bpp/8=1600 сделала хуже — значит BIOS НЕ врёт.)
+    g_pitch = (unsigned int)(*(volatile unsigned short*)(VBE_PARAM_ADDR + 4));
     g_active = 1;
     return 1;
 }
