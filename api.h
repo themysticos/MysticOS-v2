@@ -105,6 +105,12 @@ typedef struct {
                                unsigned int fg);
     // Очистить нижний (текстовый) слой окна.
     void (*window_static_clear)(int id);
+
+    // --- HTTP (v3, в конец — ABI сохранён) ---
+    // GET по url ("http://host/path"). Копирует ТЕЛО ответа (без HTTP-
+    // заголовков) в buf программы. Возвращает длину тела или -1 при ошибке.
+    // buf должен быть в памяти ПРОГРАММЫ (ring3). Только http:// (без TLS).
+    int (*http_get)(const char* url, char* buf, unsigned int max);
 } mystic_api_t;
 
 #endif

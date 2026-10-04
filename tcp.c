@@ -118,6 +118,20 @@ int net_tcp_send(tcp_conn_t* c, const void* data, unsigned int len) {
     return (int)len;
 }
 
+// НЕБЛОКИРУЮЩИЙ приём: забрать, что уже есть в g_rxbuf, без ожидания.
+// Возвращает число байт (0 если пусто) или -1.
+int net_tcp_recv_nb(tcp_conn_t* c, void* buf, unsigned int max) {
+    (void)c;
+    if (g_rxlen == 0) return 0;
+    unsigned int n = g_rxlen;
+    if (n > max) n = max;
+    unsigned char* d = (unsigned char*)buf;
+    for (unsigned int i = 0; i < n; i++) d[i] = g_rxbuf[i];
+    for (unsigned int i = n; i < g_rxlen; i++) g_rxbuf[i - n] = g_rxbuf[i];
+    g_rxlen -= n;
+    return (int)n;
+}
+
 int net_tcp_recv(tcp_conn_t* c, void* buf, unsigned int max) {
     for (unsigned int i = 0; i < 3000000u; i++) {
         net_poll();

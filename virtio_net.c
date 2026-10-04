@@ -94,6 +94,7 @@ int virtio_net_probe(device_t* dev) {
 
     // Features: MAC + VERSION_1.
     v_u64 want = (v_u64)(1ULL << VIRTIO_NET_F_MAC)
+               | (v_u64)(1ULL << VIRTIO_NET_F_MRG_RXBUF)   // bit 15
                | (v_u64)(1ULL << 32);   // VIRTIO_F_VERSION_1
     if (!virtio_init(&g_dev, want)) return -2;
 

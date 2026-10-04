@@ -67,5 +67,9 @@
 // Сеть (v3)
 // ============================================================
 #define SYS_NET_STATUS       400  // (net_status_t* out) -> 0
+#define SYS_HTTP_GET         401  // (url*, buf*, max) -> длина тела или -1  (УСТАРЕЛ, блокирующий)
+#define SYS_HTTP_START       402  // (url*) -> 0/-1  начать запрос (не ждёт)
+#define SYS_HTTP_POLL        403  // () -> 0=в процессе, 1=готово, -1=ошибка
+#define SYS_HTTP_RESULT      404  // (buf*, max) -> длина тела или -1 (скопировать результат)
 
 #endif // MSYSCALL_H

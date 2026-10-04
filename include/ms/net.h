@@ -24,4 +24,19 @@ static inline void ms_net_status(ms_net_status_t* out) {
     __ms_sc1(SYS_NET_STATUS, (unsigned int)out);
 }
 
+// --- Асинхронный HTTP ---
+// 1) начать: ms_http_start(url) -> 0/-1
+// 2) крутить свой цикл (ms_yield), периодически опрашивая ms_http_poll():
+//      0 = ещё грузится, 1 = готово, -1 = ошибка
+// 3) забрать тело: ms_http_result(buf, max) -> длина или -1
+static inline int ms_http_start(const char* url) {
+    return __ms_sc1(SYS_HTTP_START, (unsigned int)url);
+}
+static inline int ms_http_poll(void) {
+    return __ms_sc0(SYS_HTTP_POLL);
+}
+static inline int ms_http_result(char* buf, unsigned int max) {
+    return __ms_sc2(SYS_HTTP_RESULT, (unsigned int)buf, max);
+}
+
 #endif // MS_NET_H

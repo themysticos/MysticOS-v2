@@ -127,6 +127,9 @@ static int s_run_program_arg(const char* name, const char* arg) {
     return __sc2(SYS_RUN_PROGRAM_ARG, (unsigned int)name, (unsigned int)arg);
 }
 static const char* s_get_arg(void)                      { return (const char*)__sc1(SYS_GET_ARG, 0); }
+static int s_http_get(const char* url, char* buf, unsigned int max) {
+    return __sc3(SYS_HTTP_GET, (unsigned int)url, (unsigned int)buf, max);
+}
 static int s_set_wallpaper(const char* p)               { return __sc1(SYS_SET_WALLPAPER, (unsigned int)p); }
 static void s_exit(int code) {
     // SYS_EXIT только ПОМЕЧАЕТ задачу (want_exit). Ядро завершит её
@@ -182,6 +185,7 @@ static void init_api(void) {
     g_local_api.window_image       = s_window_image;
     g_local_api.window_static_text  = s_window_static_text;
     g_local_api.window_static_clear = s_window_static_clear;
+    g_local_api.http_get = s_http_get;
     g_local_api.exit = s_exit;
 }
 

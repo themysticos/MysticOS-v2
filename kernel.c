@@ -13,6 +13,7 @@
 #include "task.h"
 #include "paging.h"
 #include "pmem.h"
+#include "mmdcm.h"
 #include "bmp.h"
 #include "fs.h"
 #include "msfs.h"
@@ -642,6 +643,106 @@ static unsigned int api_screen_w(void) { return vbe_width(); }
 static unsigned int api_screen_h(void) { return vbe_height(); }
 
 // API: установить обои из BMP-файла (масштаб до экрана). 1/0.
+// HTTP GET: разобрать URL, резолвить хост, подключиться, запросить,
+// СКОПИРОВАТЬ тело ответа в буфер программы (ring3). Возвращает длину или -1.
+// Поддержка: http://host[:port]/path (только HTTP, без TLS).
+static char  g_http_buf[32768];
+
+// ============================================================
+// АСИНХРОННЫЙ HTTP. Машина состояний, чтобы долгий приём тела
+// НЕ блокировал всю ОС. Программа: http_start -> (цикл: http_poll) -> http_result.
+// ============================================================
+static char  g_http_buf[32768];
+static int   g_http_len = 0;        // сколько тела принято
+static int   g_http_state = 0;      // 0=idle 1=recv 2=done 3=error
+static int   g_http_total = 0;      // всего принято (с заголовками)
+static int   g_http_hdr_end = -1;   // позиция конца заголовков (или -1)
+static tcp_conn_t g_http_conn;
+
+// Начать HTTP-запрос. Делает DNS + connect + отправку GET (короткие фазы).
+// Возвращает 0 при успехе, -1 при ошибке.
+static int api_http_start(const char* url) {
+    g_http_state = 0; g_http_len = 0; g_http_total = 0; g_http_hdr_end = -1;
+    if (!url) { g_http_state = 3; return -1; }
+    const char* p = url;
+    if (p[0]=='h'&&p[1]=='t'&&p[2]=='t'&&p[3]=='p'&&p[4]==':'&&p[5]=='/'&&p[6]=='/') p += 7;
+    else if (p[0]=='h'&&p[1]=='t'&&p[2]=='t'&&p[3]=='p'&&p[4]=='s') { g_http_state = 3; return -1; }
+    char host[128]; int hi = 0;
+    while (*p && *p != '/' && *p != ':' && hi < 127) host[hi++] = *p++;
+    host[hi] = 0;
+    if (hi == 0) { g_http_state = 3; return -1; }
+    unsigned short port = 80;
+    if (*p == ':') { p++; int pt = 0; while (*p >= '0' && *p <= '9') pt = pt*10 + (*p++ - '0'); if (pt) port = (unsigned short)pt; }
+    const char* path = (*p == '/') ? p : "/";
+    unsigned char ip[4];
+    if (net_dns_resolve(host, ip) != 0) { g_http_state = 3; return -1; }
+    if (net_tcp_connect(&g_http_conn, ip, port) != 0) { g_http_state = 3; return -1; }
+    char req[512]; int r = 0;
+    const char* s1 = "GET "; for (int i=0;s1[i] && r<500;i++) req[r++]=s1[i];
+    for (int i=0;path[i] && r<500;i++) req[r++]=path[i];
+    const char* s2 = " HTTP/1.0\r\nHost: "; for (int i=0;s2[i] && r<500;i++) req[r++]=s2[i];
+    for (int i=0;host[i] && r<500;i++) req[r++]=host[i];
+    const char* s3 = "\r\nConnection: close\r\nUser-Agent: MysticOS/2\r\n\r\n"; for (int i=0;s3[i] && r<510;i++) req[r++]=s3[i];
+    if (net_tcp_send(&g_http_conn, req, (unsigned int)r) < 0) { g_http_state = 3; return -1; }
+    g_http_state = 1;
+    return 0;
+}
+
+// Продвинуть запрос (НЕблокирующе): один net_poll + забрать всё, что есть.
+// Возвращает 0=в процессе, 1=готово, -1=ошибка.
+static int api_http_poll(void) {
+    if (g_http_state == 2) return 1;
+    if (g_http_state == 3) return -1;
+    if (g_http_state != 1) return 0;
+    net_poll();   // один шаг приёма
+    const int CAP = (int)sizeof(g_http_buf) - 1;
+    for (;;) {
+        if (g_http_total >= CAP) break;
+        int room = CAP - g_http_total;
+        int n = net_tcp_recv_nb(&g_http_conn, g_http_buf + g_http_total, (unsigned int)room);
+        if (n <= 0) break;
+        g_http_total += n;
+    }
+    // Проверяем, закончился ли ответ (заголовки + тело по Content-Length
+    // мы не парсим — считаем готовым, когда соединение закрылось FIN,
+    // т.е. state стал CLOSED/TIME_WAIT).
+    if (g_http_conn.state == TCP_CLOSED || g_http_conn.state == TCP_TIME_WAIT) {
+        // соединение закрыто — ответ получен полностью
+        if (g_http_total <= 0) { g_http_state = 3; return -1; }
+        g_http_buf[g_http_total] = 0;
+        g_http_hdr_end = -1;
+        for (int i = 0; i + 3 < g_http_total; i++) {
+            if (g_http_buf[i]=='\r'&&g_http_buf[i+1]=='\n'&&g_http_buf[i+2]=='\r'&&g_http_buf[i+3]=='\n') { g_http_hdr_end = i + 4; break; }
+        }
+        g_http_len = g_http_total - (g_http_hdr_end >= 0 ? g_http_hdr_end : 0);
+        g_http_state = 2;
+        return 1;
+    }
+    return 0;
+}
+
+// Скопировать тело ответа в буфер программы. Возвращает длину или -1.
+static int api_http_result(char* out, unsigned int outmax) {
+    if (g_http_state != 2 || !out || outmax == 0) return -1;
+    int blen = g_http_len;
+    if ((unsigned int)blen > outmax - 1) blen = (int)(outmax - 1);
+    const char* body = g_http_buf + (g_http_hdr_end >= 0 ? g_http_hdr_end : 0);
+    for (int i = 0; i < blen; i++) out[i] = body[i];
+    out[blen] = 0;
+    return blen;
+}
+
+// Старый блокирующий вариант (оставлен для совместимости; не используется).
+static int api_http_get(const char* url, char* out, unsigned int outmax) {
+    if (api_http_start(url) != 0) return -1;
+    for (int i = 0; i < 4000000; i++) {
+        int st = api_http_poll();
+        if (st == 1) return api_http_result(out, outmax);
+        if (st < 0) return -1;
+    }
+    return -1;
+}
+
 static int api_set_wallpaper(const char* path) {
     int ok = wall_set(path);
     // Если обои сменились — пометить весь экран грязным для полной перерисовки.
@@ -845,6 +946,7 @@ static const msdll_builtin_export_t g_mskernel_exports[] = {
     { "screen_w",           (unsigned int)&api_screen_w     },
     { "screen_h",           (unsigned int)&api_screen_h     },
     { "set_wallpaper",      (unsigned int)&api_set_wallpaper},
+    { "http_get",           (unsigned int)&api_http_get},
     { "get_arg",            (unsigned int)&api_get_arg      },
     { "run_program",        (unsigned int)&run_program      },
     { "run_program_arg",    (unsigned int)&api_run_program_arg },
@@ -911,6 +1013,10 @@ static int msys_dispatch(unsigned int n,
     case SYS_RUN_PROGRAM:   return run_program((const char*)a0);
     case SYS_GET_ARG:       return (int)api_get_arg();
     case SYS_SET_WALLPAPER: return api_set_wallpaper((const char*)a0);
+    case SYS_HTTP_GET:      return api_http_get((const char*)a0, (char*)a1, a2);
+    case SYS_HTTP_START:    return api_http_start((const char*)a0);
+    case SYS_HTTP_POLL:     return api_http_poll();
+    case SYS_HTTP_RESULT:   return api_http_result((char*)a0, a1);
     default: return 0;
     }
 }
@@ -954,7 +1060,8 @@ static mystic_api_t g_api = {
     api_fs_write,
     api_format,
     api_window_static_text,   // в КОНЕЦ — ABI v2 сохранён
-    api_window_static_clear
+    api_window_static_clear,
+    api_http_get   // в КОНЕЦ — ABI v3 сохранён
 };
 
 static int start_open = 0;
@@ -1626,11 +1733,7 @@ static void diag_mark(int pos, char c) {
     vga[pos * 2 + 1] = 0x0F;   // белый на чёрном
 }
 
-static int g_ping_sent = 0;
 static int g_dhcp_started = 0;
-static int g_dns_started = 0;
-static int g_tcp_started = 0;
-static unsigned char g_dns_ip[4] = {0,0,0,0};
 
 void kernel_main(void) {
     serial_init();       // COM1 — отладочный вывод в -serial stdio
@@ -1654,6 +1757,9 @@ void kernel_main(void) {
     paging_init();
     diag_mark(2, 'C');   // paging_init() прошёл (если видим C — paging не убил систему)
     pmem_init();
+    // MMDCM инициализируется ПОСЛЕ idt_init/pic_init (ниже), т.к. ставит свои
+    // IDT-гейты для DOS-прерываний, которые иначе перезапишутся IRQ.
+
     // VDS: инициализация реестра драйверов + сканирование PCI.
     // Пока ни один драйвер не зарегистрирован — pci_dump() выведет
     // все устройства в консоль (видно на панели QEMU в текстовом режиме
@@ -1684,6 +1790,9 @@ void kernel_main(void) {
     gdt_init_all();   // GDT с ring3 + TSS (этап ring3)
     idt_init();
     pic_init();
+    // MMDCM: после IDT/PIC, чтобы гейты DOS-прерываний не перезаписались.
+    mmdcm_init();   // MMDCM: V86 + IVT-ловушки
+    mmdcm_test_dos();   // тест: DOS-программа "Hello from DOS!" через int 21h
     pit_init(100);
     mouse_init();
     interrupts_enable();
@@ -1810,55 +1919,8 @@ void kernel_main(void) {
             net_dhcp_discover();
         }
 
-        // DNS-резолв: один раз через 3 секунды после старта.
-        if (virtio_net_ready() && !g_dns_started && timer_ticks() > 300) {
-            g_dns_started = 1;
-            net_dns_resolve("info.cern.ch", g_dns_ip);
-        }
-
-        // TCP connect + HTTP GET: через 5 секунд после старта.
-        if (virtio_net_ready() && !g_tcp_started && g_dns_ip[0] != 0 && timer_ticks() > 500) {
-            g_tcp_started = 1;
-            extern int net_tcp_connect(tcp_conn_t*, const unsigned char*, unsigned short);
-            extern int net_tcp_send(tcp_conn_t*, const void*, unsigned int);
-            extern int net_tcp_recv(tcp_conn_t*, void*, unsigned int);
-            extern void net_tcp_close(tcp_conn_t*);
-            tcp_conn_t conn;
-            serial_print("[http] connecting to ");
-            for (int i = 0; i < 4; i++) { serial_print_int(g_dns_ip[i]); if (i<3) serial_print("."); }
-            serial_print(":80\n");
-            if (net_tcp_connect(&conn, g_dns_ip, 80) == 0) {
-                const char* req = "GET / HTTP/1.0\r\nHost: info.cern.ch\r\nConnection: close\r\n\r\n";
-                int reqlen = 0; while (req[reqlen]) reqlen++;
-                net_tcp_send(&conn, req, (unsigned int)reqlen);
-                char buf[512];
-                int n = net_tcp_recv(&conn, buf, sizeof(buf) - 1);
-                if (n > 0) {
-                    buf[n] = 0;
-                    serial_print("[http] received "); serial_print_int(n); serial_print(" bytes:\n");
-                    // Печатаем первые 200 байт (с "." на непечатаемых).
-                    for (int i = 0; i < n && i < 200; i++) {
-                        char c = buf[i];
-                        if (c == '\r' || c == '\n') serial_print("\n");
-                        else if (c >= 32 && c < 127) { char s[2] = {c, 0}; serial_print(s); }
-                        else serial_print(".");
-                    }
-                    serial_print("\n[http] done\n");
-                }
-                net_tcp_close(&conn);
-            }
-        }
-
-        // Автопинг: один раз через 2 секунды после старта.
-        if (virtio_net_ready() && !g_ping_sent && timer_ticks() > 200) {
-            g_ping_sent = 1;
-            unsigned char gw[4] = {10, 0, 2, 2};
-            serial_print("[net] ping 10.0.2.2 (auto)\n");
-            int rc = net_ping(gw);
-            serial_print("[net] net_ping returned ");
-            serial_print_int(rc);
-            serial_print("\n");
-        }
+        // (Тестовые DNS/HTTP/ping-задачи убраны: они блокировали ядро
+        //  на старте. Сеть теперь используется по требованию — браузером.)
 
         // Уступить CPU задачам-программам (кооперативно). Вернёмся сюда,
         // когда программа вызовет api->yield() или завершится.

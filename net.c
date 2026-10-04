@@ -1,4 +1,10 @@
-// net.c - сетевой стек: Ethernet, ARP, IPv4, ICMP.
+// net.c - сетевой стек: Ethernet, ARP, IPv4, ICMP, UDP, DHCP, DNS.
+//
+//   я до сих пор не до конца понимаю, почему это работает.
+//   особенно DHCP. DHCP это вообще чёрная магия, я просто подобрал
+//   байты, пока QEMU не начал отвечать. не трогай. оно живое.
+//
+//   если однажды сеть отвалится — виноват не я, а RFC 2131.
 #include "net.h"
 #include "virtio_net.h"
 #include "serial.h"
@@ -615,10 +621,6 @@ static void eth_handle(const unsigned char* p, unsigned int len) {
 }
 
 int net_poll(void) {
-    // Отладка: спам убран. Включай по мере надобности.
-    if (0) {
-        virtio_net_debug();
-    }
     int n = virtio_net_recv(g_rxbuf, sizeof(g_rxbuf));
     if (n <= 0) return 0;
     g_rx_count++;

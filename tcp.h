@@ -67,6 +67,9 @@ int  net_tcp_send(tcp_conn_t* c, const void* data, unsigned int len);
 // Принять данные в буфер. Возвращает число байт (0 если пусто) или -1.
 int  net_tcp_recv(tcp_conn_t* c, void* buf, unsigned int max);
 
+// Неблокирующий приём: сразу вернуть, что уже есть (0 если пусто).
+int  net_tcp_recv_nb(tcp_conn_t* c, void* buf, unsigned int max);
+
 // Закрыть соединение (FIN).
 void net_tcp_close(tcp_conn_t* c);
 
