@@ -18,6 +18,9 @@
 __pycache__/
 *.pyc
 
+# Дамп всех исходников (генерётся вручную)
+all_sources.txt
+
 # Второй диск создаётся make
 /disk2.img
 dll/test_msdll

@@ -1,5 +1,6 @@
-; bootloader.asm - MysticOS 2: включает VBE 800x600x24, грузит ядро.
-; Сектор 0 (MBR): VBE + загрузка kernel.bin с сектора 2, прыжок в ядро.
+; bootloader.asm - MysticOS 2, сектор 0.
+; Задача: загрузить stage2 (секторы 1..16) на 0x8000 и прыгнуть туда.
+; Вся логика (VBE, диагностика, ядро) — в stage2.asm (не 512 байт).
 [BITS 16]
 [ORG 0x7C00]
 
@@ -16,70 +17,19 @@ boot_code:
     mov sp, 0x7C00
     mov [boot_drive], dl
 
-    ; --- ДИАГНОСТИКА: '1' = наши сектор-0 выполняются. ---
-    mov al, '1'
-    call putc_bios
-
-    ; --- VBE: 800x600, сначала 24bpp (0x115), потом 32bpp (0x11B) ---
-    ; Без цикла и без push/pop — минимальная правка старого кода.
-    mov dword [0x9000], 0
-    ; Попытка 1: 0x115 (800x600x24)
-    mov ax, 0x4F01
-    mov cx, 0x115
-    mov di, 0x8000
-    int 0x10
-    cmp ax, 0x004F
-    jne .try_11B
-    mov ax, 0x4F02
-    mov bx, 0x4115
-    int 0x10
-    cmp ax, 0x004F
-    jne .try_11B
-    mov byte [0x900A], 24
-    jmp .vbe_ok
-.try_11B:
-    ; Попытка 2: 0x11B (800x600x32)
-    mov ax, 0x4F01
-    mov cx, 0x11B
-    mov di, 0x8000
-    int 0x10
-    cmp ax, 0x004F
-    jne vbe_fail
-    mov ax, 0x4F02
-    mov bx, 0x411B
-    int 0x10
-    cmp ax, 0x004F
-    jne vbe_fail
-    mov byte [0x900A], 32
-.vbe_ok:
-    mov eax, [0x8000 + 0x28]
-    mov [0x9000], eax
-    mov ax, [0x8000 + 0x10]
-    mov [0x9004], ax
-    mov ax, [0x8000 + 0x12]
-    mov [0x9006], ax
-    mov ax, [0x8000 + 0x14]
-    mov [0x9008], ax
-    mov al, 'V'           ; маркер: VBE ok
-    call putc_bios
-    jmp vbe_done
-vbe_fail:
-    mov al, 'v'           ; маркер: VBE провал (текстовый режим)
-    call putc_bios
-vbe_done:
-
-    ; --- Загрузка ядра: сектор 2 и далее (LBA 1+) на 0x10000 ---
-    mov word [kern_sectors], 400
-    mov byte [chs_sector], 2
+    ; Загрузить stage2: секторы 1..16 (16 секторов) на 0x8000.
+    ; CHS: сектор 1 (после MBR) = сектор 2 по счёту BIOS (1-based).
+    mov word [stg_sectors], 16
+    mov byte [chs_sector], 2   ; первый сектор stage2 (CHS 1-based)
     mov byte [chs_head], 0
     mov byte [chs_cyl], 0
-    mov bx, 0x1000
+    mov bx, 0x0800             ; ES:BX = 0x8000 (es=0x800, bx=0)
     mov es, bx
     xor bx, bx
 
-read_loop:
-    cmp word [kern_sectors], 0
-    je read_done
+stg_loop:
+    cmp word [stg_sectors], 0
+    je stg_done
     mov ah, 0x02
     mov al, 1
     mov ch, [chs_cyl]
@@ -91,35 +41,25 @@ read_loop:
     add bx, 512
     jnc .no_wrap
     mov ax, es
-    add ax, 0x1000      ; +64 КБ (0x1000 параграфов), а не 0x20!
+    add ax, 0x1000
     mov es, ax
 .no_wrap:
-    dec word [kern_sectors]
+    dec word [stg_sectors]
     inc byte [chs_sector]
     cmp byte [chs_sector], 64
-    jb read_loop
+    jb stg_loop
     mov byte [chs_sector], 1
     inc byte [chs_head]
     cmp byte [chs_head], 32
-    jb read_loop
+    jb stg_loop
     mov byte [chs_head], 0
     inc byte [chs_cyl]
-    jmp read_loop
+    jmp stg_loop
 
-read_done:
-    mov al, 'K'           ; маркер: ядро прочитано
-    call putc_bios
-    mov al, 'J'           ; маркер: сейчас прыжок в ядро (до cli!)
-    call putc_bios
-    in al, 0x92
-    or al, 2
-    out 0x92, al
-    cli
-    lgdt [gdt_desc]
-    mov eax, cr0
-    or eax, 1
-    mov cr0, eax
-    jmp dword 0x08:0x10000
+stg_done:
+    ; Передать загрузочный диск в stage2 (dl) и прыгнуть.
+    mov dl, [boot_drive]
+    jmp 0x0000:0x8000
 
 disk_error:
     mov si, msg_err
@@ -136,33 +76,12 @@ print_str:
     jmp .l
 .d: ret
 
-; Печать символа (AL) через BIOS teletype. Сохраняет ВСЕ регистры.
-putc_bios:
-    pusha
-    push ds
-    push es
-    mov ah, 0x0E
-    int 0x10
-    pop es
-    pop ds
-    popa
-    ret
-
-boot_drive db 0
-kern_sectors dw 0
-chs_sector db 2
-chs_head db 0
-chs_cyl db 0
-msg_err db 'Disk Error!', 0
-
-gdt_start:
-    dq 0
-    dw 0xFFFF, 0x0000, 0x9A00, 0x00CF
-    dw 0xFFFF, 0x0000, 0x9200, 0x00CF
-gdt_end:
-gdt_desc:
-    dw gdt_end - gdt_start - 1
-    dd gdt_start
+boot_drive  db 0
+stg_sectors dw 0
+chs_sector  db 2
+chs_head    db 0
+chs_cyl     db 0
+msg_err db 'Stage2 load error!', 0
 
 times 510 - ($ - $$) db 0
 dw 0xAA55
