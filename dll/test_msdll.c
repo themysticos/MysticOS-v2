@@ -140,7 +140,9 @@ static void build_image(void) {
     g_image[0x0080] = 0xC3;
 
     // Значение, которое должно измениться после релокации.
-    put_u32(0x0088, 0x11111111u);
+    // Семантика ABS32: в слоте — абсолютный адрес под MSDLL_BASE.
+    // Кладём MSDLL_BASE + 0x1111; после релокации станет base + 0x1111.
+    put_u32(0x0088, MSDLL_BASE + 0x1111u);
 }
 
 // ============================================================
@@ -246,7 +248,7 @@ int main(void) {
            | ((unsigned int)g_image[0x89] << 8)
            | ((unsigned int)g_image[0x8A] << 16)
            | ((unsigned int)g_image[0x8B] << 24);
-    check(before == 0x11111111u, "reloc target starts as 0x11111111");
+    check(before == MSDLL_BASE + 0x1111u, "reloc target starts as MSDLL_BASE+0x1111");
 
     unsigned int loaded = msdll_load_from_buffer("fake", g_image, IMG_SIZE, base);
     check(loaded == base, "load_from_buffer returns base");
@@ -260,7 +262,8 @@ int main(void) {
                        | ((unsigned int)g_image[0x89] << 8)
                        | ((unsigned int)g_image[0x8A] << 16)
                        | ((unsigned int)g_image[0x8B] << 24);
-    check(after == 0x11111111u + base, "relocation applied: target += base");
+    check(after == base + 0x1111u,
+          "relocation applied: target = base+0x1111");
 
     // 10. Загрузка того же образа второй раз — refcount++, база та же.
     unsigned int again = msdll_load_from_buffer("fake", g_image, IMG_SIZE, base + 0x1000);
@@ -269,6 +272,25 @@ int main(void) {
     // 11. Точное количество символов: 2 (mskernel) + 1 (fake) = 3.
     check(msdll_symbol_count() == 3, "3 symbols total");
 
+    // ============================================================
+    // 12. Файловая загрузка: region_alloc + load_image (секции)
+    // ============================================================
+    // Для хостового теста регион — обычный массив в .bss (0x64000000 на
+    // хосте недоступен). Задаём его через msdll_region_set().
+    static unsigned char host_region[0x400000];
+    msdll_region_set((unsigned int)host_region, sizeof(host_region));
+    unsigned int rbase = (unsigned int)host_region;
+    unsigned int r1 = msdll_region_alloc(0x100);
+    check(r1 == rbase, "region_alloc first == base");
+    unsigned int r2 = msdll_region_alloc(0x100);
+    check(r2 == rbase + 0x1000, "region_alloc aligns to 4K");
+    // Переполнение региона.
+    unsigned int rbig = msdll_region_alloc(sizeof(host_region) * 2);
+    check(rbig == 0, "region_alloc overflow returns 0");
+
+    // ПРИМЕЧАНИЕ: загрузка файлового .msdll (заголовок + образ) проверяется
+    // отдельным тестом test_real_dll.c на НАСТОЯЩЕМ .msdll. Здесь — только
+    // bump-аллокатор региона (load_image требует формата file=header+image).
     // ============================================================
     println("");
     print("Tests:   "); print_int(g_tests); print("\n");

@@ -17,14 +17,16 @@
 #include "msfs.h"
 #include "ata.h"
 
+// MSFS v2: этап 1 — ключ + шифр + чтение.
+
 void print_string(const char* str);
 void put_char(char c);
 void print_int(int num);
 
-#define SECTOR_SIZE 512
-
-#define MSFS_MAGIC       "MSFS"
-#define MSFS_VERSION     1
+#define SECTOR_SIZE      512
+#define MSFS_VERSION     2
+#define MSFS_KEY_SECTORS 59           // первые 59 секторов — ключ
+#define MSFS_SUPER_LBA   59           // суперблок (зашифрован)
 #define MSFS_MAX_INODES  64
 #define MSFS_INODE_SIZE  64
 #define MSFS_NAME_LEN    32
@@ -35,11 +37,72 @@ void print_int(int num);
 #define MSFS_TYPE_DIR    2
 #define MSFS_PATH_MAX    128
 
-// Ключ шифрования имён (зависит от номера inode).
-#define MSFS_NAME_KEY(i)  ((unsigned char)(((i) * 73u + 0x5Au) & 0xFF))
+// ============================================================
+// ШИФР (XTEA-подобный, 32 раунда, блок 8 байт, ключ 128 бит)
+// ============================================================
+typedef struct { unsigned int k[4]; } msfs_key_t;
+#define XT_DELTA 0x9E3779B9u
 
-// Контрольная сумма inode лежит в поле reserved (offset 33).
-#define MSFS_CHK_OFF 33
+static void xtea_encrypt_block(const msfs_key_t* key, unsigned int* v0, unsigned int* v1) {
+    unsigned int v = *v0, w = *v1, sum = 0;
+    for (int i = 0; i < 32; i++) {
+        v += (((w << 4) ^ (w >> 5)) + w) ^ (sum + key->k[sum & 3]);
+        sum += XT_DELTA;
+        w += (((v << 4) ^ (v >> 5)) + v) ^ (sum + key->k[(sum >> 11) & 3]);
+    }
+    *v0 = v; *v1 = w;
+}
+static void xtea_decrypt_block(const msfs_key_t* key, unsigned int* v0, unsigned int* v1) {
+    unsigned int v = *v0, w = *v1, sum = XT_DELTA * 32;
+    for (int i = 0; i < 32; i++) {
+        w -= (((v << 4) ^ (v >> 5)) + v) ^ (sum + key->k[(sum >> 11) & 3]);
+        sum -= XT_DELTA;
+        v -= (((w << 4) ^ (w >> 5)) + w) ^ (sum + key->k[sum & 3]);
+    }
+    *v0 = v; *v1 = w;
+}
+static void msfs_crypt(const msfs_key_t* key, unsigned char* buf, unsigned int len, int enc) {
+    unsigned int n = len & ~7u;
+    for (unsigned int i = 0; i < n; i += 8) {
+        unsigned int v0 = buf[i] | (buf[i+1]<<8) | (buf[i+2]<<16) | ((unsigned int)buf[i+3]<<24);
+        unsigned int v1 = buf[i+4] | (buf[i+5]<<8) | (buf[i+6]<<16) | ((unsigned int)buf[i+7]<<24);
+        if (enc) xtea_encrypt_block(key, &v0, &v1);
+        else     xtea_decrypt_block(key, &v0, &v1);
+        buf[i+0]=(unsigned char)v0; buf[i+1]=(unsigned char)(v0>>8);
+        buf[i+2]=(unsigned char)(v0>>16); buf[i+3]=(unsigned char)(v0>>24);
+        buf[i+4]=(unsigned char)v1; buf[i+5]=(unsigned char)(v1>>8);
+        buf[i+6]=(unsigned char)(v1>>16); buf[i+7]=(unsigned char)(v1>>24);
+    }
+}
+
+// Маркеры фрагментов ключа.
+static const unsigned char MSFS_START[5] = { 0x53, 0x54, 0x41, 0x52, 0x54 };
+static const unsigned char MSFS_END[3]   = { 0x45, 0x4E, 0x44 };
+
+// ============================================================
+// ЖУРНАЛ (WAL, этап 2)
+// ============================================================
+#define JRNL_MAX_RECS   64           // макс. записей в транзакции
+#define JRNL_EMPTY      0
+#define JRNL_COMMITTED  1
+#define JRNL_APPLIED    2
+
+typedef struct {
+    char          magic[4];          // "JRNL"
+    unsigned int  generation;        // к какой генерации относится
+    unsigned int  count;             // число записей
+    unsigned int  state;             // JRNL_*
+    unsigned int  lba_list[JRNL_MAX_RECS];   // какие LBA меняются
+} __attribute__((packed)) msfs_journal_t;
+
+// Текущая транзакция в ОЗУ (один буфер — журнал работает с текущим диском).
+// ВАЖНО: НЕ в .bss (128 КБ сдвинули бы .bss за стек ядра 0x90000).
+#define JRNL_DATA_ADDR 0x02C00000u
+static msfs_journal_t g_jrnl[ATA_MAX_DRIVES];
+static unsigned char (*g_jrnl_data)[SECTOR_SIZE] = (unsigned char (*)[SECTOR_SIZE])JRNL_DATA_ADDR;
+
+#define J (&g_jrnl[g_msfs_drive])
+#define JDATA (g_jrnl_data)
 
 typedef struct {
     char          magic[4];
@@ -51,6 +114,10 @@ typedef struct {
     unsigned int  cluster_size;
     unsigned int  cluster_count;
     unsigned int  next_start;
+    // --- v2 этап 2: журнал + CoW ---
+    unsigned int  journal_start;     // LBA заголовка журнала
+    unsigned int  journal_sectors;   // всего секторов под журнал
+    unsigned int  generation;        // растёт при каждой транзакции (CoW/снапшоты)
 } __attribute__((packed)) msfs_super_t;
 
 typedef struct {
@@ -64,40 +131,20 @@ typedef struct {
     unsigned char pad[16];
 } __attribute__((packed)) msfs_inode_t;
 
-static msfs_super_t g_super[2];
-static msfs_inode_t g_inodes[2][MSFS_MAX_INODES];
-static int g_loaded[2] = {0, 0};
+#include "ata.h"
+static msfs_super_t g_super[ATA_MAX_DRIVES];
+static msfs_inode_t g_inodes[ATA_MAX_DRIVES][MSFS_MAX_INODES];
+static int g_loaded[ATA_MAX_DRIVES];
 static int g_msfs_drive = 0;
+static msfs_key_t g_key[ATA_MAX_DRIVES];
 
 #define S (&g_super[g_msfs_drive])
+#define K (&g_key[g_msfs_drive])
 #define INODES (g_inodes[g_msfs_drive])
 
-// ============================================================
-// ПРОКЛЯТИЕ #1 и #2: перемешивание. bit-reverse — биекция,
-// значит всё честно, просто выглядит как хаос.
-// ============================================================
-static unsigned int msfs_perm6(unsigned int i) {
-    unsigned int r = 0;
-    for (int b = 0; b < 6; b++) { r = (r << 1) | (i & 1); i >>= 1; }
-    return r;
-}
-static unsigned int msfs_perm_cluster(unsigned int c) {
-    unsigned int r = 0;
-    for (int b = 0; b < 13; b++) { r = (r << 1) | (c & 1); c >>= 1; }
-    return r;
-}
-
-// ============================================================
-// ПРОКЛЯТИЕ #4: контрольная сумма inode.
-// ============================================================
-static unsigned char msfs_inode_chk(const unsigned char* b) {
-    unsigned int s = 0;
-    for (int i = 0; i < MSFS_INODE_SIZE; i++) if (i != MSFS_CHK_OFF) s += b[i];
-    return (unsigned char)(s & 0xFF);
-}
-
 void msfs_use_drive(int d) {
-    g_msfs_drive = d & 1;
+    if (d < 0 || d >= ATA_MAX_DRIVES) d = 0;
+    g_msfs_drive = d;
     ata_select(g_msfs_drive);
 }
 int msfs_current_drive(void) { return g_msfs_drive; }
@@ -114,14 +161,126 @@ static void str_cpy_n(char* dst, const char* src, int max) {
     dst[i] = 0;
 }
 
+// Собрать мастер-ключ (16 байт) из первых 59 секторов.
+// Сканируем секторы по порядку, находим блоки [START][data][END],
+// склеиваем data в порядке ПОЯВЛЕНИЯ, берём первые 16 байт.
+static int msfs_collect_key(msfs_key_t* key) {
+    static unsigned char raw[MSFS_KEY_SECTORS * SECTOR_SIZE];
+    for (int s = 0; s < MSFS_KEY_SECTORS; s++)
+        ata_read_sector(s, raw + s * SECTOR_SIZE);
+    unsigned char keybuf[64];
+    int klen = 0;
+    unsigned int total = MSFS_KEY_SECTORS * SECTOR_SIZE;
+    for (unsigned int i = 0; i + 5 <= total && klen < 16; i++) {
+        if (raw[i] != MSFS_START[0]) continue;
+        int ok = 1;
+        for (int j = 1; j < 5; j++) if (raw[i+j] != MSFS_START[j]) { ok = 0; break; }
+        if (!ok) continue;
+        unsigned int d = i + 5;
+        for (unsigned int j = d; j + 3 <= total; j++) {
+            if (raw[j] == MSFS_END[0] && raw[j+1] == MSFS_END[1] && raw[j+2] == MSFS_END[2]) {
+                for (unsigned int t = d; t < j && klen < 64; t++) keybuf[klen++] = raw[t];
+                i = j + 2;
+                break;
+            }
+        }
+    }
+    if (klen < 16) return 0;
+    for (int i = 0; i < 4; i++)
+        key->k[i] = keybuf[i*4] | (keybuf[i*4+1]<<8) | (keybuf[i*4+2]<<16) | ((unsigned int)keybuf[i*4+3]<<24);
+    return 1;
+}
+
+// ============================================================
+// ЖУРНАЛ: транзакция
+// ============================================================
+// Начать транзакцию (state=EMPTY, count=0).
+static void jrnl_begin(void) {
+    J->magic[0]='J'; J->magic[1]='R'; J->magic[2]='N'; J->magic[3]='L';
+    J->generation = 0;
+    J->count = 0;
+    J->state = JRNL_EMPTY;
+}
+
+// Добавить запись (сектор lba = данные data). Только в ОЗУ.
+static int jrnl_add(unsigned int lba, const unsigned char* data) {
+    if (J->count >= JRNL_MAX_RECS) return 0;
+    unsigned int i = J->count;
+    J->lba_list[i] = lba;
+    for (int k = 0; k < SECTOR_SIZE; k++) JDATA[i][k] = data[k];
+    J->count++;
+    return 1;
+}
+
+// Записать заголовок журнала на диск (со всеми записями). Зашифрован.
+static void jrnl_commit(unsigned int generation) {
+    J->generation = generation;
+    J->state = JRNL_COMMITTED;
+    // Заголовок.
+    unsigned char hb[SECTOR_SIZE];
+    for (int k = 0; k < SECTOR_SIZE; k++) hb[k] = 0;
+    msfs_journal_t* h = (msfs_journal_t*)hb;
+    for (int k = 0; k < 4; k++) h->magic[k] = J->magic[k];
+    h->generation = J->generation; h->count = J->count; h->state = J->state;
+    for (unsigned int i = 0; i < J->count; i++) h->lba_list[i] = J->lba_list[i];
+    msfs_crypt(K, hb, SECTOR_SIZE, 1);
+    ata_write_sector(S->journal_start, hb);
+    // Записи (по сектору на запись).
+    for (unsigned int i = 0; i < J->count; i++) {
+        unsigned char db[SECTOR_SIZE];
+        for (int k = 0; k < SECTOR_SIZE; k++) db[k] = JDATA[i][k];
+        msfs_crypt(K, db, SECTOR_SIZE, 1);
+        ata_write_sector(S->journal_start + 1 + i, db);
+    }
+}
+
+// Применить транзакцию (записать данные по их LBA).
+static void jrnl_apply(void) {
+    for (unsigned int i = 0; i < J->count; i++) {
+        unsigned char db[SECTOR_SIZE];
+        for (int k = 0; k < SECTOR_SIZE; k++) db[k] = JDATA[i][k];
+        ata_write_sector(J->lba_list[i], db);
+    }
+    J->state = JRNL_APPLIED;
+    // Сбросить заголовок в EMPTY.
+    unsigned char hb[SECTOR_SIZE];
+    for (int k = 0; k < SECTOR_SIZE; k++) hb[k] = 0;
+    msfs_journal_t* h = (msfs_journal_t*)hb;
+    h->magic[0]='J'; h->magic[1]='R'; h->magic[2]='N'; h->magic[3]='L';
+    h->state = JRNL_EMPTY; h->count = 0; h->generation = J->generation;
+    msfs_crypt(K, hb, SECTOR_SIZE, 1);
+    ata_write_sector(S->journal_start, hb);
+}
+
+// Recovery: если на диске state==COMMITTED, докатить.
+static void jrnl_recovery(void) {
+    unsigned char hb[SECTOR_SIZE];
+    ata_read_sector(S->journal_start, hb);
+    msfs_crypt(K, hb, SECTOR_SIZE, 0);
+    msfs_journal_t* h = (msfs_journal_t*)hb;
+    if (h->magic[0]!='J'||h->magic[1]!='R'||h->magic[2]!='N'||h->magic[3]!='L') return;
+    if (h->state != JRNL_COMMITTED) return;
+    // Прочитать записи.
+    unsigned int n = h->count;
+    if (n > JRNL_MAX_RECS) n = JRNL_MAX_RECS;
+    for (unsigned int i = 0; i < n; i++) {
+        unsigned char db[SECTOR_SIZE];
+        ata_read_sector(S->journal_start + 1 + i, db);
+        msfs_crypt(K, db, SECTOR_SIZE, 0);
+        for (int k = 0; k < SECTOR_SIZE; k++) JDATA[i][k] = db[k];
+        J->lba_list[i] = h->lba_list[i];
+    }
+    J->count = n; J->state = JRNL_COMMITTED;
+    jrnl_apply();   // докатить
+}
+
 static int msfs_read_super(void) {
     ata_select(g_msfs_drive);
     unsigned char buf[SECTOR_SIZE];
-    ata_read_sector(0, buf);
+    ata_read_sector(MSFS_SUPER_LBA, buf);
+    msfs_crypt(K, buf, SECTOR_SIZE, 0);
     msfs_super_t* s = (msfs_super_t*)buf;
-    // ПРОКЛЯТИЕ #5: магия задом наперёд.
-    if (s->magic[0] != 'S' || s->magic[1] != 'F' ||
-        s->magic[2] != 'S' || s->magic[3] != 'M') return 0;
+    if (s->magic[0]!='M'||s->magic[1]!='F'||s->magic[2]!='S'||s->magic[3]!='2') return 0;
     S->version       = s->version;
     S->sector_size   = s->sector_size;
     S->inode_start   = s->inode_start;
@@ -130,90 +289,141 @@ static int msfs_read_super(void) {
     S->cluster_size  = s->cluster_size;
     S->cluster_count = s->cluster_count;
     S->next_start    = s->next_start;
+    S->journal_start   = s->journal_start;
+    S->journal_sectors = s->journal_sectors;
+    S->generation      = s->generation;
     for (int k = 0; k < 4; k++) S->magic[k] = s->magic[k];
     return 1;
 }
 
-// Загрузка всех inode с расшифровкой, проверкой суммы и снятием перемешивания.
+// Загрузка inode (расшифровка сектора).
 static void msfs_load_inodes(void) {
     unsigned int total = S->inode_count;
     if (total > MSFS_MAX_INODES) total = MSFS_MAX_INODES;
     unsigned int per_sector = SECTOR_SIZE / MSFS_INODE_SIZE;
     ata_select(g_msfs_drive);
     for (unsigned int i = 0; i < total; i++) {
-        unsigned int p   = msfs_perm6(i);
-        unsigned int lba = S->inode_start + p / per_sector;
-        unsigned int slt = p % per_sector;
+        unsigned int lba = S->inode_start + i / per_sector;
+        unsigned int slt = i % per_sector;
         unsigned char buf[SECTOR_SIZE];
         ata_read_sector(lba, buf);
+        msfs_crypt(K, buf, SECTOR_SIZE, 0);
         unsigned char* src = &buf[slt * MSFS_INODE_SIZE];
         unsigned char* d   = (unsigned char*)&INODES[i];
         for (unsigned int k = 0; k < MSFS_INODE_SIZE; k++) d[k] = src[k];
-        if (d[MSFS_CHK_OFF] != msfs_inode_chk(d)) {
-            for (unsigned int k = 0; k < MSFS_INODE_SIZE; k++) d[k] = 0;
-            continue;
-        }
-        unsigned char key = MSFS_NAME_KEY(i);
-        for (int k = 0; k < MSFS_NAME_LEN; k++) d[k] ^= key;
     }
     g_loaded[g_msfs_drive] = 1;
 }
 
-// Сохранение inode: шифруем имя, считаем сумму, кладём в перемешанный слот.
+// Сохранение inode ЧЕРЕЗ ЖУРНАЛ (WAL).
 static void msfs_save_inodes(void) {
     unsigned int total = S->inode_count;
     if (total > MSFS_MAX_INODES) total = MSFS_MAX_INODES;
     unsigned int per_sector = SECTOR_SIZE / MSFS_INODE_SIZE;
     ata_select(g_msfs_drive);
-    for (unsigned int i = 0; i < total; i++) {
-        unsigned char tmp[MSFS_INODE_SIZE];
-        unsigned char* s = (unsigned char*)&INODES[i];
-        for (unsigned int k = 0; k < MSFS_INODE_SIZE; k++) tmp[k] = s[k];
-        unsigned char key = MSFS_NAME_KEY(i);
-        for (int k = 0; k < MSFS_NAME_LEN; k++) tmp[k] ^= key;
-        tmp[MSFS_CHK_OFF] = 0;
-        tmp[MSFS_CHK_OFF] = msfs_inode_chk(tmp);
-        unsigned int p   = msfs_perm6(i);
-        unsigned int lba = S->inode_start + p / per_sector;
-        unsigned int slt = p % per_sector;
+    jrnl_begin();
+    for (unsigned int s = 0; s * per_sector < total; s++) {
+        unsigned int lba = S->inode_start + s;
         unsigned char buf[SECTOR_SIZE];
         ata_read_sector(lba, buf);
-        unsigned char* dst = &buf[slt * MSFS_INODE_SIZE];
-        for (unsigned int k = 0; k < MSFS_INODE_SIZE; k++) dst[k] = tmp[k];
-        ata_write_sector(lba, buf);
+        msfs_crypt(K, buf, SECTOR_SIZE, 0);
+        for (unsigned int slt = 0; slt < per_sector; slt++) {
+            unsigned int i = s * per_sector + slt;
+            if (i >= total) break;
+            unsigned char* src = (unsigned char*)&INODES[i];
+            unsigned char* dst = &buf[slt * MSFS_INODE_SIZE];
+            for (unsigned int k = 0; k < MSFS_INODE_SIZE; k++) dst[k] = src[k];
+        }
+        msfs_crypt(K, buf, SECTOR_SIZE, 1);
+        jrnl_add(lba, buf);
     }
+    jrnl_commit(S->generation);
+    jrnl_apply();
 }
 
 int msfs_probe(void) {
+    if (!msfs_collect_key(K)) return 0;   // без ключа ничего не прочесть
     if (!msfs_read_super()) return 0;
     if (S->sector_size != SECTOR_SIZE) return 0;
     if (S->inode_count == 0 || S->inode_count > MSFS_MAX_INODES) return 0;
+    jrnl_recovery();   // докатить незавершённую транзакцию
     msfs_load_inodes();
     return 1;
 }
 
 void msfs_format(void) {
-    unsigned char buf[SECTOR_SIZE];
+    // Этап 1: ключ фиксированный (16 байт), разложен фрагментами по 4 байта
+    // в секторы 37,5,51,22 (псевдослучайный порядок) в виде [START][4 байта][END].
+    // TODO (этап 4): генерация случайного ключа.
+    static const unsigned char MASTER[16] = {
+        0x4D,0x79,0x73,0x74,0x69,0x63,0x4F,0x53, 0x32,0x4B,0x65,0x79,0x21,0x21,0x21,0x21
+    };
+    static const unsigned char FRAG_SEC[4] = { 37, 5, 51, 22 };
+
+    ata_select(g_msfs_drive);
+
+    // 1. Сначала ЗАНУЛИТЬ все ключевые секторы, потом разложить фрагменты.
+    for (int s = 0; s < MSFS_KEY_SECTORS; s++) {
+        unsigned char zb[SECTOR_SIZE];
+        for (int k = 0; k < SECTOR_SIZE; k++) zb[k] = 0;
+        ata_write_sector(s, zb);
+    }
+    for (int f = 0; f < 4; f++) {
+        unsigned char kb[SECTOR_SIZE];
+        for (int k = 0; k < SECTOR_SIZE; k++) kb[k] = 0;
+        int p = 0;
+        for (int j = 0; j < 5; j++) kb[p++] = MSFS_START[j];
+        for (int j = 0; j < 4; j++) kb[p++] = MASTER[f*4 + j];
+        for (int j = 0; j < 3; j++) kb[p++] = MSFS_END[j];
+        ata_write_sector(FRAG_SEC[f], kb);
+    }
+
+    // 2. Ключ для шифрования — собираем ТЕМ ЖЕ способом, что probe
+    //    (по порядку появления START на диске), иначе ключи не совпадут.
+    msfs_collect_key(K);
+
+    // 3. Геометрия.
     S->version       = MSFS_VERSION;
     S->sector_size   = SECTOR_SIZE;
-    S->inode_start   = 1;
+    S->inode_start   = MSFS_SUPER_LBA + 1;   // 60
     S->inode_count   = MSFS_MAX_INODES;
     S->cluster_size  = 1;
     S->cluster_count = 8192;
     unsigned int inode_sectors = (MSFS_MAX_INODES * MSFS_INODE_SIZE + SECTOR_SIZE - 1) / SECTOR_SIZE;
     S->next_start = S->inode_start + inode_sectors;
     unsigned int next_sectors = (S->cluster_count * 4 + SECTOR_SIZE - 1) / SECTOR_SIZE;
-    S->data_start = S->next_start + next_sectors;
+    S->journal_start   = S->next_start + next_sectors;
+    S->journal_sectors = 1 + JRNL_MAX_RECS;   // заголовок + записи
+    S->data_start      = S->journal_start + S->journal_sectors;
+    S->generation      = 0;
 
-    ata_select(g_msfs_drive);
-    for (int k = 0; k < SECTOR_SIZE; k++) buf[k] = 0;
-    msfs_super_t* s = (msfs_super_t*)buf;
-    s->magic[0]='S'; s->magic[1]='F'; s->magic[2]='S'; s->magic[3]='M';
-    s->version=S->version; s->sector_size=S->sector_size;
-    s->inode_start=S->inode_start; s->inode_count=S->inode_count;
-    s->data_start=S->data_start; s->cluster_size=S->cluster_size;
-    s->cluster_count=S->cluster_count; s->next_start=S->next_start;
-    ata_write_sector(0, buf);
+    // Записать суперблок (зашифрован).
+    {
+        unsigned char buf[SECTOR_SIZE];
+        for (int k = 0; k < SECTOR_SIZE; k++) buf[k] = 0;
+        msfs_super_t* s = (msfs_super_t*)buf;
+        s->magic[0]='M'; s->magic[1]='F'; s->magic[2]='S'; s->magic[3]='2';
+        s->version=S->version; s->sector_size=S->sector_size;
+        s->inode_start=S->inode_start; s->inode_count=S->inode_count;
+        s->data_start=S->data_start; s->cluster_size=S->cluster_size;
+        s->cluster_count=S->cluster_count; s->next_start=S->next_start;
+        s->journal_start=S->journal_start; s->journal_sectors=S->journal_sectors;
+        s->generation=S->generation;
+        msfs_crypt(K, buf, SECTOR_SIZE, 1);
+        ata_write_sector(MSFS_SUPER_LBA, buf);
+    }
+
+    // Журнал: пустой заголовок (EMPTY).
+    jrnl_begin();
+    {
+        unsigned char hb[SECTOR_SIZE];
+        for (int k = 0; k < SECTOR_SIZE; k++) hb[k] = 0;
+        msfs_journal_t* h = (msfs_journal_t*)hb;
+        h->magic[0]='J'; h->magic[1]='R'; h->magic[2]='N'; h->magic[3]='L';
+        h->state = JRNL_EMPTY; h->count = 0; h->generation = 0;
+        msfs_crypt(K, hb, SECTOR_SIZE, 1);
+        ata_write_sector(S->journal_start, hb);
+    }
 
     for (int i = 0; i < MSFS_MAX_INODES; i++) {
         unsigned char* p = (unsigned char*)&INODES[i];
@@ -345,8 +555,9 @@ int msfs_read_file(const char* path, unsigned char* out, unsigned int max) {
     unsigned int pos = 0;
     unsigned char buf[SECTOR_SIZE];
     while (remaining > 0 && cluster != 0xFFFFFFFF) {
-        // ПРОКЛЯТИЕ #2: физический сектор кластера — перемешанный.
-        ata_read_sector(S->data_start + msfs_perm_cluster(cluster), buf);
+        // Кластер зашифрован — читаем и расшифровываем.
+        ata_read_sector(S->data_start + cluster, buf);
+        msfs_crypt(K, buf, SECTOR_SIZE, 0);
         unsigned int chunk = remaining < SECTOR_SIZE ? remaining : SECTOR_SIZE;
         for (unsigned int i = 0; i < chunk; i++) out[pos++] = buf[i];
         remaining -= chunk;
@@ -359,6 +570,12 @@ int msfs_read_file(const char* path, unsigned char* out, unsigned int max) {
         cluster = next;
     }
     return (int)pos;
+}
+
+int msfs_size(const char* path) {
+    int inode = msfs_resolve(path);
+    if (inode < 0 || INODES[inode].type != MSFS_TYPE_FILE) return -1;
+    return (int)INODES[inode].size;
 }
 
 int msfs_read_dir(const char* path, char* names, int* is_dir,
@@ -496,8 +713,11 @@ int msfs_write(const char* path, const char* content) {
         for (int k = 0; k < SECTOR_SIZE; k++) data[k] = 0;
         unsigned int chunk = len - written < SECTOR_SIZE ? len - written : SECTOR_SIZE;
         for (unsigned int k = 0; k < chunk; k++) data[k] = content[written + k];
-        // ПРОКЛЯТИЕ #2: пишем кластер по перемешанному адресу.
-        ata_write_sector(S->data_start + msfs_perm_cluster(cluster), data);
+        // Кластер шифруется при записи.
+        unsigned char enc[SECTOR_SIZE];
+        for (int k = 0; k < SECTOR_SIZE; k++) enc[k] = data[k];
+        msfs_crypt(K, enc, SECTOR_SIZE, 1);
+        ata_write_sector(S->data_start + cluster, enc);
         written += chunk;
         prev = cluster;
     }

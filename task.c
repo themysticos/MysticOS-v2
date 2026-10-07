@@ -3,6 +3,7 @@
 #include "paging.h"
 #include "pmem.h"
 #include "gdt.h"
+#include "pe.h"
 
 static task_t tasks[TASK_MAX];
 static int cur = -1;
@@ -46,6 +47,10 @@ int task_current(void) { return (cur >= 0) ? tasks[cur].id : -1; }
 // доступен в любом адресном пространстве (identity-часть PD не меняется).
 extern int exec_load_segments(const unsigned char* image, unsigned int size,
                               unsigned int virt_base, unsigned int phys_base);
+
+// PE-загрузчик (pe.c) — для мультизагрузчика (.exe).
+extern int pe_load_segments(const unsigned char* image, unsigned int size,
+                            unsigned int virt_base, unsigned int phys_base);
 
 // RING3 ШАГ 1 (диагностика). Ассемблерная task_enter_ring3 (entry.asm)
 // просто зовёт эту C-функцию. Пока — печатаем аргументы в консоль и
@@ -134,6 +139,74 @@ int task_create_elf(const unsigned char* image, unsigned int size, const void* a
     t->kernel_stack_phys = kstack_phys;
     t->kernel_stack_top  = kstack_phys + PMEM_BLOCK - 16;   // -16 — выравн. по 16
     t->entry = (void (*)(void*))entry;
+    t->arg = (void*)api;
+
+    unsigned int phys_top = stack_phys + TASK_STACK_SZ;
+    unsigned int* sp = (unsigned int*)phys_top;
+    *(--sp) = (unsigned int)task_trampoline;
+    *(--sp) = 0x00000202;
+    *(--sp) = 0;
+    *(--sp) = 0;
+    *(--sp) = 0;
+    *(--sp) = 0;
+    unsigned int used = phys_top - (unsigned int)sp;
+    t->esp = (TASK_STACK_VIRT + TASK_STACK_SZ) - used;
+    t->stack_base = TASK_STACK_VIRT;
+    t->stack_top  = TASK_STACK_VIRT + TASK_STACK_SZ;
+
+    return t->id;
+}
+
+// Создать задачу из PE-образа (.exe). Логика та же, что у task_create_elf,
+// но секции раскладывает pe_load_segments (по RVA + .reloc HIGHLOW).
+int task_create_pe(const unsigned char* image, unsigned int size, const void* api) {
+    int slot = -1;
+    for (int i = 1; i < TASK_MAX; i++) {
+        if (tasks[i].state == TASK_FREE) { slot = i; break; }
+    }
+    if (slot < 0) return -1;
+
+    unsigned int code_phys   = pmem_alloc_block();
+    unsigned int stack_phys  = pmem_alloc_block();
+    unsigned int kstack_phys = pmem_alloc_block();
+    if (!code_phys || !stack_phys || !kstack_phys) {
+        if (code_phys)   pmem_free_block(code_phys);
+        if (stack_phys)  pmem_free_block(stack_phys);
+        if (kstack_phys) pmem_free_block(kstack_phys);
+        return -1;
+    }
+
+    // PE грузится по phys_base = TASK_CODE_VIRT (identity): секции по RVA
+    // от этой базы, .reloc сдвигает абсолютные адреса из ImageBase.
+    int entry = pe_load_segments(image, size, TASK_CODE_VIRT, code_phys);
+    if (entry < 0) {
+        pmem_free_block(code_phys); pmem_free_block(stack_phys); pmem_free_block(kstack_phys);
+        return -1;
+    }
+
+    // Разрешить импорты (.idata): заполнить IAT адресами из DLL.
+    // Вызывается ДО старта задачи. Если импортов нет — вернёт 0.
+    pe_load_imports(image, size, code_phys);
+
+    unsigned int pd = paging_task_pd_alloc(code_phys, stack_phys);
+    if (!pd) {
+        pmem_free_block(code_phys); pmem_free_block(stack_phys); pmem_free_block(kstack_phys);
+        return -1;
+    }
+
+    task_t* t = &tasks[slot];
+    t->id = next_id++;
+    t->state = TASK_READY;
+    t->exit_code = 0;
+    t->want_exit = 0;
+    t->exit_request_code = 0;
+    t->pd_phys = pd;
+    t->code_phys = code_phys;
+    t->stack_phys = stack_phys;
+    t->kernel_stack_phys = kstack_phys;
+    t->kernel_stack_top  = kstack_phys + PMEM_BLOCK - 16;
+    // entry — RVA точки входа; виртуальный адрес = TASK_CODE_VIRT + RVA.
+    t->entry = (void (*)(void*))(TASK_CODE_VIRT + (unsigned int)entry);
     t->arg = (void*)api;
 
     unsigned int phys_top = stack_phys + TASK_STACK_SZ;

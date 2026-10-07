@@ -56,8 +56,12 @@ start:
 ; Хотим 800x600, bpp 16/24/32. Предпочитаем LFB, но принимаем и без.
 ; ------------------------------------------------------------
 vbe_search:
-    mov si, [0x700E]              ; offset списка режимов
-    mov bx, [0x7010]              ; segment списка режимов
+    ; Список режимов: храним offset+segment в ПАМЯТИ (BIOS-вызовы портят
+    ; bx/si!). Грузим перед каждым чтением.
+    mov ax, [0x700E]
+    mov [list_off], ax
+    mov ax, [0x7010]
+    mov [list_seg], ax
     mov word [loop_ctr], 512
 
 .read_mode:
@@ -65,6 +69,9 @@ vbe_search:
     je vbe_fail
     dec word [loop_ctr]
 
+    ; Прочитать слово по (list_seg:list_off).
+    mov si, [list_off]
+    mov bx, [list_seg]
     push ds
     mov ds, bx
     mov ax, [si]
@@ -88,6 +95,74 @@ vbe_search:
     cmp word [0x5000 + 0x14], 600
     jne .next_mode
 
+    ; --- Проверить, что это графический режим (bit4) ---
+    mov ax, [0x5000 + 0x00]
+    test ax, 0x0010
+    jz .next_mode
+
+    ; --- ДИАГНОСТИКА: показать КАЖДЫЙ 800x600 графический режим ---
+    ;     mode=0x.... bpp=.. pitch=.... attr=0x.... LFB=YES/no
+    mov si, msg_cand
+    call puts
+    mov ax, [cur_mode]
+    call put_hex16
+    mov si, msg_bpp
+    call puts
+    mov al, [0x5000 + 0x19]
+    call put_dec8
+    mov si, msg_masks
+    call puts
+    mov al, [0x5000 + 0x1F]     ; red size
+    call put_dec8
+    mov al, ','
+    call putc
+    mov al, [0x5000 + 0x20]     ; red pos
+    call put_dec8
+    mov al, ' '
+    call putc
+    mov al, [0x5000 + 0x21]     ; green size
+    call put_dec8
+    mov al, ','
+    call putc
+    mov al, [0x5000 + 0x22]     ; green pos
+    call put_dec8
+    mov al, ' '
+    call putc
+    mov al, [0x5000 + 0x23]     ; blue size
+    call put_dec8
+    mov al, ','
+    call putc
+    mov al, [0x5000 + 0x24]     ; blue pos
+    call put_dec8
+    mov si, msg_pitch
+    call puts
+    mov ax, [0x5000 + 0x10]     ; bytes_per_scan_line (banked)
+    call put_dec16
+    mov si, msg_linpitch
+    call puts
+    mov ax, [0x5000 + 0x32]     ; lin_bytes_per_scan_line (LFB, VBE3.0)
+    call put_dec16
+    mov si, msg_attrs
+    call puts
+    mov ax, [0x5000 + 0x00]
+    call put_hex16
+    mov si, msg_fbaddr
+    call puts
+    mov eax, [0x5000 + 0x28]      ; PhysBasePtr (может быть 0 до 4F02!)
+    call put_hex32
+    mov ax, [0x5000 + 0x00]       ; перезагрузить attrs (put_hex32 портит eax)
+    test ax, 0x0080
+    jz .cand_nol
+    mov si, msg_lfb_yes
+    call puts
+    jmp .cand_done
+.cand_nol:
+    mov si, msg_lfb_no
+    call puts
+.cand_done:
+    mov si, msg_nl
+    call puts
+
     ; --- bpp 16/24/32 ---
     mov dl, [0x5000 + 0x19]
     cmp dl, 16
@@ -95,36 +170,12 @@ vbe_search:
     cmp dl, 32
     ja .next_mode
 
-    ; --- Проверить, что это графический режим (bit4) ---
-    mov ax, [0x5000 + 0x00]
-    test ax, 0x0010
-    jz .next_mode
-
     ; --- Есть LFB? (bit7 ModeAttributes) ---
+    mov ax, [0x5000 + 0x00]
     test ax, 0x0080
     jz .try_no_lfb            ; нет LFB — попробуем всё равно
 
-    ; --- ДИАГНОСТИКА (до 4F02, мы ещё в VGA-тексте!): показать параметры ---
-    mov si, msg_diag
-    call puts
-    mov si, msg_bpp
-    call puts
-    mov al, [0x5000 + 0x19]       ; BitsPerPixel
-    call put_hex8
-    mov si, msg_pitch
-    call puts
-    mov ax, [0x5000 + 0x10]       ; BytesPerScanLine
-    call put_hex16
-    mov si, msg_wh
-    call puts
-    mov ax, [0x5000 + 0x12]       ; Xres
-    call put_dec16
-    mov al, 'x'
-    call putc
-    mov ax, [0x5000 + 0x14]       ; Yres
-    call put_dec16
-    mov si, msg_nl
-    call puts
+    ; --- ПАУЗА: ждать клавишу перед 4F02 ---
     mov si, msg_pause
     call puts
     mov ah, 0x00
@@ -157,7 +208,7 @@ vbe_search:
     jmp vbe_ok
 
 .next_mode:
-    add si, 2
+    add word [list_off], 2      ; двигаем курсор списка (в памяти!)
     jmp .read_mode
 
 ; ------------------------------------------------------------
@@ -173,8 +224,23 @@ vbe_ok:
     mov [0x9006], ax
     mov ax, [0x5000 + 0x14]       ; Yres
     mov [0x9008], ax
-    mov al, [0x5000 + 0x19]       ; bpp
+    mov al, [0x5000 + 0x19]       ; BitsPerPixel (0x19)
     mov [0x900A], al
+    ; Маски каналов (Linux vesafb так делает): red/green/blue pos/size.
+    ; ModeInfo offsets: 0x1F=RedSize 0x20=RedPos 0x21=GreenSize 0x22=GreenPos
+    ;                   0x23=BlueSize 0x24=BluePos
+    mov al, [0x5000 + 0x20]       ; red_pos
+    mov [0x900C], al
+    mov al, [0x5000 + 0x1F]       ; red_size
+    mov [0x900D], al
+    mov al, [0x5000 + 0x22]       ; green_pos
+    mov [0x900E], al
+    mov al, [0x5000 + 0x21]       ; green_size
+    mov [0x900F], al
+    mov al, [0x5000 + 0x24]       ; blue_pos
+    mov [0x9010], al
+    mov al, [0x5000 + 0x23]       ; blue_size
+    mov [0x9011], al
     mov si, msg_vbe_done
     call puts
     jmp load_kernel
@@ -322,6 +388,23 @@ put_dec16:
     pop ax
     ret
 
+; --- Вывести EAX как 8 hex-цифр. ---
+put_hex32:
+    push eax
+    shr eax, 16
+    call put_hex16
+    pop eax
+    call put_hex16
+    ret
+
+; --- Вывести AL как десятичное (0..255). ---
+put_dec8:
+    push ax
+    mov ah, 0
+    call put_dec16
+    pop ax
+    ret
+
 ; Вывести AL в COM1 (0x3F8), без инициализации (BIOS уже настроил).
 serial_putc:
     push dx
@@ -351,11 +434,20 @@ chs_head    db 0
 chs_cyl     db 0
 cur_mode    dw 0
 loop_ctr    dw 0
+list_off    dw 0
+list_seg    dw 0
 
 msg_stage2    db 'MysticOS stage2', 13, 10, 0
 msg_diag      db '[DIAG] mode params:', 13, 10, 0
-msg_bpp       db '  bpp=', 0
-msg_pitch     db '  pitch=0x', 0
+msg_fbaddr    db 'LFB addr=0x', 0
+msg_cand      db '[mode] =', 0
+msg_bpp       db ' bpp=', 0
+msg_masks     db ' RGB(s,p):', 0
+msg_pitch     db ' pitch=', 0
+msg_linpitch  db ' linpitch=', 0
+msg_attrs     db ' attr=0x', 0
+msg_lfb_yes   db ' LFB=YES', 0
+msg_lfb_no    db ' LFB=no', 0
 msg_wh        db '  res=', 0
 msg_nl        db 13, 10, 0
 msg_vbe_ok    db '[OK] VBE 2.0+ found', 13, 10, 0

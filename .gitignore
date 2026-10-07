@@ -24,3 +24,37 @@ all_sources.txt
 # Второй диск создаётся make
 /disk2.img
 dll/test_msdll
+
+# Референс Linux (клон дерева ядра) - НЕ часть проекта!
+/linux-virtio-ref/
+
+# Скомпилированные бинарники (не исходники)
+*.exe
+*.dll
+*.a
+*.msdll
+*.so
+*.EFI
+*.efi
+
+# Тестовые бинарники
+/test_msfs
+/test_pe
+/dll/test_dllimport
+/dll/test_real_dll
+
+# Прочие артефакты
+test_msfs
+test_pe
+
+# UEFI-загрузчик: мусор сборки (исходники остаются)
+uefi/*.o
+uefi/*.so
+uefi/*.bin
+uefi/*.EFI
+uefi/*.efi
+uefi/BOOTX64.EFI
+uefi/HELLO.EFI
+uefi/_*.py
+uefi/bootx64.so
+uefi/*.old_gnuefi

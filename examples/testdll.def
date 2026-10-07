@@ -1,0 +1,4 @@
+LIBRARY testdll.dll
+EXPORTS
+my_add
+my_mul

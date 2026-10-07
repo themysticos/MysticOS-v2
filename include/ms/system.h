@@ -42,4 +42,27 @@ static inline int ms_wallpaper(const char* path) {
     return __ms_sc1(SYS_SET_WALLPAPER, (unsigned int)path);
 }
 
+// ============================================================
+// DLL (v4)
+// ============================================================
+// Найти символ в загруженной DLL. dll_name==0 или "*" — искать во всех.
+// Возвращает адрес функции или 0. Сама DLL должна быть уже загружена
+// ядром (см. ms_dll_load / запуск программы с DLL).
+static inline unsigned int ms_dll_resolve(const char* dll_name, const char* func_name) {
+    return (unsigned int)__ms_sc2(SYS_DLL_RESOLVE,
+                                  (unsigned int)dll_name, (unsigned int)func_name);
+}
+
+// Загрузить .msdll с диска (по имени name и пути path). Возвращает базу или 0.
+// Уже загруженную вернёт сразу (refcount++).
+static inline unsigned int ms_dll_load(const char* name, const char* path) {
+    return (unsigned int)__ms_sc2(SYS_DLL_LOAD,
+                                  (unsigned int)name, (unsigned int)path);
+}
+
+// Число загруженных DLL (для отладки).
+static inline int ms_dll_count(void) {
+    return __ms_sc0(SYS_DLL_COUNT);
+}
+
 #endif

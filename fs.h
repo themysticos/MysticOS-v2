@@ -54,6 +54,9 @@ int  vfs_register(const fs_driver_t* drv);
 // Нормализация пути ('.', '..', '//') в out (FS_PATH_MAX). Полезно и вне VFS.
 void vfs_normalize(const char* path, char* out);
 
+// Есть ли на диске d распознанная ФС (драйвер определён). 1/0.
+int vfs_drive_has_fs(int d);
+
 // Разбор префикса диска "D0:"/"D1:". Без префикса — диск 0.
 // В *drive кладётся номер диска, в out — путь БЕЗ префикса (нормализованный).
 // Пример: "D1:/dir/f" -> drive=1, out="/dir/f"; "/dir/f" -> drive=0.

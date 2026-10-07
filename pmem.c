@@ -11,7 +11,13 @@
 static unsigned int g_used = 0;
 
 void pmem_init(void) {
-    g_used = 0;   // всё свободно
+    g_used = 0;   // all free
+    // DLL_RESERVE: 0x0C000000..0x0D000000 (4 blocks) for DLL region.
+    {
+        unsigned int b0 = (0x0C000000u - PMEM_START) / PMEM_BLOCK;
+        unsigned int bn = 0x01000000u / PMEM_BLOCK;
+        for (unsigned int i = 0; i < bn; i++) g_used |= (1u << (b0 + i));
+    }
 }
 
 unsigned int pmem_alloc_block(void) {

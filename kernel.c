@@ -6,6 +6,7 @@
 #include "icons.h"
 #include "io.h"
 #include "ata.h"
+#include "pe.h"
 #include "fat.h"
 #include "console.h"
 #include "term.h"
@@ -26,6 +27,7 @@
 #include "virtio_net.h"
 #include "net.h"
 #include "tcp.h"
+#include "gpu.h"
 
 // ============================================================
 // SYSCALL (int 0x80) — заглушка в начале файла (настоящий диспетчер
@@ -209,6 +211,21 @@ static int find_win(const char* title) {
     return -1;
 }
 
+// Роутинг клавиатуры: ввод получает ТОЛЬКО задача активного (в фокусе)
+// окна. Раньше kb_available/kb_getchar были глобальными, и при двух
+// окнах-«писателях» клавиши распределялись между задачами случайно
+// (обе печатали). Теперь фокус — по активному окну: кликнул окно —
+// его задача получает ввод.
+//
+// Возвращает task_id активного видимого окна или -1, если такого нет.
+static int focused_task_id(void) {
+    for (int i = 0; i < MAXWIN; i++) {
+        if (wins[i].used && wins[i].visible && wins[i].active)
+            return wins[i].task_id;
+    }
+    return -1;
+}
+
 static int drag_win = -1;
 static int prev_left = 0;
 
@@ -270,16 +287,28 @@ static int rects_overlap(int ax,int ay,int aw,int ah, int bx,int by,int bw,int b
 }
 
 typedef struct { int x, y; icon_t* ic; const char* label; const char* elf; } desktop_icon_t;
-#define NICON 5
+
+// Системные иконки (фиксированные): My PC, Terminal, Docs, Wallpaper.
+#define NICON_SYS 4
+static desktop_icon_t dicons[NICON_SYS];
+
+// Иконки ДИСКОВ — динамические: показываем только присутствующие (ata_present)
+// и с распознанной ФС. Клик — открыть FILES с аргументом "D<n>:/".
+static desktop_icon_t disk_icons[ATA_MAX_DRIVES];
+static int  disk_drive[ATA_MAX_DRIVES];   // номер ATA-диска для иконки i
+static int  disk_count = 0;
+
 // Динамические иконки из корня диска (кроме /kernel).
 #define MAXDYN 32
 static desktop_icon_t dyn_icons[MAXDYN];
 static char dyn_names[MAXDYN][13];       // 8.3 имена
 static int  dyn_isdir[MAXDYN];
 static int  dyn_count = 0;
-static desktop_icon_t dicons[NICON];
 static int last_icon = -1;
 static unsigned int last_icon_tick = 0;
+
+// Метки иконок дисков ("Disk D0"..). Живут постоянно.
+static char disk_labels[ATA_MAX_DRIVES][12];
 
 // Иконки запускают ELF-программы из /kernel/SYSPR/ (не встроенные окна).
 static void icons_layout(void) {
@@ -291,9 +320,31 @@ static void icons_layout(void) {
     dicons[2].label = "Docs";     dicons[2].elf = "/kernel/SYSPR/FILES.ELF";
     dicons[3].x = 24;  dicons[3].y = 282; dicons[3].ic = &ICON_WALLPAPER;
     dicons[3].label = "Wallpaper"; dicons[3].elf = "/kernel/SYSPR/WPICK.ELF";
-    // Второй диск (D1) — открывает Files с аргументом "D1:/".
-    dicons[4].x = 24;  dicons[4].y = 368; dicons[4].ic = &ICON_DISK;
-    dicons[4].label = "Disk D1"; dicons[4].elf = "/kernel/SYSPR/FILES.ELF";
+}
+
+// Пересобрать иконки ДИСКОВ: показать только реально подключённые
+// ATA-устройства с распознанной ФС. Вызывать после vfs_init/format.
+static void disks_layout(void) {
+    disk_count = 0;
+    int col_y = NICON_SYS * 86 + 24;   // под системными иконками
+    for (int d = 0; d < ATA_MAX_DRIVES && disk_count < ATA_MAX_DRIVES; d++) {
+        if (!ata_present(d)) continue;              // не подключён — нет иконки
+        if (!vfs_drive_has_fs(d)) continue;         // нет ФС — не показываем
+        int i = disk_count;
+        disk_icons[i].x = 24;
+        disk_icons[i].y = col_y + i * 86;
+        disk_icons[i].ic = &ICON_DISK;
+        // "Disk D0" .. "Disk D3"
+        const char* p = "Disk D"; int k = 0;
+        while (p[k]) { disk_labels[i][k] = p[k]; k++; }
+        disk_labels[i][k++] = (char)('0' + d);
+        disk_labels[i][k] = 0;
+        disk_icons[i].label = disk_labels[i];
+        disk_icons[i].elf = "/kernel/SYSPR/FILES.ELF";
+        disk_drive[i] = d;
+        disk_count++;
+    }
+    bg_cache_invalidate();
 }
 
 // Проверка расширения имени (регистронезависимо).
@@ -352,12 +403,20 @@ static void draw_icons_region(int rx,int ry,int rw,int rh) {
     // Тень (чёрный глиф на 1px ниже/правее) — для читаемости на светлых обоях.
     unsigned int fg = FB_RGB(0xFF,0xFF,0xFF);
     unsigned int shadow = FB_RGB(0x00,0x00,0x00);
-    for (int i = 0; i < NICON; i++) {
+    for (int i = 0; i < NICON_SYS; i++) {
         int ix = dicons[i].x, iy = dicons[i].y;
         if (!rects_overlap(rx,ry,rw,rh, ix - 2, iy - 2, 96, 56)) continue;
         draw_icon(ix, iy, dicons[i].ic);
         bb_text_t(ix + 3, iy + 37, dicons[i].label, shadow);   // тень
         bb_text_t(ix + 2, iy + 36, dicons[i].label, fg);       // белый текст
+    }
+    // Иконки дисков (только присутствующие).
+    for (int i = 0; i < disk_count; i++) {
+        int ix = disk_icons[i].x, iy = disk_icons[i].y;
+        if (!rects_overlap(rx,ry,rw,rh, ix - 2, iy - 2, 96, 56)) continue;
+        draw_icon(ix, iy, disk_icons[i].ic);
+        bb_text_t(ix + 3, iy + 37, disk_icons[i].label, shadow);
+        bb_text_t(ix + 2, iy + 36, disk_icons[i].label, fg);
     }
     // Динамические иконки из корня диска.
     for (int i = 0; i < dyn_count; i++) {
@@ -624,7 +683,7 @@ static int api_fs_write(const char* path, const char* content) {
 // API: форматировать диск (drive 0/1). fs: 0=FAT, 1=MSFS. 1/0.
 // ВНИМАНИЕ: уничтожает данные на диске. После — переопределяем VFS.
 static int api_format(int drive, int fs, int version) {
-    if (drive < 0 || drive > 1) return 0;
+    if (drive < 0 || drive >= ATA_MAX_DRIVES) return 0;
     ata_select(drive);
     fat_use_drive(drive);
     msfs_use_drive(drive);
@@ -633,7 +692,8 @@ static int api_format(int drive, int fs, int version) {
     else { ok = fat_format(version); }
     if (ok) {
         vfs_init();          // переопределить ФС на дисках
-        desktop_scan();      // обновить иконки (если форматировали D0)
+        disks_layout();      // обновить иконки дисков
+        desktop_scan();      // обновить иконки файлов
         mark_dirty(0, 0, (int)vbe_width(), (int)vbe_height());
     }
     return ok;
@@ -981,8 +1041,14 @@ static int msys_dispatch(unsigned int n,
     case SYS_PRINT_HEX:     print_hex((unsigned int)a0); return 0;
     case SYS_TICKS:         return (int)timer_ticks();
     case SYS_SLEEP:         api_sleep(a0); return 0;
-    case SYS_KEY_AVAILABLE: return kb_available();
-    case SYS_KEY_GETCHAR:   return kb_getchar();
+    // Клавиатура — только активной (в фокусе) задаче. Иначе две
+    // программы-«писателя» делили бы поток клавиш между собой.
+    case SYS_KEY_AVAILABLE:
+        if (focused_task_id() != task_current()) return 0;
+        return kb_available();
+    case SYS_KEY_GETCHAR:
+        if (focused_task_id() != task_current()) return 0;
+        return kb_getchar();
     case SYS_MOUSE_X:       return mouse_x();
     case SYS_MOUSE_Y:       return mouse_y();
     case SYS_MOUSE_LEFT:    return mouse_left();
@@ -1011,12 +1077,27 @@ static int msys_dispatch(unsigned int n,
     case SYS_FORMAT:    return api_format((int)a0, (int)a1, (int)a2);
     // ----- Система -----
     case SYS_RUN_PROGRAM:   return run_program((const char*)a0);
-    case SYS_GET_ARG:       return (int)api_get_arg();
+    case SYS_RUN_PROGRAM_ARG: return api_run_program_arg((const char*)a0, (const char*)a1);
+    case SYS_GET_ARG: {
+        // Аргумент лежит в ЯДРОВОЙ памяти (g_prog_arg) — ring3 её не видит.
+        // Копируем его в стек-регион ВЫЗЫВАЮЩЕЙ задачи по фикс-адресу
+        // 0x00800100 (низ стека, не пересекается с растущим вниз стеком)
+        // и возвращаем этот user-адрес.
+        char* dst = (char*)0x00800100u;
+        int i = 0;
+        while (g_prog_arg[i] && i < 158) { dst[i] = g_prog_arg[i]; i++; }
+        dst[i] = 0;
+        return (int)0x00800100u;
+    }
     case SYS_SET_WALLPAPER: return api_set_wallpaper((const char*)a0);
     case SYS_HTTP_GET:      return api_http_get((const char*)a0, (char*)a1, a2);
     case SYS_HTTP_START:    return api_http_start((const char*)a0);
     case SYS_HTTP_POLL:     return api_http_poll();
     case SYS_HTTP_RESULT:   return api_http_result((char*)a0, a1);
+    // ----- DLL (v4) -----
+    case SYS_DLL_RESOLVE:   return (int)msdll_resolve((const char*)a0, (const char*)a1);
+    case SYS_DLL_LOAD:      return (int)msdll_load_file((const char*)a0, (const char*)a1);
+    case SYS_DLL_COUNT:     return (int)msdll_dll_count();
     default: return 0;
     }
 }
@@ -1267,16 +1348,29 @@ static int process_events(int handle_kbd) {
             handled = 1;
         }
         else {
-            for (int i = 0; i < NICON && !handled; i++) {
+            // Системные иконки (My PC, Terminal, Docs, Wallpaper).
+            for (int i = 0; i < NICON_SYS && !handled; i++) {
                 if (icon_hit(i, mx, my)) {
                     unsigned int now = timer_ticks();
-                    if (i == last_icon && (now - last_icon_tick) < 40) {
-                        if (i == 4)   // Disk D1 — Files с аргументом "D1:/"
-                            api_run_program_arg(dicons[i].elf, "D1:/");
-                        else
-                            run_program(dicons[i].elf);   // запуск ELF из /kernel/SYSPR/
-                    }
+                    if (i == last_icon && (now - last_icon_tick) < 40)
+                        run_program(dicons[i].elf);
                     last_icon = i;
+                    last_icon_tick = now;
+                    handled = 1;
+                }
+            }
+
+            // Иконки дисков: двойной клик — Files с аргументом "D<n>:/".
+            for (int i = 0; i < disk_count && !handled; i++) {
+                int ix = disk_icons[i].x, iy = disk_icons[i].y;
+                if (mx >= ix && mx < ix + 32 && my >= iy && my < iy + 32) {
+                    unsigned int now = timer_ticks();
+                    int code = 100 + i;
+                    if (code == last_icon && (now - last_icon_tick) < 40) {
+                        char arg[6]; arg[0]='D'; arg[1]=(char)('0'+disk_drive[i]); arg[2]=':'; arg[3]='/'; arg[4]=0;
+                        api_run_program_arg(disk_icons[i].elf, arg);
+                    }
+                    last_icon = code;
                     last_icon_tick = now;
                     handled = 1;
                 }
@@ -1287,7 +1381,8 @@ static int process_events(int handle_kbd) {
                 int ix = dyn_icons[i].x, iy = dyn_icons[i].y;
                 if (mx >= ix && mx < ix + 32 && my >= iy && my < iy + 32) {
                     unsigned int now = timer_ticks();
-                    if ((i + NICON) == last_icon && (now - last_icon_tick) < 40) {
+                    int code = 200 + i;
+                    if (code == last_icon && (now - last_icon_tick) < 40) {
                         char full[160]; full[0] = '/'; int p = 1;
                         const char* nm = dyn_names[i];
                         for (int k = 0; nm[k] && p < 158; k++) full[p++] = nm[k];
@@ -1302,7 +1397,7 @@ static int process_events(int handle_kbd) {
                             api_run_program_arg("/kernel/SYSPR/EDITOR.ELF", full);   // редактор
                         }
                     }
-                    last_icon = i + NICON;   // смещаем, чтобы не путать с системными
+                    last_icon = code;
                     last_icon_tick = now;
                     handled = 1;
                 }
@@ -1465,7 +1560,9 @@ static void draw_window(window_t* w, int rx, int ry, int rw, int rh) {
     draw_icon(w->x + w->w - 50, w->y + 4, &ICON_BTN_MIN);
 
     // Заголовок (текст) — по центру заголовка.
-    bb_text(w->x + 8, w->y + 6, w->title, COL_TEXT, t1);
+    // bb_text_t: только буквы, БЕЗ плоского фона — иначе на градиенте
+    // заголовка виден прямоугольник другого оттенка.
+    bb_text_t(w->x + 8, w->y + 6, w->title, COL_TEXT);
 
     // Тонкая рамка.
     fb_backbuffer_rect(w->x, w->y, w->w, w->h, COL_WIN_BORDER);
@@ -1603,7 +1700,36 @@ static void render_region(int rx,int ry,int rw,int rh) {
     draw_ctx_menu(rx, ry, rw, rh);
 }
 
+// Слой курсора: фон под курсором сохраняем и восстанавливаем, чтобы
+// быстрый мах мышью не "смазывал" фон. Курсор НЕ впекается в кадр.
+#define CUR_W 12
+#define CUR_H 19
+static unsigned int g_cur_bg[CUR_H][CUR_W];
+static int g_cur_saved = 0;      // 1 = g_cur_bg содержит фон под курсором
+static int g_cur_sx = -1000, g_cur_sy = -1000;
+
+// Прочитать пиксель backbuffer (0xRRGGBB).
+static unsigned int bb_get(int x, int y) {
+    if (x < 0 || y < 0 || x >= (int)vbe_width() || y >= (int)vbe_height()) return 0;
+    const unsigned char* p = (const unsigned char*)0x01000000u
+        + ((unsigned int)y * (unsigned int)vbe_width() + (unsigned int)x) * 3u;
+    return ((unsigned int)p[2] << 16) | ((unsigned int)p[1] << 8) | p[0];
+}
+
+// Восстановить фон под ранее нарисованным курсором.
+static void cursor_bb_restore(void) {
+    if (!g_cur_saved) return;
+    for (int row = 0; row < CUR_H; row++)
+        for (int col = 0; col < CUR_W; col++)
+            fb_backbuffer_pixel(g_cur_sx + col, g_cur_sy + row, g_cur_bg[row][col]);
+    g_cur_saved = 0;
+}
+
 static void draw_cursor_bb(int mx, int my) {
+    // ВАЖНО: render_region() ДО этого уже нарисовал чистый фон (обои,
+    // окна, таскбар) в регионе. Поэтому фон под курсором УЖЕ чистый -
+    // restore не нужен (раньше он возвращал устаревший фон и вредил).
+    // Просто рисуем курсор поверх свежего фона.
     for (int row = 0; row < 19; row++)
         for (int col = 0; col < 12; col++) {
             unsigned char m = CUR[row][col];
@@ -1707,6 +1833,50 @@ static unsigned char* prog_buf = (unsigned char*)PROG_BUF_ADDR;
 // (например, из рекурсивного process_events по всё ещё нажатой мыши) запрещён.
 // Иначе WINAPP -> yield -> process_events -> WINAPP -> ... перетирает стек.
 
+
+// ============================================================
+// АВТО-ЗАГРУЗКА PE-DLL (для импортов PE-программ)
+// ============================================================
+// Вызывается из pe_load_imports, когда программа импортирует DLL.
+// Ищет файл "/kernel/SYS/<NAME>.DLL", грузит в DLL-регион и регистрирует
+// экспорты. Возвращает базу или 0.
+// Буфер под PE-DLL — в верхней RAM, НЕ в .bss (256 КБ в .bss переполняли
+// его за стек ядра 0x90000 -> стек и .bss пересекались -> порча всего).
+#define DLL_BUF_ADDR 0x02B00000u
+static unsigned char* dll_buf = (unsigned char*)DLL_BUF_ADDR;
+
+unsigned int pe_load_dll_by_name(const char* name) {
+    if (!name || !name[0]) return 0;
+    // Уже загружена? (msdll знает про встроенные + ранее загруженные)
+    msdll_entry_t* e = msdll_find(name);
+    if (e && e->base) return e->base;
+
+    // Собрать путь /kernel/SYS/NAME.DLL (8.3, имя в верхнем регистре).
+    char path[64]; int p = 0;
+    const char* pre = "/kernel/SYS/";
+    for (int i = 0; pre[i]; i++) path[p++] = pre[i];
+    for (int i = 0; name[i] && p < 56; i++) {
+        char c = name[i];
+        if (c >= 'a' && c <= 'z') c -= 32;
+        path[p++] = c;
+    }
+    const char* ext = ".DLL";
+    for (int i = 0; ext[i] && p < 62; i++) path[p++] = ext[i];
+    path[p] = 0;
+
+    ata_select(0);
+    int sz = vfs_read_file(path, dll_buf, 256 * 1024);
+    if (sz <= 0) { serial_print("[pe] DLL not found: "); serial_print(path); serial_print("\n"); return 0; }
+
+    // Выделить регион под образ и разложить.
+    unsigned int base = msdll_region_alloc(0x10000u);   // 64 КБ на DLL
+    if (!base) return 0;
+    int r = pe_load_dll(dll_buf, (unsigned int)sz, base, name);
+    if (r <= 0) return 0;
+    serial_print("[pe] DLL loaded: "); serial_print(name); serial_print("\n");
+    return base;
+}
+
 static int run_program(const char* name) {
     // Обычный запуск БЕЗ аргумента: сбросить аргумент, чтобы новая программа
     // не получила путь от предыдущей (баг: FILES открывался по чужому пути).
@@ -1717,8 +1887,15 @@ static int run_program(const char* name) {
     int sz = vfs_read_file(name, prog_buf, 256 * 1024);   // prog_buf = 256 КБ (в верхней RAM)
     if (sz <= 0) return -1;
     while (kb_available()) kb_getchar();
+    // Мультизагрузчик: формат по магии.
+    //   'MZ'      -> PE (.exe)
+    //   0x7F'ELF' -> ELF
     // Создаём ЗАДАЧУ (своё адресное пространство) вместо блокирующего exec_run.
-    int id = task_create_elf(prog_buf, (unsigned int)sz, &g_api);
+    int id;
+    if (sz >= 2 && prog_buf[0] == 'M' && prog_buf[1] == 'Z')
+        id = task_create_pe(prog_buf, (unsigned int)sz, &g_api);
+    else
+        id = task_create_elf(prog_buf, (unsigned int)sz, &g_api);
     if (id < 0) return -1;
     mark_dirty(0, 0, (int)vbe_width(), (int)vbe_height());
     return 0;
@@ -1757,6 +1934,21 @@ void kernel_main(void) {
     paging_init();
     diag_mark(2, 'C');   // paging_init() прошёл (если видим C — paging не убил систему)
     pmem_init();
+
+    // VirtIO-GPU: если есть — вывод пойдёт через GPU (быстрее).
+    // init находит устройство 0x1050 и настраивает controlq; setup_framebuffer
+    // создаёт экранный ресурс и привязывает backbuffer (0x1000000).
+    if (gpu_init()) {
+        if (gpu_setup_framebuffer(vbe_width(), vbe_height())) {
+            serial_print("[gpu] framebuffer via GPU ready\n");
+            gpu_cursor_init();   // аппаратный курсор (64x64)
+        } else {
+            serial_print("[gpu] setup_framebuffer failed, fallback to LFB\n");
+        }
+    } else {
+        serial_print("[gpu] no virtio-gpu, using LFB\n");
+    }
+
     // MMDCM инициализируется ПОСЛЕ idt_init/pic_init (ниже), т.к. ставит свои
     // IDT-гейты для DOS-прерываний, которые иначе перезапишутся IRQ.
 
@@ -1802,10 +1994,12 @@ void kernel_main(void) {
     // "mskernel.dll" (не файл — таблица в ядре). Программы смогут
     // звать msdll_resolve("mskernel", "window_create") и т.п.
     msdll_init();
+    msdll_region_init();   // обнулить bump-аллокатор DLL-региона (0x64000000)
     msdll_register_builtin("mskernel", g_mskernel_exports);
 
     ata_select(0);
     vfs_init();   // определить ФС и выбрать активный драйвер
+    disks_layout();   // иконки подключённых дисков (D0..D3)
     desktop_scan();   // иконки файлов из корня диска (кроме /kernel)
 
     // Загрузить дефолтные обои (BMP) из образа. Если файла нет/не BMP —
@@ -1884,6 +2078,15 @@ void kernel_main(void) {
         if (mx != old_mx || my != old_my || changed || dirty_w > 0) {
             render_region(rx, ry, rw, rh);
             draw_cursor_bb(mx, my);
+            // Аппаратный курсор (plane) не должен попадать в backbuffer/flush.
+            // Если курсор аппаратный - регион курсора в flush НЕ добавляем.
+            if (!(gpu_is_ready() && gpu_cursor_hw_enabled())) {
+                int cxr = mx + 12, cyr = my + 19;
+                if (mx < rx) { rw += rx - mx; rx = mx; }
+                if (my < ry) { rh += ry - my; ry = my; }
+                if (cxr > rx + rw) rw = cxr - rx;
+                if (cyr > ry + rh) rh = cyr - ry;
+            }
             fb_flip_rect(rx, ry, rw, rh);
             // ВАЖНО: render_region рисует таскбар и меню ЦЕЛИКОМ (по всей
             // ширине), но fb_flip_rect скопировал только область курсора.

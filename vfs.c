@@ -27,7 +27,9 @@ extern void ata_read_sector(unsigned int lba, unsigned char* buffer);
 static const fs_driver_t* g_drivers[VFS_MAX_DRIVERS];
 static int g_driver_count = 0;
 // g_drive_fs[d] — драйвер, определённый на диске d (или 0).
-static const fs_driver_t* g_drive_fs[2] = {0, 0};
+// Дисков до ATA_MAX_DRIVES (4). Неподключённые — 0.
+#include "ata.h"
+static const fs_driver_t* g_drive_fs[ATA_MAX_DRIVES];
 
 int vfs_register(const fs_driver_t* drv) {
     if (!drv || g_driver_count >= VFS_MAX_DRIVERS) return 0;
@@ -86,7 +88,7 @@ static int msfs_drv_read_dir(const char* path, char* names, int* is_dir,
 static int msfs_drv_read_file(const char* path, unsigned char* buf, unsigned int max) {
     return msfs_read_file(path, buf, max);
 }
-static int msfs_drv_size(const char* path) { (void)path; return -1; }
+static int msfs_drv_size(const char* path) { return msfs_size(path); }
 static int msfs_drv_mkdir(const char* path)              { return msfs_mkdir(path); }
 static int msfs_drv_write(const char* path, const char* content) {
     return msfs_write(path, content);
@@ -105,12 +107,14 @@ void vfs_init(void) {
     g_driver_count = 0;
     vfs_register(&FAT16_DRIVER);
     vfs_register(&MSFS_DRIVER);
-    // Диск 0 — системный. Диск 1 — второй.
-    for (int d = 0; d < 2; d++) {
+    // Определить все подключённые ATA-устройства, затем ФС на каждом.
+    for (int d = 0; d < ATA_MAX_DRIVES; d++) g_drive_fs[d] = 0;
+    ata_probe_all();
+    for (int d = 0; d < ATA_MAX_DRIVES; d++) {
+        if (!ata_present(d)) continue;
         ata_select(d);
         fat_use_drive(d);
         msfs_use_drive(d);
-        g_drive_fs[d] = 0;
         for (int i = 0; i < g_driver_count; i++) {
             if (g_drivers[i]->probe && g_drivers[i]->probe()) {
                 g_drive_fs[d] = g_drivers[i];
@@ -124,8 +128,13 @@ void vfs_init(void) {
 
 // Драйвер для диска d (0/1).
 static const fs_driver_t* drv_for(int d) {
-    if (d < 0 || d > 1) d = 0;
+    if (d < 0 || d >= ATA_MAX_DRIVES) d = 0;
     return g_drive_fs[d];
+}
+
+int vfs_drive_has_fs(int d) {
+    if (d < 0 || d >= ATA_MAX_DRIVES) return 0;
+    return g_drive_fs[d] != 0;
 }
 
 fs_type_t vfs_get_type(void) {

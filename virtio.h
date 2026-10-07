@@ -195,6 +195,11 @@ int  virtio_queue_setup(virtio_dev_t* dev, int idx, v_u16 size,
 int  virtio_queue_add(virtio_dev_t* dev, int idx,
                       v_u64 addr, v_u32 len, v_u16 flags);
 
+// Добавить цепочку дескрипторов (команда out + ответ in для virtio-gpu).
+// Возвращает индекс первого дескриптора или -1.
+int  virtio_queue_add_chain(virtio_dev_t* dev, int idx,
+                            v_u64* addrs, v_u32* lens, v_u16* flags, int n);
+
 // Оповестить устройство, что в очереди есть новые дескрипторы.
 void virtio_queue_notify(virtio_dev_t* dev, int idx);
 

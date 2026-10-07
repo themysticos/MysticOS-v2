@@ -29,6 +29,7 @@ static unsigned int g_pd_used_mask = 0;
 
 #define PDE_IDX_STACK 2
 #define PDE_IDX_CODE 16
+#define PDE_IDX_DLL  48    // 0x0C000000 / 4MB = 48 (DLL region)
 
 unsigned int paging_task_pd_alloc(unsigned int code_phys, unsigned int stack_phys) {
     int slot = -1;
@@ -45,6 +46,9 @@ unsigned int paging_task_pd_alloc(unsigned int code_phys, unsigned int stack_phy
     // пока НЕ ставим user: ring3 не должен писать в ядро.
     pd[PDE_IDX_STACK] = stack_phys | PDE_PRESENT | PDE_RW | PDE_USER | PDE_PS;
     pd[PDE_IDX_CODE]  = code_phys  | PDE_PRESENT | PDE_RW | PDE_USER | PDE_PS;
+    // DLL-регион (0x64000000, PDE[400]) — тоже USER: ring3-программы
+    // исполняют код DLL и читают её данные. Иначе #PF (PG 0x05) на EIP=0x64001000.
+    pd[PDE_IDX_DLL]   = (PDE_IDX_DLL * 0x400000u) | PDE_PRESENT | PDE_RW | PDE_USER | PDE_PS;
     return (unsigned int)pd;
 }
 
@@ -88,7 +92,14 @@ void paging_low_user(int on) {
 void paging_init(void) {
     // Заполняем все 1024 записи: каждая — 4 МБ, identity.
     for (unsigned int i = 0; i < 1024; i++) {
-        g_pd[i] = (i * 0x400000u) | PDE_PRESENT | PDE_RW | PDE_PS;
+        unsigned int e = (i * 0x400000u) | PDE_PRESENT | PDE_RW | PDE_PS;
+        // Верхние 2 ГБ (0x80000000..0xFFFFFFFF) — MMIO (LFB, PCI, APIC).
+        // Их НЕЛЬЗЯ кэшировать: иначе записи в LFB "залипают" в кэше
+        // и на экран попадают частично (полосы!). На реальном железе это
+        // критично (в QEMU кэш не эмулируется, поэтому там не видно).
+        // PCD (Page Cache Disable) = bit 4.
+        if (i >= 512) e |= 0x10u;   // PCD
+        g_pd[i] = e;
     }
 
     // Загружаем PD в CR3 и включаем PSE + paging.

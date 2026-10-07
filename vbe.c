@@ -7,6 +7,7 @@
 //   fb_flip_rect когда-то сдвигал картинку. я его починил. наверное.
 //   если снова сдвигается — это не баг, это фича (нет).
 #include "vbe.h"
+#include "gpu.h"
 
 // Параметры VBE, сохранённые загрузчиком по адресу 0x9000:
 //   0x9000: dword fb_addr | 0x9004: word pitch | 0x9006: w | 0x9008: h
@@ -16,12 +17,18 @@ static unsigned int g_fb = 0;
 static unsigned int g_pitch = 0;
 static int g_w = 0, g_h = 0;
 static int g_active = 0;
-static int g_lfb_bpp = 24;   // формат LFB: 24 (3 байта/пиксель) или 32 (4 байта)
+static int g_lfb_bpp = 24;   // формат LFB: 16/24/32
+// Маски каналов (из ModeInfo, заполняет stage2). Нужны для правильной
+// упаковки цвета (565 vs 555 vs XRGB).
+static unsigned char g_red_pos = 11,   g_red_size = 5;
+static unsigned char g_green_pos = 5,  g_green_size = 6;
+static unsigned char g_blue_pos = 0,   g_blue_size = 5;
 
 unsigned int vbe_fb_addr(void) { return g_fb; }
 unsigned int vbe_width(void) { return (unsigned int)g_w; }
 unsigned int vbe_height(void) { return (unsigned int)g_h; }
 unsigned int vbe_pitch(void) { return g_pitch; }
+int vbe_bpp(void) { return g_lfb_bpp; }
 int vbe_active(void) { return g_active; }
 
 int vbe_init(void) {
@@ -37,9 +44,27 @@ int vbe_init(void) {
     g_lfb_bpp = (int)bpp;
     // PITCH из ModeInfo (BytesPerScanLine). Проверено на ноуте: 1664 — ВЕРНЫЙ.
     // (Попытка вычислить w*bpp/8=1600 сделала хуже — значит BIOS НЕ врёт.)
-    g_pitch = (unsigned int)(*(volatile unsigned short*)(VBE_PARAM_ADDR + 4));
+    // ТЕСТ: pitch = w*bpp/8 (1600), НЕ из ModeInfo (1664).
+    g_pitch = (unsigned int)g_w * (bpp / 8u);
+    // МАСКИ КАНАЛОВ из ModeInfo (stage2 пишет 0x900C..0x9011).
+    // Реальный формат (565 vs 555) узнаём по маскам — как Linux vesafb.c.
+    g_red_pos   = *(volatile unsigned char*)(VBE_PARAM_ADDR + 0x0C);
+    g_red_size  = *(volatile unsigned char*)(VBE_PARAM_ADDR + 0x0D);
+    g_green_pos = *(volatile unsigned char*)(VBE_PARAM_ADDR + 0x0E);
+    g_green_size= *(volatile unsigned char*)(VBE_PARAM_ADDR + 0x0F);
+    g_blue_pos  = *(volatile unsigned char*)(VBE_PARAM_ADDR + 0x10);
+    g_blue_size = *(volatile unsigned char*)(VBE_PARAM_ADDR + 0x11);
     g_active = 1;
     return 1;
+}
+
+// Упаковать 0xRRGGBB в 16bpp ПО МАСКАМ (565/555/...). Linux-стиль.
+static unsigned short pack16(unsigned int r, unsigned int g, unsigned int b) {
+    unsigned int v = 0;
+    if (g_red_size)   v |= ((r >> (8 - g_red_size))   & ((1u<<g_red_size)-1))   << g_red_pos;
+    if (g_green_size) v |= ((g >> (8 - g_green_size)) & ((1u<<g_green_size)-1)) << g_green_pos;
+    if (g_blue_size)  v |= ((b >> (8 - g_blue_size))  & ((1u<<g_blue_size)-1))  << g_blue_pos;
+    return (unsigned short)v;
 }
 
 // Пиксель. Формат задаётся g_lfb_bpp (24 = BGR, 32 = XRGB8888).
@@ -50,10 +75,8 @@ void fb_put_pixel(int x, int y, unsigned int color) {
         unsigned int* p = (unsigned int*)(g_fb + (unsigned int)y * g_pitch + (unsigned int)x * 4u);
         *p = color & 0x00FFFFFFu;
     } else if (g_lfb_bpp == 16) {
-        // 565: RRRRRGGGGGGBBBBB
         unsigned short* p = (unsigned short*)(g_fb + (unsigned int)y * g_pitch + (unsigned int)x * 2u);
-        unsigned int r = (color >> 16) & 0xFF, gg = (color >> 8) & 0xFF, b = color & 0xFF;
-        *p = (unsigned short)(((r >> 3) << 11) | ((gg >> 2) << 5) | (b >> 3));
+        *p = pack16((color >> 16) & 0xFF, (color >> 8) & 0xFF, color & 0xFF);
     } else {
         unsigned char* p = (unsigned char*)(g_fb + (unsigned int)y * g_pitch + (unsigned int)x * 3u);
         p[0] = (unsigned char)(color & 0xFF);
@@ -315,6 +338,12 @@ void fb_flip_rect(int x, int y, int w, int h) {
     if (x + w > g_w) w = g_w - x;
     if (y + h > g_h) h = g_h - y;
     if (w <= 0 || h <= 0) return;
+    // Через GPU: конвертируем и шлём ТОЛЬКО этот регион (gpu_flush пока
+    // конвертирует весь экран, но flush-регион передаём корректно).
+    if (gpu_is_ready()) {
+        gpu_flush((unsigned int)x, (unsigned int)y, (unsigned int)w, (unsigned int)h);
+        return;
+    }
     int bytes_pp = g_lfb_bpp / 8;
     for (int yy = y; yy < y + h; yy++) {
         const unsigned char* src = g_bb + ((unsigned int)yy * (unsigned int)g_w + (unsigned int)x) * 3u;
@@ -329,8 +358,7 @@ void fb_flip_rect(int x, int y, int w, int h) {
         } else if (g_lfb_bpp == 16) {
             unsigned short* d16 = (unsigned short*)dst;
             for (int i = 0; i < w; i++) {
-                unsigned int b = src[0], g = src[1], r = src[2];
-                d16[i] = (unsigned short)(((r >> 3) << 11) | ((g >> 2) << 5) | (b >> 3));
+                d16[i] = pack16(src[2], src[1], src[0]);
                 src += 3;
             }
         } else {
@@ -341,6 +369,11 @@ void fb_flip_rect(int x, int y, int w, int h) {
 
 void fb_flip(void) {
     if (!g_bb || !g_active) return;
+    // Если есть virtio-gpu - показываем через него (быстрее LFB), и выходим.
+    if (gpu_is_ready()) {
+        gpu_flush(0, 0, (unsigned int)g_w, (unsigned int)g_h);
+        return;
+    }
     for (int y = 0; y < g_h; y++) {
         const unsigned char* src = g_bb + (unsigned int)y * (unsigned int)g_w * 3u;
         unsigned char* dst = (unsigned char*)(g_fb + (unsigned int)y * g_pitch);
@@ -354,8 +387,7 @@ void fb_flip(void) {
         } else if (g_lfb_bpp == 16) {
             unsigned short* d16 = (unsigned short*)dst;
             for (int x = 0; x < g_w; x++) {
-                unsigned int b = src[0], g = src[1], r = src[2];
-                d16[x] = (unsigned short)(((r >> 3) << 11) | ((g >> 2) << 5) | (b >> 3));
+                d16[x] = pack16(src[2], src[1], src[0]);
                 src += 3;
             }
         } else {

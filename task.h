@@ -52,6 +52,10 @@ extern void switch_set_cr3(unsigned int cr3);
 // Выделяет физ. память под код и стек, строит PD, готовит стек для switch.
 int task_create_elf(const unsigned char* image, unsigned int size, const void* api);
 
+// Создать задачу из PE-образа (.exe). Возвращает id или -1.
+// Отличия от ELF: секции раскладываются по RVA, применяются .reloc (HIGHLOW).
+int task_create_pe(const unsigned char* image, unsigned int size, const void* api);
+
 // Включить кооперативное переключение (sched_on=1).
 void task_enable(void);
 

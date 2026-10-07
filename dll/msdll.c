@@ -67,6 +67,8 @@ void msdll_init(void) {
 
 unsigned int msdll_symbol_count(void) { return g_sym_count; }
 
+unsigned int msdll_dll_count(void) { return g_dll_count; }
+
 msdll_entry_t* msdll_find(const char* name) {
     for (u32 i = 0; i < g_dll_count; i++) {
         if (str_eq(g_dlls[i].name, name)) return &g_dlls[i];
@@ -81,6 +83,11 @@ static void add_symbol(const char* dll, const char* func, u32 addr) {
     str_cpy_n(s->dll_name,  dll,  MSDLL_NAME_LEN);
     str_cpy_n(s->func_name, func, MSDLL_FUNC_LEN);
     s->addr = addr;
+}
+
+void msdll_register_export(const char* dll, const char* func, unsigned int addr) {
+    if (!dll || !func || !addr) return;
+    add_symbol(dll, func, addr);
 }
 
 // ============================================================
@@ -204,13 +211,16 @@ unsigned int msdll_load_from_buffer(const char* name,
     // "base + rva".
 
     // 1. Релокации.
+    // Семантика ABS32: слот хранит абсолютный адрес под MSDLL_BASE; грузим
+    // по base — сдвигаем на (base - MSDLL_BASE).
     if (h->reloc_count && (h->flags & MSDLL_FLAG_RELOCS)) {
         const msdll_reloc_t* r = (const msdll_reloc_t*)(base + h->reloc_rva);
+        u32 delta = base - (u32)MSDLL_BASE;
         for (u32 i = 0; i < h->reloc_count; i++) {
             if (r[i].type != MSDLL_RELOC_ABS32) continue;   // v1: только ABS32
             if (r[i].rva + 4 > h->image_size) continue;     // защита
             u32* slot = (u32*)(base + r[i].rva);
-            *slot += base;
+            *slot += delta;
         }
     }
 
@@ -240,5 +250,189 @@ unsigned int msdll_load_from_buffer(const char* name,
         entry(base, MSDLL_DLL_PROCESS_ATTACH);
     }
 
+    return base;
+}
+
+// ============================================================
+// Файловая загрузка (v2): секции по vaddr, свой аллокатор региона
+// ============================================================
+// Регион DLL — фиксированный диапазон виртуальных адресов, identity во
+// ВСЕХ адресных пространствах (PD копируется целиком, см. paging.c).
+// Внутри региона — bump-аллокатор: каждая DLL получает кусок, выровненный
+// на 4 КБ, вплотную за предыдущей.
+static u32 g_region_next = 0;   // смещение от msdll_region_base
+
+// Текущая база/размер региона. По умолчанию — DLL-регион ядра.
+unsigned int msdll_region_base = MSDLL_REGION_DEFAULT_BASE;
+unsigned int msdll_region_size = MSDLL_REGION_DEFAULT_SIZE;
+
+// Выравнивание вверх до 4 КБ.
+static u32 align4k(u32 v) { return (v + 0xFFFu) & ~0xFFFu; }
+
+void msdll_region_set(unsigned int base, unsigned int size) {
+    msdll_region_base = base;
+    msdll_region_size = size;
+    g_region_next = 0;
+}
+
+void msdll_region_init(void) {
+    msdll_region_base = MSDLL_REGION_DEFAULT_BASE;
+    msdll_region_size = MSDLL_REGION_DEFAULT_SIZE;
+    g_region_next = 0;
+}
+
+unsigned int msdll_region_alloc(unsigned int size) {
+    if (size == 0) return 0;
+    u32 off = align4k(g_region_next);
+    u32 end = off + align4k(size);
+    if (end > msdll_region_size) return 0;   // регион переполнен
+    g_region_next = end;
+    return msdll_region_base + off;
+}
+
+// Скопировать память побайтово (без libc).
+static void mem_copy(u8* dst, const u8* src, u32 n) {
+    for (u32 i = 0; i < n; i++) dst[i] = src[i];
+}
+
+// Отобразить образ из файла в память по base: скопировать каждую секцию
+// из file+file_off в base+vaddr (filesz байт), хвост memsz-filesz занулить.
+// Для секций, которых нет в таблице секций (section_count==0), копируем
+// весь файл по смещению 0 — удобно для крошечных DLL, собранных «в лоб».
+static int map_sections(const msdll_header_t* h, const u8* file,
+                        u32 size, u32 base) {
+    if (h->image_size == 0 || h->image_size > MSDLL_MAX_FILE) return 0;
+
+    // Зануляем весь образ — так .bss гарантированно нулевой.
+    mem_zero((void*)base, align4k(h->image_size));
+
+    if (h->section_count == 0) {
+        // Секций нет: считаем, что файл — плоский образ, кладём как есть.
+        u32 n = (size < h->image_size) ? size : h->image_size;
+        mem_copy((u8*)base, file, n);
+        return 1;
+    }
+
+    const msdll_section_t* s = (const msdll_section_t*)(file + h->section_rva);
+    for (u32 i = 0; i < h->section_count; i++) {
+        u32 va = s[i].vaddr;
+        u32 fsz = s[i].filesz;
+        u32 msz = s[i].memsz;
+        u32 foff = s[i].file_off;
+        if (msz < fsz) msz = fsz;
+        if (va + msz < va) return 0;              // переполнение
+        if (va + msz > h->image_size) return 0;   // секция за образом
+        if (fsz) {
+            if (foff + fsz < foff) return 0;
+            if (foff + fsz > size) return 0;      // за файлом
+            mem_copy((u8*)(base + va), file + foff, fsz);
+        }
+        // Хвост (msz - fsz) уже нулевой (мы занулили образ).
+    }
+    return 1;
+}
+
+// Заголовок .msdll занимает первые 64 байта файла. Всё остальное — «образ»,
+// RVA отсчитываются от начала ОБРАЗА (= file + sizeof(msdll_header_t)).
+// Так решил пост-линкер tools/msdll_pack.py: заголовок не входит в образ.
+#define MSDLL_IMAGE_OFF ((u32)sizeof(msdll_header_t))
+
+// Загрузить .msdll из ПОЛНОГО ФАЙЛА (не identity). Сам выделяет базу в
+// DLL-регионе, маппит секции, применяет релокации, регистрирует, зовёт DllMain.
+unsigned int msdll_load_image(const char* name,
+                              const unsigned char* file,
+                              unsigned int size) {
+    if (!name || !file || !size) return 0;
+    if (size > MSDLL_MAX_FILE) return 0;
+    if (size < MSDLL_IMAGE_OFF) return 0;
+
+    msdll_entry_t* existing = msdll_find(name);
+    if (existing) { existing->refcount++; return existing->base; }
+    if (g_dll_count >= MSDLL_MAX_DLLS) return 0;
+
+    const msdll_header_t* h = 0;
+    if (!msdll_validate(file, size, &h)) return 0;
+
+    // Указатель на начало образа и его длина (без заголовка).
+    const u8* img  = file + MSDLL_IMAGE_OFF;
+    u32       isz  = size - MSDLL_IMAGE_OFF;
+
+    u32 base = msdll_region_alloc(h->image_size);
+    if (!base) return 0;
+
+    if (!map_sections(h, img, isz, base)) return 0;
+
+    // Релокации ABS32 (таблица лежит в ОБРАЗЕ — читаем оттуда).
+    //
+    // Семантика ABS32: в слоте лежит АБСОЛЮТНЫЙ адрес, вычисленный при
+    // линковке под MSDLL_BASE (0x64000000). Грузим по base — сдвигаем на
+    // (base - MSDLL_BASE). Для base==MSDLL_BASE это no-op.
+    if (h->reloc_count && (h->flags & MSDLL_FLAG_RELOCS)) {
+        const msdll_reloc_t* r = (const msdll_reloc_t*)(img + h->reloc_rva);
+        u32 delta = base - (u32)MSDLL_BASE;
+        for (u32 i = 0; i < h->reloc_count; i++) {
+            if (r[i].type != MSDLL_RELOC_ABS32) continue;
+            if (r[i].rva + 4 > h->image_size) continue;
+            u32* slot = (u32*)(base + r[i].rva);
+            *slot += delta;
+        }
+    }
+
+    // Регистрируем DLL.
+    msdll_entry_t* e = &g_dlls[g_dll_count++];
+    str_cpy_n(e->name, name, MSDLL_NAME_LEN);
+    e->base = base;
+    e->refcount = 1;
+    e->loaded = 1;
+    e->hdr = 0;   // заголовок в file — не сохраняем (буфер может уйти)
+
+    // Экспорты -> таблица символов. Таблица — в ОБРАЗЕ, адреса — в base.
+    if (h->export_count) {
+        const msdll_export_t* ex = (const msdll_export_t*)(img + h->export_rva);
+        for (u32 i = 0; i < h->export_count; i++) {
+            const char* fname = (const char*)(img + ex[i].name_rva);
+            add_symbol(name, fname, base + ex[i].func_rva);
+        }
+    }
+
+    // DllMain (если есть).
+    if (h->entry_rva && (h->flags & MSDLL_FLAG_ENTRY)) {
+        typedef int (*dllmain_t)(unsigned int, unsigned int);
+        dllmain_t entry = (dllmain_t)(base + h->entry_rva);
+        entry(base, MSDLL_DLL_PROCESS_ATTACH);
+    }
+
+    return base;
+}
+
+// Загрузить .msdll с диска. vfs_read_file объявлена weak — если её нет
+// (например, при хостовом тесте), функция вернёт 0, не ломая линковку.
+__attribute__((weak))
+int vfs_read_file(const char* path, unsigned char* buf, unsigned int max);
+
+#define MSDLL_FILE_BUF  0x07800000u   // временный буфер под файл (2 МБ)
+
+unsigned int msdll_load_file(const char* name, const char* path) {
+    if (!name || !path) return 0;
+
+    msdll_entry_t* existing = msdll_find(name);
+    if (existing) { existing->refcount++; return existing->base; }
+
+    if (!vfs_read_file) return 0;
+
+    // Читаем файл во временный буфер в верхней RAM (не трогаем регион).
+    unsigned char* buf = (unsigned char*)MSDLL_FILE_BUF;
+    int n = vfs_read_file(path, buf, MSDLL_MAX_FILE);
+    if (n <= 0) return 0;
+
+    // msdll_load_image копирует секции и таблицы из buf — buf можно
+    // переиспользовать после возврата (заголовок hdr НЕ сохраняем как
+    // указатель на buf: e->hdr указывает в buf, но для resolve он не нужен;
+    // чтобы не было висячего указателя — обнулим e->hdr ниже).
+    unsigned int base = msdll_load_image(name, buf, (unsigned int)n);
+    if (base) {
+        msdll_entry_t* e = msdll_find(name);
+        if (e) e->hdr = 0;   // buf больше не валиден
+    }
     return base;
 }

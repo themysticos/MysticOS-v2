@@ -47,13 +47,15 @@ typedef struct {
     int is_fat16;
 } fat_geom_t;
 
-// Геометрия — per-drive (два диска ATA). Индекс 0/1.
-static fat_geom_t g_geom[2];
+// Геометрия — per-drive (до 4 дисков ATA). Индекс 0..3.
+#include "ata.h"
+static fat_geom_t g_geom[ATA_MAX_DRIVES];
 static int g_fat_drive = 0;   // текущий диск для операций FAT
 
-// Выбрать диск для последующих операций FAT (D0/D1).
+// Выбрать диск для последующих операций FAT (D0..D3).
 void fat_use_drive(int d) {
-    g_fat_drive = d & 1;
+    if (d < 0 || d >= ATA_MAX_DRIVES) d = 0;
+    g_fat_drive = d;
     ata_select(g_fat_drive);
 }
 int fat_current_drive(void) { return g_fat_drive; }

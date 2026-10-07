@@ -259,6 +259,31 @@ int virtio_queue_add(virtio_dev_t* dev, int idx,
     return (int)d;
 }
 
+// Добавить ЦЕПОЧКУ дескрипторов (для virtio-gpu: команда out + ответ in).
+// desc: несколько буферов, связанных флагом F_NEXT. avail-запись — одна,
+// на первый дескриптор цепочки. Возвращает индекс первого desc или -1.
+int virtio_queue_add_chain(virtio_dev_t* dev, int idx,
+                           v_u64* addrs, v_u32* lens, v_u16* flags, int n) {
+    virtqueue_t* q = &dev->queues[idx];
+    if (!q->in_use || n <= 0) return -1;
+    v_u16 first = q->next_desc;
+    for (int i = 0; i < n; i++) {
+        v_u16 d = q->next_desc;
+        q->desc[d].addr  = addrs[i];
+        q->desc[d].len   = lens[i];
+        // F_NEXT для всех, кроме последнего.
+        q->desc[d].flags = flags[i] | ((i < n - 1) ? VIRTQ_DESC_F_NEXT : 0);
+        q->desc[d].next  = (v_u16)((d + 1) & (q->queue_size - 1));
+        q->next_desc = (d + 1) & (q->queue_size - 1);
+    }
+    // avail: записать ТОЛЬКО первый дескриптор цепочки.
+    v_u16 a = q->avail->idx & (q->queue_size - 1);
+    q->avail->ring[a] = first;
+    __asm__ volatile ("" ::: "memory");
+    q->avail->idx++;
+    return (int)first;
+}
+
 void virtio_queue_notify(virtio_dev_t* dev, int idx) {
     virtqueue_t* q = &dev->queues[idx];
     if (!q->in_use) return;

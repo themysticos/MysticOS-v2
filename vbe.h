@@ -13,6 +13,7 @@ unsigned int vbe_width(void);
 unsigned int vbe_height(void);
 unsigned int vbe_pitch(void);
 int vbe_active(void);
+int vbe_bpp(void);
 
 // Примитивы.
 void fb_put_pixel(int x, int y, unsigned int color);

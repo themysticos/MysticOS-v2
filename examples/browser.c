@@ -234,7 +234,7 @@ static void load_url(void) {
 int _start(void) {
     win_w = 560; win_h = 400;
     win_id = ms_window("Browser", 100, 60, win_w, win_h);
-    if (win_id < 0) return 1;
+    if (win_id < 0) ms_exit(1);
     url[0] = 0; url_len = 0;
     nlines = 0; add_line();
     render();
@@ -273,5 +273,5 @@ int _start(void) {
         ms_sleep(20);
     }
     ms_window_close(win_id);
-    return 0;
+    ms_exit(0);
 }

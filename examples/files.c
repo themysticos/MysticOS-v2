@@ -1,11 +1,10 @@
-// files.c - SYSPR: файловый менеджер (в стиле Windows Explorer).
+// files.c - SYSPR: файловый менеджер (в стиле Windows Explorer). ring3 API.
 // Адресная строка с буквой диска, иконки типов, выделение, двойной клик.
-#include "../api.h"
+#include "../include/mysticos.h"
 
 #define FMAX 64
 #define ROW_H 14
 
-static const mystic_api_t* g;
 static char names[FMAX * 13];
 static int  isdir[FMAX];
 static unsigned int sizes[FMAX];
@@ -13,17 +12,17 @@ static int  count = 0;
 
 static int win_id = -1, win_w = 0, win_h = 0, win_x = 0, win_y = 0;
 static char path[128] = "/";       // путь БЕЗ префикса диска
-static int  g_drive = 0;            // текущий диск (D0/D1)
+static int  g_drive = 0;            // текущий диск (D0..D3)
 static int sel = -2;              // выделенная строка: -2 ничего, -1 "..", >=0 файл
 
-#define C_BG      0x181820     // фон окна
-#define C_ADDR    0x203860     // фон адресной строки
-#define C_SEL     0x2A4A8A     // фон выделенной строки
-#define C_DIR     0xFFD060     // папки
-#define C_EXE     0x70E070     // программы
-#define C_TXT     0xE0E0F0     // текст
-#define C_IMG     0x80D0FF     // картинки
-#define C_FILE    0xC0C0D0     // прочее
+#define C_BG      0x181820
+#define C_ADDR    0x203860
+#define C_SEL     0x2A4A8A
+#define C_DIR     0xFFD060
+#define C_EXE     0x70E070
+#define C_TXT     0xE0E0F0
+#define C_IMG     0x80D0FF
+#define C_FILE    0xC0C0D0
 #define C_DIM     0x808090
 #define C_STATUS  0x101018
 
@@ -31,21 +30,19 @@ static int strlen8(const char* s);
 
 static int at_root(void) { return path[0] == '/' && path[1] == 0; }
 
-// Собрать полный путь с префиксом диска: "D<n>:" + path. Например
-// path="/KERNEL" -> "D1:/KERNEL".  Используется для всех вызовов fs_*.
 static void mkpath(char* out) {
     int p = 0;
     out[p++] = 'D';
     out[p++] = (char)('0' + (g_drive % 10));
     out[p++] = ':';
     for (int k = 0; path[k] && p < 120; k++) out[p++] = path[k];
-    if (p == 3) out[p++] = '/';   // корень диска
+    if (p == 3) out[p++] = '/';
     out[p] = 0;
 }
 
 static void reload(void) {
     char fp[128]; mkpath(fp);
-    count = g->fs_list(fp, names, isdir, sizes, FMAX);
+    count = ms_fs_list(fp, names, isdir, sizes, FMAX);
     if (count < 0) count = 0;
     sel = -2;
 }
@@ -67,7 +64,6 @@ static void go_up(void) {
     reload();
 }
 
-// Полный путь к элементу С ПРЕФИКСОМ диска (для запуска программ).
 static void full_path(const char* nm, char* out) {
     int n = 0;
     out[n++] = 'D'; out[n++] = (char)('0' + (g_drive % 10)); out[n++] = ':';
@@ -77,20 +73,17 @@ static void full_path(const char* nm, char* out) {
     out[n] = 0;
 }
 
-// Адресная строка: "MYSTIC:\путь" (как C:\ в Explorer).
 static void addr_string(char* out) {
     int p = 0;
     out[p++] = 'D';
     out[p++] = (char)('0' + (g_drive % 10));
     out[p++] = ':';
     out[p++] = '\\';
-    // path без ведущего '/' (чтобы не было двойного "D1:\\/")
     int k = (path[0] == '/') ? 1 : 0;
     for (; path[k] && p < 120; k++) out[p++] = (path[k] == '/') ? '\\' : path[k];
     out[p] = 0;
 }
 
-// Тип элемента -> (символ-иконка, цвет). kind: 0 dir,1 exe,2 txt,3 img,4 file
 static void type_of(const char* nm, int is_d, int* kind, char* icon, unsigned int* col) {
     if (is_d) { *kind = 0; icon[0]='<'; icon[1]='D'; icon[2]='>'; icon[3]=0; *col = C_DIR; return; }
     for (int k = 0; nm[k]; k++) {
@@ -128,28 +121,26 @@ static void num_to_str(int v, char* out) {
 }
 
 static void render(void) {
-    g->window_fill(win_id, 0, 0, win_w, win_h, C_BG);
+    ms_fill(win_id, 0, 0, win_w, win_h, C_BG);
 
-    // Адресная строка (как в Explorer).
-    g->window_fill(win_id, 0, 0, win_w, 16, C_ADDR);
-    g->window_text(win_id, 6, 4, "Up", 0xFFFFFF, C_ADDR);       // кнопка "вверх"
+    ms_fill(win_id, 0, 0, win_w, 16, C_ADDR);
+    ms_text_bg(win_id, 6, 4, "Up", 0xFFFFFF, C_ADDR);
     char addr[130]; addr_string(addr);
-    g->window_text(win_id, 40, 4, addr, 0xD0E0FF, C_ADDR);
+    ms_text_bg(win_id, 40, 4, addr, 0xD0E0FF, C_ADDR);
 
     int y = 20;
     int special = at_root() ? 0 : 1;
     int maxrows = (win_h - y - 14) / ROW_H;
     if (maxrows < 1) maxrows = 1;
 
-    // Строка ".." (наверх).
     if (special) {
         unsigned int rbg = (sel == -1) ? C_SEL : C_BG;
-        g->window_text(win_id, 6, y, "<U> ..", 0xFFC060, rbg);
+        ms_text_bg(win_id, 6, y, "<U> ..", 0xFFC060, rbg);
         y += ROW_H;
     }
 
     if (count == 0 && !special) {
-        g->window_text(win_id, 6, y + 4, "(empty folder)", C_DIM, C_BG);
+        ms_text_bg(win_id, 6, y + 4, "(empty folder)", C_DIM, C_BG);
     }
 
     for (int i = 0; i < count && i < maxrows; i++) {
@@ -157,16 +148,15 @@ static void render(void) {
         unsigned int rbg = (sel == i) ? C_SEL : C_BG;
         int kind; char icon[4]; unsigned int col;
         type_of(names + i * 13, isdir[i], &kind, icon, &col);
-        g->window_text(win_id, 6, ry, icon, col, rbg);
-        g->window_text(win_id, 6 + 4 * 8, ry, names + i * 13, col, rbg);
+        ms_text_bg(win_id, 6, ry, icon, col, rbg);
+        ms_text_bg(win_id, 6 + 4 * 8, ry, names + i * 13, col, rbg);
         if (!isdir[i]) {
             char sz[16]; num_to_str((int)sizes[i], sz);
-            g->window_text(win_id, win_w - 6 - (int)strlen8(sz) * 8, ry, sz, C_DIM, rbg);
+            ms_text_bg(win_id, win_w - 6 - (int)strlen8(sz) * 8, ry, sz, C_DIM, rbg);
         }
     }
 
-    // Строка состояния внизу.
-    g->window_fill(win_id, 0, win_h - 12, win_w, 12, C_STATUS);
+    ms_fill(win_id, 0, win_h - 12, win_w, 12, C_STATUS);
     char st[80]; int p = 0;
     const char* pr = "items: ";
     for (int k = 0; pr[k]; k++) st[p++] = pr[k];
@@ -175,12 +165,11 @@ static void render(void) {
     const char* hint = "   dbl-click = open";
     for (int k = 0; hint[k] && p < 78; k++) st[p++] = hint[k];
     st[p] = 0;
-    g->window_text(win_id, 4, win_h - 10, st, C_DIM, C_STATUS);
+    ms_text_bg(win_id, 4, win_h - 10, st, C_DIM, C_STATUS);
 }
 
 static int strlen8(const char* s) { int n = 0; while (s[n]) n++; return n; }
 
-// Какая строка списка под (mx,my)? -2 ничего, -1 "..", >=0 файл.
 static int pick(int mx, int my) {
     int lx = mx - win_x, ly = my - (win_y + 20);
     if (lx < 0 || lx >= win_w || ly < 0 || ly >= win_h) return -2;
@@ -193,12 +182,9 @@ static int pick(int mx, int my) {
     return -2;
 }
 
-int _start(const mystic_api_t* api) {
-    g = api;
-    // Стартовый путь: из аргумента (run_program_arg) или корень D0.
-    const char* a = (api->get_arg ? api->get_arg() : "");
-    // Аргумент может быть "D1:/", "D1:/DIR", "D0:" или обычный путь.
-    // Выделяем диск в g_drive, остаток — в path (без префикса).
+int _start(void) {
+    // Стартовый путь: из аргумента (ms_arg) или корень D0.
+    const char* a = ms_arg();
     g_drive = 0;
     path[0] = '/'; path[1] = 0;
     if (a && a[0]) {
@@ -207,7 +193,6 @@ int _start(const mystic_api_t* api) {
             g_drive = a[1] - '0';
             rest = a + 3;
         }
-        // Если это путь-файл (не каталог) — откатываемся в корень диска.
         int rlen = 0; while (rest[rlen]) rlen++;
         int is_dir_like = (rlen == 0) || rest[rlen-1] == '/';
         if (is_dir_like) {
@@ -219,50 +204,44 @@ int _start(const mystic_api_t* api) {
         }
     }
     win_w = 380; win_h = 240; win_x = 380; win_y = 120;
-    win_id = api->window_create("Files", win_x, win_y, win_w, win_h);
-    if (win_id < 0) return 1;
+    win_id = ms_window("Files", win_x, win_y, win_w, win_h);
+    if (win_id < 0) ms_exit(1);
 
     reload();
     render();
 
     int prev_left = 0, last_idx = -3;
     unsigned int last_tick = 0;
-    while (!api->key_available()) {
-        int mx = api->mouse_x(), my = api->mouse_y();
-        int ml = api->mouse_left();
+    while (!ms_key_avail()) {
+        int mx = ms_mouse_x(), my = ms_mouse_y();
+        int ml = ms_mouse_left();
         if (ml && !prev_left) {
             int lx = mx - win_x, ly = my - (win_y + 20);
-            // Кнопка "Up" (в адресной строке).
             if (lx >= 0 && lx < 36 && ly >= 0 && ly < 16) {
                 go_up(); render();
             } else {
                 int idx = pick(mx, my);
                 if (idx != -2) {
-                    unsigned int now = api->ticks();
+                    unsigned int now = ms_ticks();
                     if (idx == last_idx && (now - last_tick) < 40) {
-                        // Двойной клик — открыть по типу файла.
                         if (idx == -1) go_up();
                         else if (isdir[idx]) enter(names + idx * 13);
                         else {
                             const char* nm = names + idx * 13;
                             char full[160]; full_path(nm, full);
                             if (is_elf(nm)) {
-                                api->run_program(full);
-                                api->window_close(win_id);
-                                return 0;
+                                ms_run(full);
+                                ms_window_close(win_id);
+                                ms_exit(0);
                             } else if (has_ext3(nm, 't', 'x', 't')) {
-                                // Текст — открыть в редакторе (с путём к файлу).
-                                if (api->run_program_arg)
-                                    api->run_program_arg("/kernel/SYSPR/EDITOR.ELF", full);
+                                ms_run_arg("/kernel/SYSPR/EDITOR.ELF", full);
                             } else if (has_ext3(nm, 'b', 'm', 'p')) {
-                                // Картинка — открыть в просмотрщике.
-                                if (api->run_program_arg)
-                                    api->run_program_arg("/kernel/SYSPR/IMGVIEW.ELF", full);
+                                ms_run_arg("/kernel/SYSPR/IMGVIEW.ELF", full);
                             }
                         }
                         last_idx = -3;
                     } else {
-                        sel = idx;                 // выделить
+                        sel = idx;
                         last_idx = idx; last_tick = now;
                     }
                     render();
@@ -270,10 +249,10 @@ int _start(const mystic_api_t* api) {
             }
         }
         prev_left = ml;
-        api->yield();
-        api->sleep(20);
+        ms_yield();
+        ms_sleep(20);
     }
-    api->key_getchar();
-    api->window_close(win_id);
-    return 0;
+    ms_key_get();
+    ms_window_close(win_id);
+    ms_exit(0);
 }
