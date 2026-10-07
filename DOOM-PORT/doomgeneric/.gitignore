@@ -9,5 +9,5 @@
 Debug/
 Release/
 Build/
-doomgeneric
+# 'doomgeneric' игнорировало подпапку с исходниками - убрано (баг апстрима).
 doomgeneric.map
