@@ -191,7 +191,8 @@ void pic_remap(void) {
     outb(PIC1_DATA, 0x20); outb(PIC2_DATA, 0x28);
     outb(PIC1_DATA, 0x04); outb(PIC2_DATA, 0x02);
     outb(PIC1_DATA, 0x01); outb(PIC2_DATA, 0x01);
-    outb(PIC1_DATA, 0xF8);
+    // PIC1: IRQ0(таймер),1(клава),2(cascade),5(SB16). 0xD8 = биты 0,1,2,5 = 0.
+    outb(PIC1_DATA, 0xD8);
     outb(PIC2_DATA, 0xEF);
 }
 

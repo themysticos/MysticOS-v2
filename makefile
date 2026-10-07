@@ -170,13 +170,16 @@ gpu.o: gpu.c virtio.h virtio_gpu.h serial.h pmem.h
 theme.o: theme.c theme.h
 	$(GCC) $(CFLAGS) -c $< -o $@
 
+sb16.o: sb16.c sb16.h io.h
+	$(GCC) $(CFLAGS) -c $< -o $@
+
 net.o: net.c net.h virtio_net.h serial.h
 	$(GCC) $(CFLAGS) -c $< -o $@
 
 tcp.o: tcp.c tcp.h net.h serial.h
 	$(GCC) $(CFLAGS) -c $< -o $@
 
-$(ELF): entry.o switch.o kernel.o task.o paging.o paging_asm.o pmem.o mmdcm.o mmdcm_asm.o vbe.o bmp.o vfs.o msfs.o gdt.o font.o console.o idt.o pic.o io.o cursor.o icons.o icons_gen.o ata.o fat.o kprint.o term.o exec.o msdll.o pe.o pci.o driver.o serial.o virtio.o virtio_net.o net.o tcp.o gpu.o theme.o
+$(ELF): entry.o switch.o kernel.o task.o paging.o paging_asm.o pmem.o mmdcm.o mmdcm_asm.o vbe.o bmp.o vfs.o msfs.o gdt.o font.o console.o idt.o pic.o io.o cursor.o icons.o icons_gen.o ata.o fat.o kprint.o term.o exec.o msdll.o pe.o pci.o driver.o serial.o virtio.o virtio_net.o net.o tcp.o gpu.o theme.o sb16.o
 	$(LD) $(LDFLAGS) -o $@ $^
 
 $(BIN): $(ELF)

@@ -37,6 +37,15 @@ static inline const char* ms_arg(void) {
     return (const char*)__ms_sc0(SYS_GET_ARG);
 }
 
+// Звук: простой тон (системный звук). freq_hz, длительность ms.
+static inline void ms_beep(unsigned int freq, unsigned int ms) {
+    __ms_sc2(SYS_SOUND_BEEP, freq, ms);
+}
+// Звук: 8-бит беззнаковый моно-PCM буфер.
+static inline void ms_sound_pcm(const unsigned char* buf, unsigned int len, unsigned int rate) {
+    __ms_sc3(SYS_SOUND_PCM, (unsigned int)buf, len, rate);
+}
+
 // Отладка: вывести строку в serial (COM1). Реализация в libc/posix.c.
 void ms_debug(const char* s);
 

@@ -29,6 +29,7 @@
 #include "tcp.h"
 #include "gpu.h"
 #include "theme.h"
+#include "sb16.h"
 
 // ============================================================
 // SYSCALL (int 0x80) — заглушка в начале файла (настоящий диспетчер
@@ -1118,6 +1119,8 @@ static int msys_dispatch(unsigned int n,
     case SYS_WINDOW_STATIC_CLEAR:api_window_static_clear((int)a0); return 0;
     case SYS_WINDOW_FRAME:       api_window_frame((int)a0, (const unsigned int*)a1, (int)a2, (int)a3); return 0;
     case SYS_KEY_EVENT:    return kb_get_event();
+    case SYS_SOUND_BEEP:  sb16_beep(a0, a1); return 0;
+    case SYS_SOUND_PCM:   sb16_play_pcm((const unsigned char*)a0, a1, a2); return 0;
     case SYS_MOUSE_GRAB:   mouse_set_grab((int)a0); return 0;
     case SYS_MOUSE_REL: {
         int dx = 0, dy = 0;
@@ -2068,6 +2071,11 @@ void kernel_main(void) {
         // а ответы будут обработаны в главном цикле через net_poll.
         serial_print("[net] init done, polling in main loop\n");
     }
+
+    if (sb16_init()) {
+        serial_print("[sb16] ready\n");
+        sb16_beep(880, 150);   // тестовый "пип" при старте
+    } else serial_print("[sb16] not found\n");
 
     icons_init();
     icons_layout();
