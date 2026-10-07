@@ -47,6 +47,13 @@ dll/test_msdll
 test_msfs
 test_pe
 
+# Референс Linux (чужой код, GPL) - не наш, не в git
+/linuxSB16ref/
+/linux-virtio-ref/
+
+# Артефакты звука
+*.wav
+
 # Doom: WAD (11 МБ, бинарник) и скриншоты - не в git
 DOOM-PORT/*.WAD
 DOOM-PORT/*.wad
