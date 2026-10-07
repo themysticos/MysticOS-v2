@@ -28,6 +28,7 @@
 #include "net.h"
 #include "tcp.h"
 #include "gpu.h"
+#include "theme.h"
 
 // ============================================================
 // SYSCALL (int 0x80) — заглушка в начале файла (настоящий диспетчер
@@ -58,22 +59,25 @@ static void bg_cache_invalidate(void);
 // ============================================================
 // ПАЛИТРА (современная тёмная тема). Одна таблица на всю ОС.
 // ============================================================
-#define COL_DESKTOP    FB_RGB(0x1A, 0x1B, 0x26)  // фон рабочего стола (если нет обоев)
-#define COL_WIN_BG     FB_RGB(0x25, 0x26, 0x32)  // тело окна
-#define COL_WIN_BORDER FB_RGB(0x3A, 0x3C, 0x4E)  // рамка окна
-#define COL_TITLE_ACT  FB_RGB(0x2D, 0x4A, 0x7C)  // заголовок активного окна
-#define COL_TITLE_INA  FB_RGB(0x2A, 0x2B, 0x38)  // заголовок неактивного
-#define COL_TEXT       FB_RGB(0xE8, 0xE8, 0xF0)  // основной текст
-#define COL_TEXT_DIM   FB_RGB(0x90, 0x92, 0xA0)  // приглушённый текст
-#define COL_ACCENT     FB_RGB(0x4A, 0x8A, 0xD8)  // акцент (кнопки, выделение)
-#define COL_ACCENT_HI  FB_RGB(0x6A, 0xA8, 0xF0)  // акцент при наведении
-#define COL_SEL        FB_RGB(0x2E, 0x4A, 0x7A)  // фон выделения
-#define COL_TASKBAR    FB_RGB(0x1E, 0x1F, 0x2A)  // фон таскбара
-#define COL_TASKBAR_HI FB_RGB(0x2A, 0x2C, 0x3C)  // кнопка таскбара при наведении
-#define COL_MENU_BG    FB_RGB(0x25, 0x26, 0x34)  // фон меню
-#define COL_MENU_SEL   FB_RGB(0x2D, 0x4A, 0x7C)  // пункт меню при наведении
-#define COL_SHADOW     FB_RGB(0x0A, 0x0A, 0x10)  // тень окна
-#define COL_SEP        FB_RGB(0x38, 0x3A, 0x48)  // разделитель
+// Цвета теперь берутся из ТЕМЫ (theme.c). COL_* - макросы к g_theme,
+// поэтому весь существующий код работает без изменений, а тему можно
+// переключать (theme_set). Стиль: Windows 11 (см. theme.c).
+#define COL_DESKTOP    g_theme.desktop
+#define COL_WIN_BG     g_theme.win_bg
+#define COL_WIN_BORDER g_theme.win_border
+#define COL_TITLE_ACT  g_theme.title_act
+#define COL_TITLE_INA  g_theme.title_ina
+#define COL_TEXT       g_theme.text
+#define COL_TEXT_DIM   g_theme.text_dim
+#define COL_ACCENT     g_theme.accent
+#define COL_ACCENT_HI  g_theme.accent_hi
+#define COL_SEL        g_theme.sel
+#define COL_TASKBAR    g_theme.taskbar
+#define COL_TASKBAR_HI g_theme.taskbar_hi
+#define COL_MENU_BG    g_theme.menu_bg
+#define COL_MENU_SEL   g_theme.menu_sel
+#define COL_SHADOW     g_theme.shadow
+#define COL_SEP        g_theme.sep
 
 #define MAXWIN     8
 #define NWIN_SYS   3
@@ -1148,8 +1152,10 @@ static mystic_api_t g_api = {
 static int start_open = 0;
 #define SM_W 160
 #define SM_ITEM_H 26
-#define SM_N 5
-static const char* sm_items[SM_N] = { "Terminal", "Files", "About", "Wallpaper", "Reboot" };
+#define SM_N 6
+static const char* sm_items[SM_N] = { "Terminal", "Files", "About", "Wallpaper", "Theme", "Reboot" };
+// Текущая тема: 0 = dark, 1 = light.
+static int g_theme_light = 0;
 static int sm_x(void) { return 4; }
 static int sm_y(void) { return (int)vbe_height() - TASKBAR_H - SM_N * SM_ITEM_H - 4; }
 
@@ -1336,7 +1342,16 @@ static int process_events(int handle_kbd) {
                                        : (idx == 2) ? "/kernel/SYSPR/ABOUT.ELF"
                                                     : "/kernel/SYSPR/WPICK.ELF";
                         run_program(ep);   // запуск ELF вместо встроенного окна
+                    } else if (idx == 4) {
+                        // Theme: переключить Dark <-> Light.
+                        g_theme_light = !g_theme_light;
+                        theme_set(g_theme_light);
+                        // Иконки/подписи на рабочем столе кэшируются в bg_cache -
+                        // инвалидируем, чтобы перерисовались цветами новой темы.
+                        bg_cache_invalidate();
+                        mark_dirty(0, 0, (int)vbe_width(), (int)vbe_height());
                     } else {
+                        // Reboot.
                         __asm__ volatile ("cli");
                         while (inb(0x64) & 2);
                         outb(0x64, 0xFE);
@@ -1551,13 +1566,16 @@ static void draw_window(window_t* w, int rx, int ry, int rw, int rh) {
 
     // Заголовок: градиент (активный — синий, неактивный — серый).
     unsigned int t1 = w->active ? COL_TITLE_ACT : COL_TITLE_INA;
-    unsigned int t2 = w->active ? COL_ACCENT : FB_RGB(0x22, 0x23, 0x2E);
+    unsigned int t2 = w->active ? g_theme.title_act2 : g_theme.title_ina2;
     fill_grad_v(w->x, w->y, w->w, 20, t1, t2);
 
-    // Кнопки окна.
+    // Кнопки окна. Max/Min - тёмные в светлой теме, светлые в тёмной.
+    // Close (красный) - один для обеих.
+    const icon_t* ic_max = g_theme_light ? &ICON_BTN_MAX_DARK : &ICON_BTN_MAX;
+    const icon_t* ic_min = g_theme_light ? &ICON_BTN_MIN_DARK : &ICON_BTN_MIN;
     draw_icon(w->x + w->w - 18, w->y + 4, &ICON_BTN_CLOSE);
-    draw_icon(w->x + w->w - 34, w->y + 4, &ICON_BTN_MAX);
-    draw_icon(w->x + w->w - 50, w->y + 4, &ICON_BTN_MIN);
+    draw_icon(w->x + w->w - 34, w->y + 4, ic_max);
+    draw_icon(w->x + w->w - 50, w->y + 4, ic_min);
 
     // Заголовок (текст) — по центру заголовка.
     // bb_text_t: только буквы, БЕЗ плоского фона — иначе на градиенте
@@ -1597,7 +1615,7 @@ static void draw_taskbar_region(int rx,int ry,int rw,int rh) {
     int sw = (int)vbe_width();
     if (!rects_overlap(rx,ry,rw,rh, 0,y,sw,TASKBAR_H)) return;
     // Градиент фона таскбара (заметный: светлее сверху).
-    fill_grad_v(0, y, sw, TASKBAR_H, FB_RGB(0x3A, 0x3D, 0x52), FB_RGB(0x16, 0x17, 0x20));
+    fill_grad_v(0, y, sw, TASKBAR_H, COL_TASKBAR, g_theme.taskbar2);
     fb_backbuffer_line(0, y, sw, y, COL_SEP);
 
     // Кнопка Start с hover.
@@ -1612,7 +1630,7 @@ static void draw_taskbar_region(int rx,int ry,int rw,int rh) {
     for (int i = 0; i < MAXWIN; i++) {
         if (!wins[i].used || !wins[i].minimized) continue;
         int hi = (mx >= bx && mx < bx + 100 && my >= y + 3 && my < y + TASKBAR_H - 3);
-        unsigned int bc = hi ? COL_TASKBAR_HI : FB_RGB(0x33, 0x35, 0x46);
+        unsigned int bc = hi ? COL_TASKBAR_HI : g_theme.taskbar_btn;
         fb_backbuffer_fill(bx, y + 4, 100, TASKBAR_H - 8, bc);
         bb_text(bx + 8, y + 10, wins[i].title, COL_TEXT, bc);
         bx += 106;
@@ -1922,6 +1940,7 @@ void kernel_main(void) {
     }
     diag_mark(1, 'B');   // vbe_init вернул успех
     fb_backbuffer_init();
+    theme_init();   // палитра (Dark по умолчанию, см. theme.c)
     // console_init ОБЯЗАТЕЛЕН: без него console.cols/rows = 0, и первый же
     // console_putc сделает while(cy>=0) scroll() — сдвинет ВЕСЬ LFB вверх
     // на 8 строк. Так у нас «улетал рабочий стол» при put_char/print_hex.

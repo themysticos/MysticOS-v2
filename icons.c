@@ -8,6 +8,8 @@ extern const unsigned int mypc_pixels[1024];
 extern const unsigned int btn_close_pixels[144];
 extern const unsigned int btn_max_pixels[144];
 extern const unsigned int btn_min_pixels[144];
+extern const unsigned int btn_max_dark_pixels[144];
+extern const unsigned int btn_min_dark_pixels[144];
 
 // Простая иконка-обои (32x32): рамка-картина, "небо", "солнце", "горы".
 // Рисуется кодом, чтобы не зависеть от PNG. ARGB, alpha=0 = прозрачно.
@@ -160,6 +162,9 @@ icon_t ICON_DISK   = { 32, 32, 0 };
 icon_t ICON_BTN_CLOSE = { 12, 12, 0 };
 icon_t ICON_BTN_MAX   = { 12, 12, 0 };
 icon_t ICON_BTN_MIN   = { 12, 12, 0 };
+// Тёмные версии (для СВЕТЛОЙ темы).
+icon_t ICON_BTN_MAX_DARK = { 12, 12, 0 };
+icon_t ICON_BTN_MIN_DARK = { 12, 12, 0 };
 
 void icons_init(void) {
     ICON_TERMINAL.pixels = terminal_pixels;
@@ -175,4 +180,6 @@ void icons_init(void) {
     ICON_BTN_CLOSE.pixels = btn_close_pixels;
     ICON_BTN_MAX.pixels   = btn_max_pixels;
     ICON_BTN_MIN.pixels   = btn_min_pixels;
+    ICON_BTN_MAX_DARK.pixels = btn_max_dark_pixels;
+    ICON_BTN_MIN_DARK.pixels = btn_min_dark_pixels;
 }

@@ -24,6 +24,9 @@ extern icon_t ICON_DISK;        // дисковод / жёсткий диск
 extern icon_t ICON_BTN_CLOSE;
 extern icon_t ICON_BTN_MAX;
 extern icon_t ICON_BTN_MIN;
+// Тёмные версии кнопок (для светлой темы).
+extern icon_t ICON_BTN_MAX_DARK;
+extern icon_t ICON_BTN_MIN_DARK;
 
 void icons_init(void);
 
