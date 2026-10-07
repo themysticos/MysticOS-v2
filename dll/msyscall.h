@@ -44,6 +44,7 @@
 #define SYS_WINDOW_IMAGE      109  // (id, x, y, w, h, path*) -> 1/0
 #define SYS_WINDOW_STATIC_TEXT  110 // (id, x, y, s*, fg)
 #define SYS_WINDOW_STATIC_CLEAR 111 // (id)
+#define SYS_WINDOW_FRAME        112 // (id, src*, w, h) — быстрый blit кадра
 
 // ============================================================
 // ФС

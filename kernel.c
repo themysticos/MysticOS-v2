@@ -546,6 +546,34 @@ static void api_window_fill(int id, int x, int y, int ww, int hh, unsigned int c
             api_window_pixel(id, xx, yy, color);
 }
 
+// Быстрый blit кадра: копирует src (32bpp ARGB) в буфер окна (24bpp BGR)
+// с масштабом под размер клиентской области. Для игр (Doom 640x400).
+// src — указатель в памяти вызывающей ELF-программы (ring3).
+static void api_window_frame(int id, const unsigned int* src, int sw, int sh) {
+    int idx = win_by_id(id);
+    if (idx < 0 || !src || sw <= 0 || sh <= 0) return;
+    window_t* w = &wins[idx];
+    int cw = w->w, chh = w->h - 20;   // клиентская область (без заголовка)
+    if (cw <= 0 || chh <= 0) return;
+    for (int y = 0; y < chh; y++) {
+        int sy = (int)((long)y * sh / chh);
+        if (sy >= sh) sy = sh - 1;
+        unsigned char* drow = w->buf + ((unsigned) y * PWIN_MAXW) * 3;
+        const unsigned int* srow = src + (unsigned) sy * sw;
+        for (int x = 0; x < cw; x++) {
+            int sx = (int)((long)x * sw / cw);
+            if (sx >= sw) sx = sw - 1;
+            unsigned int c = srow[sx];
+            drow[x*3+0] = c & 0xFF;          // B
+            drow[x*3+1] = (c >> 8) & 0xFF;   // G
+            drow[x*3+2] = (c >> 16) & 0xFF;  // R
+        }
+    }
+    w->dirty = 1;
+    w->alpha = 255;   // непрозрачно (кадр заливает всё)
+    mark_dirty(w->x, w->y, w->w, w->h);
+}
+
 static void api_window_rect(int id, int x, int y, int ww, int hh, unsigned int color) {
     for (int xx = x; xx < x + ww; xx++) { api_window_pixel(id, xx, y, color); api_window_pixel(id, xx, y + hh - 1, color); }
     for (int yy = y; yy < y + hh; yy++) { api_window_pixel(id, x, yy, color); api_window_pixel(id, x + ww - 1, yy, color); }
@@ -1072,6 +1100,7 @@ static int msys_dispatch(unsigned int n,
     case SYS_WINDOW_IMAGE:       return api_window_image((int)a0, (int)a1, (int)a2, (int)a3, (int)a4, 0);
     case SYS_WINDOW_STATIC_TEXT: api_window_static_text((int)a0, (int)a1, (int)a2, (const char*)a3, a4); return 0;
     case SYS_WINDOW_STATIC_CLEAR:api_window_static_clear((int)a0); return 0;
+    case SYS_WINDOW_FRAME:       api_window_frame((int)a0, (const unsigned int*)a1, (int)a2, (int)a3); return 0;
     // ----- ФС -----
     case SYS_FS_SIZE:   return api_fs_size((const char*)a0);
     case SYS_FS_EXISTS: return api_fs_exists((const char*)a0);

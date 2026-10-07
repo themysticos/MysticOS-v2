@@ -83,6 +83,14 @@ static inline void ms_static_clear(int id) {
     __ms_sc1(SYS_WINDOW_STATIC_CLEAR, (unsigned int)id);
 }
 
+// Быстрый blit кадра: src — 32bpp ARGB (как DG_ScreenBuffer), w x h.
+// Копирует в окно с конвертацией 32->24 и масштабом под клиентскую область.
+// Для игр (Doom 640x400). Возвращает 0.
+static inline int ms_frame(int id, const unsigned int* src, int w, int h) {
+    return __ms_sc4(SYS_WINDOW_FRAME, (unsigned int)id, (unsigned int)src,
+                    (unsigned int)w, (unsigned int)h);
+}
+
 // Картинка (BMP), масштабируется до w x h.
 static inline int ms_image(int id, int x, int y, int w, int h, const char* path) {
     return __ms_sc6(SYS_WINDOW_IMAGE, (unsigned int)id, (unsigned int)x,
