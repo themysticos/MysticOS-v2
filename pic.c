@@ -25,7 +25,9 @@ extern void irq15(void);
 static volatile unsigned int g_ticks = 0;
 
 #define KB_SIZE 64
-static volatile char kb_buf[KB_SIZE];
+// Буфер клавиатурных СОБЫТИЙ: (pressed<<8) | код. Так храним и нажатия,
+// и ОТПУСКАНИЯ (нужно Doom: иначе движение «залипает»).
+static volatile unsigned short kb_buf[KB_SIZE];
 static volatile unsigned int kb_head = 0, kb_tail = 0;
 static int shift = 0, caps = 0;
 static int e0_prefix = 0;   // префикс 0xE0 перед расширенными клавишами (стрелки)
@@ -49,8 +51,38 @@ int kb_getchar(void) {
     return c;
 }
 
+// Очередь СОБЫТИЙ клавиш (raw scancode + нажатие/отпускание) - для игр.
+static volatile unsigned short ev_buf[KB_SIZE];
+static volatile unsigned int ev_head = 0, ev_tail = 0;
+
+void kb_push_event(int pressed, unsigned char sc) {
+    unsigned int n = (ev_head + 1) % KB_SIZE;
+    unsigned short ev = (unsigned short)(((pressed ? 1u : 0u) << 8) | sc);
+    if (n != ev_tail) { ev_buf[ev_head] = ev; ev_head = n; }
+}
+int kb_event_available(void) { return ev_head != ev_tail; }
+// Возвращает (pressed<<8)|sc или -1 если пусто (неблокирующе).
+int kb_get_event(void) {
+    if (ev_head == ev_tail) return -1;
+    unsigned short ev = ev_buf[ev_tail];
+    ev_tail = (ev_tail + 1) % KB_SIZE;
+    return (int)ev;
+}
+
 static int m_x = 400, m_y = 300;
 static int m_left = 0, m_right = 0;
+// Относительное движение (для игр, mouse grab): накапливается без границ.
+static int g_rel_x = 0, g_rel_y = 0;
+static int g_mouse_grab = 0;
+void mouse_set_grab(int on) {
+    // Сбрасываем дельту ТОЛЬКО при переходе 0->1 (вход в игру), иначе
+    // при вызове каждый кадр дельта обнулялась бы постоянно.
+    if (on && !g_mouse_grab) { g_rel_x = g_rel_y = 0; }
+    g_mouse_grab = on;
+}
+// Забрать накопленную относительную дельту (обнуляет).
+void mouse_take_rel(int* dx, int* dy) { *dx = g_rel_x; *dy = g_rel_y; g_rel_x = 0; g_rel_y = 0; }
+int mouse_grabbed(void) { return g_mouse_grab; }
 static unsigned char mouse_cycle = 0;
 static unsigned char mouse_packet[3];
 static void (*g_move_hook)(int dx, int dy) = 0;
@@ -86,33 +118,38 @@ void irq_handler(registers_t* r) {
     unsigned int irq = r->int_no - 0x20;
     if (irq == 0) { g_ticks++; }
     else if (irq == 1) {
+        // Читаем, ПОКА есть байты, и ТОЛЬКО клавиатурные (статус бит 5 = 0).
+        // Иначе при удержании клавиши (auto-repeat) захватим байт мыши -> курсор слетает.
+        while (inb(PS2_STAT) & 0x01) {
+        if (inb(PS2_STAT) & 0x20) break;   // это байт мыши - оставим IRQ12
         unsigned char sc = inb(PS2_DATA);
         // Расширенный префикс (0xE0) — следом идёт код стрелок/Delete/Home/End.
-        if (sc == 0xE0) { e0_prefix = 1; }
-        else if (e0_prefix) {
+        if (sc == 0xE0) { e0_prefix = 1; continue; }
+        int pressed = !(sc & 0x80);
+        unsigned char code = sc & 0x7F;
+        if (e0_prefix) {
             e0_prefix = 0;
-            // Только НАЖАТИЕ (release = sc | 0x80); отдаём как 0x80 | scancode,
-            // чтобы не путать с ASCII (0..127).
-            if (!(sc & 0x80)) {
-                // Стрелки: 0x48 up, 0x50 down, 0x4B left, 0x4D right.
-                // Delete: 0x53, Home: 0x47, End: 0x4F, PageUp: 0x49, PageDown: 0x51.
-                kb_push((char)(0x80 | sc));
-            }
+            kb_push_event(pressed, (unsigned char)(0x80 | code));
+            if (pressed) kb_push((char)(0x80 | code));
+            continue;
         }
-        else if (sc == 0x2A || sc == 0x36) shift = 1;
+        kb_push_event(pressed, code);
+        if (sc == 0x2A || sc == 0x36) shift = 1;
         else if (sc == 0xAA || sc == 0xB6) shift = 0;
         else if (sc == 0x3A) caps = !caps;
-        else if (sc == 0x1D) kb_push((char)0x01);   // Ctrl — спец-код 0x01 (для Ctrl+S)
-        else if (sc == 0x9D) { /* release Ctrl — игнор */ }
-        else if (sc == 0x3C) kb_push((char)0x02);   // F2 — спец-код 0x02 (сохранить)
-        else if (!(sc & 0x80) && sc < 128) {
+        else if (sc == 0x1D) kb_push((char)0x01);
+        else if (sc == 0x9D) { /* release Ctrl */ }
+        else if (sc == 0x3C) kb_push((char)0x02);
+        else if (pressed && sc < 128) {
             char c = sc_lower[sc];
             if (c >= 'a' && c <= 'z' && (shift ^ caps)) c -= 32;
             if (c) kb_push(c);
         }
+        }   // end while (клавиатурные байты)
     } else if (irq == 12) {
         // Читаем ВСЕ байты, что накопились, с корректной ресинхронизацией.
         while (inb(PS2_STAT) & 0x01) {
+            if (!(inb(PS2_STAT) & 0x20)) break;   // это байт клавиатуры - оставим IRQ1
             unsigned char data = inb(PS2_DATA);
             if (mouse_cycle == 0) {
                 if (!(data & 0x08)) continue;
@@ -130,12 +167,16 @@ void irq_handler(registers_t* r) {
                 if (flags & 0x10) dx |= 0xFFFFFF00;
                 if (flags & 0x20) dy |= 0xFFFFFF00;
                 if (!(flags & 0xC0)) {
-                    m_x += dx; m_y -= dy;
-                    if (m_x < 0) m_x = 0;
-                    if (m_y < 0) m_y = 0;
-                    if (m_x > (int)vbe_width() - 1)  m_x = (int)vbe_width() - 1;
-                    if (m_y > (int)vbe_height() - 1) m_y = (int)vbe_height() - 1;
-                    if (g_move_hook) g_move_hook(dx, -dy);
+                    // Дельта копится ВСЕГДА (для игр - свободный разворот).
+                    g_rel_x += dx; g_rel_y -= dy;
+                    if (!g_mouse_grab) {
+                        m_x += dx; m_y -= dy;
+                        if (m_x < 0) m_x = 0;
+                        if (m_y < 0) m_y = 0;
+                        if (m_x > (int)vbe_width() - 1)  m_x = (int)vbe_width() - 1;
+                        if (m_y > (int)vbe_height() - 1) m_y = (int)vbe_height() - 1;
+                        if (g_move_hook) g_move_hook(dx, -dy);
+                    }
                 }
                 m_left = flags & 0x01; m_right = flags & 0x02;
             }

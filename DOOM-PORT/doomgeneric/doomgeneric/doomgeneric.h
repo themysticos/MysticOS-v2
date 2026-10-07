@@ -26,6 +26,9 @@ typedef uint32_t pixel_t;
 
 extern pixel_t* DG_ScreenBuffer;
 
+// Отладка в serial (реализация в doomgeneric_mysticos.c).
+void ms_debug(const char* s);
+
 #ifdef __cplusplus
 extern "C" {
 #endif

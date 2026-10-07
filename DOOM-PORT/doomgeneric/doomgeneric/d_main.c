@@ -33,6 +33,7 @@
 #include "dstrings.h"
 #include "doomfeatures.h"
 #include "sounds.h"
+#include "doomgeneric.h"
 
 #include "d_iwad.h"
 
@@ -436,13 +437,17 @@ void D_DoomLoop (void)
     	G_BeginRecording ();
 
     main_loop_started = true;
+    ms_debug("[dm] D_DoomLoop: main_loop_started\n");
 
     TryRunTics();
+    ms_debug("[dm] TryRunTics done\n");
 
     I_SetWindowTitle(gamedescription);
     I_GraphicsCheckCommandLine();
     I_SetGrabMouseCallback(D_GrabMouseCallback);
+    ms_debug("[dm] I_InitGraphics...\n");
     I_InitGraphics();
+    ms_debug("[dm] I_InitGraphics done\n");
     I_EnableLoadingDisk();
 
     V_RestoreBuffer();
@@ -1160,8 +1165,10 @@ static void LoadIwadDeh(void)
 //
 // D_DoomMain
 //
+#include "doomgeneric.h"
 void D_DoomMain (void)
 {
+    ms_debug("[dm] D_DoomMain entered\n");
     int p;
     char file[256];
     char demolumpname[9];
@@ -1177,6 +1184,7 @@ void D_DoomMain (void)
 
     DEH_printf("Z_Init: Init zone memory allocation daemon. \n");
     Z_Init ();
+    ms_debug("[dm] Z_Init done\n");
 
 #ifdef FEATURE_MULTIPLAYER
     //!
@@ -1357,13 +1365,22 @@ void D_DoomMain (void)
     DEH_printf("M_LoadDefaults: Load system defaults.\n");
     M_SetConfigFilenames("default.cfg", PROGRAM_PREFIX "doom.cfg");
     D_BindVariables();
+    ms_debug("[dm] M_LoadDefaults...\n");
     M_LoadDefaults();
+    ms_debug("[dm] M_LoadDefaults done\n");
 
     // Save configuration at exit.
     I_AtExit(M_SaveDefaults, false);
 
     // Find main IWAD file and load it.
+    ms_debug("[dm] D_FindIWAD...\n");
     iwadfile = D_FindIWAD(IWAD_MASK_DOOM, &gamemission);
+    ms_debug(iwadfile ? "[dm] D_FindIWAD returned (found!)\n" : "[dm] D_FindIWAD returned NULL (NOT found!)\n");
+    if (iwadfile == NULL) {
+        extern char* strdup(const char*);
+        iwadfile = strdup("DOOM.WAD");
+        ms_debug("[dm] using hardcoded DOOM.WAD\n");
+    }
 
     // None found?
 
@@ -1376,17 +1393,22 @@ void D_DoomMain (void)
     modifiedgame = false;
 
     DEH_printf("W_Init: Init WADfiles.\n");
+    ms_debug("[dm] D_AddFile (reading WAD, may be slow)...\n");
     D_AddFile(iwadfile);
+    ms_debug("[dm] D_AddFile done (WAD loaded!)\n");
 #if ORIGCODE
     numiwadlumps = numlumps;
 #endif
 
+    ms_debug("[dm] W_CheckCorrectIWAD...\n");
     W_CheckCorrectIWAD(doom);
+    ms_debug("[dm] D_IdentifyVersion...\n");
 
     // Now that we've loaded the IWAD, we can figure out what gamemission
     // we're playing and which version of Vanilla Doom we need to emulate.
     D_IdentifyVersion();
     InitGameVersion();
+    ms_debug("[dm] D_IdentifyVersion done\n");
 
 #if ORIGCODE
     //!
@@ -1757,20 +1779,11 @@ void D_DoomMain (void)
         startloadgame = -1;
     }
 
-    DEH_printf("M_Init: Init miscellaneous info.\n");
-    M_Init ();
-
-    DEH_printf("R_Init: Init DOOM refresh daemon - ");
-    R_Init ();
-
-    DEH_printf("\nP_Init: Init Playloop state.\n");
-    P_Init ();
-
-    DEH_printf("S_Init: Setting up sound.\n");
-    S_Init (sfxVolume * 8, musicVolume * 8);
-
-    DEH_printf("D_CheckNetGame: Checking network game status.\n");
-    D_CheckNetGame ();
+    ms_debug("[dm] M_Init...\n"); M_Init (); ms_debug("[dm] M_Init done\n");
+    ms_debug("[dm] R_Init...\n"); R_Init (); ms_debug("[dm] R_Init done\n");
+    ms_debug("[dm] P_Init...\n"); P_Init (); ms_debug("[dm] P_Init done\n");
+    ms_debug("[dm] S_Init...\n"); S_Init (sfxVolume * 8, musicVolume * 8); ms_debug("[dm] S_Init done\n");
+    ms_debug("[dm] D_CheckNetGame...\n"); D_CheckNetGame (); ms_debug("[dm] D_CheckNetGame done\n");
 
     PrintGameVersion();
 

@@ -28,6 +28,7 @@
 #define SYS_SCREEN_W     13
 #define SYS_SCREEN_H     14
 #define SYS_YIELD        15
+#define SYS_KEY_EVENT    16   // () -> (pressed<<8)|scancode, или -1 (для игр)
 
 // ============================================================
 // Оконный API
@@ -45,6 +46,19 @@
 #define SYS_WINDOW_STATIC_TEXT  110 // (id, x, y, s*, fg)
 #define SYS_WINDOW_STATIC_CLEAR 111 // (id)
 #define SYS_WINDOW_FRAME        112 // (id, src*, w, h) — быстрый blit кадра
+
+// Мышь для игр (v5): захват + относительная дельта (свободный разворот).
+#define SYS_MOUSE_GRAB  113  // (on) -> 0   (1 = захватить, курсор ОС стоит)
+#define SYS_MOUSE_REL   114  // (dx*, dy*) -> 1/0   (забрать дельту, обнуляет)
+
+// ============================================================
+// Память (v5): программа просит RAM у ядра (из pmem).
+// ============================================================
+#define SYS_MEM_ALLOC 600  // (bytes) -> адрес или 0 (непрерывный регион)
+#define SYS_MEM_FREE  601  // (addr, bytes) -> 1/0
+
+// Отладка: вывод строки в COM1 (serial). Видно в qemu -serial.
+#define SYS_DEBUG 700  // (const char* s) -> 0
 
 // ============================================================
 // ФС

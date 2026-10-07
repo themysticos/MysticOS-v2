@@ -30,6 +30,9 @@ static unsigned int g_pd_used_mask = 0;
 #define PDE_IDX_STACK 2
 #define PDE_IDX_CODE 16
 #define PDE_IDX_DLL  48    // 0x0C000000 / 4MB = 48 (DLL region)
+// Код+heap программы: 8 PDE (32 МБ), 0x04000000..0x06000000, с PDE_USER.
+// Раньше был 1 PDE (4 МБ) - мало для Doom (WAD 11 МБ).
+#define PDE_CODE_BLOCKS 8
 
 unsigned int paging_task_pd_alloc(unsigned int code_phys, unsigned int stack_phys) {
     int slot = -1;
@@ -45,7 +48,9 @@ unsigned int paging_task_pd_alloc(unsigned int code_phys, unsigned int stack_phy
     // Шаг 2: только stack+code. Ядру и shared-страницам (окна, DLL) —
     // пока НЕ ставим user: ring3 не должен писать в ядро.
     pd[PDE_IDX_STACK] = stack_phys | PDE_PRESENT | PDE_RW | PDE_USER | PDE_PS;
-    pd[PDE_IDX_CODE]  = code_phys  | PDE_PRESENT | PDE_RW | PDE_USER | PDE_PS;
+    // Код+heap: 8 PDE (32 МБ), непрерывные физ. блоки от code_phys.
+    for (int b = 0; b < PDE_CODE_BLOCKS; b++)
+        pd[PDE_IDX_CODE + b] = (code_phys + b * 0x400000u) | PDE_PRESENT | PDE_RW | PDE_USER | PDE_PS;
     // DLL-регион (0x64000000, PDE[400]) — тоже USER: ring3-программы
     // исполняют код DLL и читают её данные. Иначе #PF (PG 0x05) на EIP=0x64001000.
     pd[PDE_IDX_DLL]   = (PDE_IDX_DLL * 0x400000u) | PDE_PRESENT | PDE_RW | PDE_USER | PDE_PS;

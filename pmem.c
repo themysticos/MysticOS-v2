@@ -30,6 +30,29 @@ unsigned int pmem_alloc_block(void) {
     return 0;   // нет памяти
 }
 
+// Выделить N СМЕЖНЫХ блоков (для heap программы, WAD и т.п.).
+// Возвращает физ. адрес первого или 0.
+unsigned int pmem_alloc_contig(unsigned int nblocks) {
+    if (nblocks == 0) return 0;
+    for (unsigned int i = 0; i + nblocks <= PMEM_BLOCKS; i++) {
+        int ok = 1;
+        for (unsigned int j = 0; j < nblocks; j++)
+            if (g_used & (1u << (i + j))) { ok = 0; break; }
+        if (ok) {
+            for (unsigned int j = 0; j < nblocks; j++) g_used |= (1u << (i + j));
+            return PMEM_START + i * PMEM_BLOCK;
+        }
+    }
+    return 0;
+}
+
+// Освободить регион, выданный pmem_alloc_contig.
+void pmem_free_contig(unsigned int phys, unsigned int nblocks) {
+    if (phys < PMEM_START || phys >= PMEM_END) return;
+    unsigned int b0 = (phys - PMEM_START) / PMEM_BLOCK;
+    for (unsigned int j = 0; j < nblocks; j++) g_used &= ~(1u << (b0 + j));
+}
+
 void pmem_free_block(unsigned int phys) {
     if (phys < PMEM_START || phys >= PMEM_END) return;
     unsigned int i = (phys - PMEM_START) / PMEM_BLOCK;

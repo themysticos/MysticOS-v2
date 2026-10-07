@@ -25,4 +25,14 @@ int  mouse_right(void);
 // Колбэк движения мыши (вызывается из IRQ12 с приращением dx,dy).
 void mouse_set_move_hook(void (*hook)(int dx, int dy));
 
+// Захват мыши (для игр): курсор ОС стоит, дельта копится для игры.
+void mouse_set_grab(int on);
+int  mouse_grabbed(void);
+void mouse_take_rel(int* dx, int* dy);
+
+// Клавиатура: очередь событий (нажатие/отпускание) для игр.
+void kb_push_event(int pressed, unsigned char sc);
+int  kb_event_available(void);
+int  kb_get_event(void);
+
 #endif

@@ -13,4 +13,9 @@ unsigned int pmem_alloc_block(void);
 // Освободить блок (адрес, выданный pmem_alloc_block).
 void pmem_free_block(unsigned int phys);
 
+// Выделить N смежных блоков (непрерывный регион) - для heap программ.
+// Возвращает физ. адрес первого блока или 0.
+unsigned int pmem_alloc_contig(unsigned int nblocks);
+void pmem_free_contig(unsigned int phys, unsigned int nblocks);
+
 #endif

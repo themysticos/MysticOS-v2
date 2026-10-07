@@ -84,7 +84,9 @@ int exec_load_segments(const unsigned char* image, unsigned int size,
         if (ph->p_offset + ph->p_filesz > size) return -1;
         if (ph->p_vaddr < virt_base) return -1;
         unsigned int off = ph->p_vaddr - virt_base;
-        if (off + ph->p_memsz > 0x400000u) return -1;   // не вылезать за 4 МБ
+        // Лимит: программа может занимать до 192 МБ (0x04000000..0x10000000).
+        // Раньше было 4 МБ - мало для Doom (WAD 11 МБ + куча).
+        if (off + ph->p_memsz > 0x0C000000u) return -1;
         unsigned char* dst = (unsigned char*)(phys_base + off);
         mem_copy(dst, image + ph->p_offset, ph->p_filesz);
         if (ph->p_memsz > ph->p_filesz)

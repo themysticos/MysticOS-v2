@@ -198,6 +198,7 @@ wad_file_t *W_AddFile (char *filename)
 
 		header.numlumps = LONG(header.numlumps);
 		header.infotableofs = LONG(header.infotableofs);
+		printf("[w] WAD id=%.4s numlumps=%d infotable=%d\n", header.identification, header.numlumps, header.infotableofs);
 		length = header.numlumps*sizeof(filelump_t);
 		fileinfo = Z_Malloc(length, PU_STATIC, 0);
 
@@ -225,6 +226,7 @@ wad_file_t *W_AddFile (char *filename)
 			++filerover;
     }
 
+    printf("[w] lump[0] pos=%d size=%d name=%c%c%c%c\n", lumpinfo[0].position, lumpinfo[0].size, lumpinfo[0].name[0]?lumpinfo[0].name[0]:'?', lumpinfo[0].name[1]?lumpinfo[0].name[1]:'?', lumpinfo[0].name[2]?lumpinfo[0].name[2]:'?', lumpinfo[0].name[3]?lumpinfo[0].name[3]:'?');
     Z_Free(fileinfo);
 
     if (lumphash != NULL)

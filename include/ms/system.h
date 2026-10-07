@@ -37,6 +37,18 @@ static inline const char* ms_arg(void) {
     return (const char*)__ms_sc0(SYS_GET_ARG);
 }
 
+// Отладка: вывести строку в serial (COM1). Реализация в libc/posix.c.
+void ms_debug(const char* s);
+
+// Память: запросить непрерывный регион у ядра (из pmem, блоки 4 МБ).
+// Возвращает адрес (identity: phys==virt) или 0. Регион кратен 4 МБ.
+static inline unsigned int ms_mem_alloc(unsigned int bytes) {
+    return (unsigned int)__ms_sc1(SYS_MEM_ALLOC, bytes);
+}
+static inline int ms_mem_free(unsigned int addr, unsigned int bytes) {
+    return __ms_sc2(SYS_MEM_FREE, addr, bytes);
+}
+
 // Обои из BMP-файла. 1/0.
 static inline int ms_wallpaper(const char* path) {
     return __ms_sc1(SYS_SET_WALLPAPER, (unsigned int)path);

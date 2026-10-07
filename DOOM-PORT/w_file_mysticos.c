@@ -13,9 +13,16 @@ typedef struct {
 
 extern wad_file_class_t stdc_wad_file;
 
+static inline void ms_debug(const char* s) {
+    __asm__ volatile ("int $0x80" :: "a"(700), "b"(s) : "memory");
+}
 static wad_file_t* W_StdC_OpenFile(char* path) {
+    ms_debug("[wad] opening: ");
+    ms_debug(path);
+    ms_debug("\n");
     FILE* fstream = fopen(path, "rb");
-    if (fstream == NULL) return NULL;
+    if (fstream == NULL) { ms_debug("[wad] fopen FAILED\n"); return NULL; }
+    ms_debug("[wad] fopen ok\n");
     stdc_wad_file_t* result = Z_Malloc(sizeof(stdc_wad_file_t), PU_STATIC, 0);
     result->wad.file_class = &stdc_wad_file;
     result->wad.mapped = NULL;

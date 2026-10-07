@@ -555,6 +555,22 @@ static void api_window_frame(int id, const unsigned int* src, int sw, int sh) {
     window_t* w = &wins[idx];
     int cw = w->w, chh = w->h - 20;   // клиентская область (без заголовка)
     if (cw <= 0 || chh <= 0) return;
+    if (sw == cw && sh == chh) {
+        // Быстрый путь 1:1: без масштабирования, только 32->24.
+        for (int y = 0; y < chh; y++) {
+            unsigned char* drow = w->buf + ((unsigned) y * PWIN_MAXW) * 3;
+            const unsigned int* srow = src + (unsigned) y * sw;
+            for (int x = 0; x < cw; x++) {
+                unsigned int c = srow[x];
+                drow[x*3+0] = c & 0xFF;
+                drow[x*3+1] = (c >> 8) & 0xFF;
+                drow[x*3+2] = (c >> 16) & 0xFF;
+            }
+        }
+        w->dirty = 1; w->alpha = 255;
+        mark_dirty(w->x, w->y, w->w, w->h);
+        return;
+    }
     for (int y = 0; y < chh; y++) {
         int sy = (int)((long)y * sh / chh);
         if (sy >= sh) sy = sh - 1;
@@ -1101,6 +1117,34 @@ static int msys_dispatch(unsigned int n,
     case SYS_WINDOW_STATIC_TEXT: api_window_static_text((int)a0, (int)a1, (int)a2, (const char*)a3, a4); return 0;
     case SYS_WINDOW_STATIC_CLEAR:api_window_static_clear((int)a0); return 0;
     case SYS_WINDOW_FRAME:       api_window_frame((int)a0, (const unsigned int*)a1, (int)a2, (int)a3); return 0;
+    case SYS_KEY_EVENT:    return kb_get_event();
+    case SYS_MOUSE_GRAB:   mouse_set_grab((int)a0); return 0;
+    case SYS_MOUSE_REL: {
+        int dx = 0, dy = 0;
+        mouse_take_rel(&dx, &dy);
+        if (a0) *(int*)a0 = dx;
+        if (a1) *(int*)a1 = dy;
+        return (dx || dy) ? 1 : 0;
+    }
+    case SYS_MEM_ALLOC: {
+        // Программа просит непрерывный регион (из pmem, блоки 4 МБ).
+        unsigned int bytes = a0;
+        unsigned int nblocks = (bytes + PMEM_BLOCK - 1) / PMEM_BLOCK;
+        unsigned int phys = pmem_alloc_contig(nblocks);
+        return (int)phys;   // identity: phys == virt
+    }
+    case SYS_DEBUG: {
+        // Отладка программы: строку в serial (COM1).
+        const char* s = (const char*)a0;
+        if (s) serial_print(s);
+        return 0;
+    }
+    case SYS_MEM_FREE: {
+        unsigned int bytes = a1;
+        unsigned int nblocks = (bytes + PMEM_BLOCK - 1) / PMEM_BLOCK;
+        pmem_free_contig(a0, nblocks);
+        return 1;
+    }
     // ----- ФС -----
     case SYS_FS_SIZE:   return api_fs_size((const char*)a0);
     case SYS_FS_EXISTS: return api_fs_exists((const char*)a0);
@@ -1773,9 +1817,9 @@ static void cursor_bb_restore(void) {
 }
 
 static void draw_cursor_bb(int mx, int my) {
-    // ВАЖНО: render_region() ДО этого уже нарисовал чистый фон (обои,
-    // окна, таскбар) в регионе. Поэтому фон под курсором УЖЕ чистый -
-    // restore не нужен (раньше он возвращал устаревший фон и вредил).
+    // В ЗАХВАТЕ (игра) курсор ОС скрыт - игра рисует свой прицел.
+    if (mouse_grabbed()) { g_cur_drawn_x = -1000; g_cur_drawn_y = -1000; return; }
+    // render_region() ДО этого уже нарисовал чистый фон в регионе.
     // Просто рисуем курсор поверх свежего фона.
     for (int row = 0; row < 19; row++)
         for (int col = 0; col < 12; col++) {
@@ -1931,7 +1975,9 @@ static int run_program(const char* name) {
     // Ограничение "одна программа" снято: каждая задача изолирована (своя PD).
     // prog_buf используется только на время загрузки — это безопасно.
     ata_select(0);
-    int sz = vfs_read_file(name, prog_buf, 256 * 1024);   // prog_buf = 256 КБ (в верхней RAM)
+    // prog_buf: 0x02A00000..0x02B00000 (1 МБ) - до DLL-буфера.
+    // Раньше было 256 КБ - мало для Doom (524 КБ).
+    int sz = vfs_read_file(name, prog_buf, 1024 * 1024);
     if (sz <= 0) return -1;
     while (kb_available()) kb_getchar();
     // Мультизагрузчик: формат по магии.

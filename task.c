@@ -101,11 +101,12 @@ int task_create_elf(const unsigned char* image, unsigned int size, const void* a
     }
     if (slot < 0) return -1;
 
-    unsigned int code_phys   = pmem_alloc_block();
+    // Код+heap: 8 смежных блоков (32 МБ) - хватит на код + WAD + кучу.
+    unsigned int code_phys   = pmem_alloc_contig(8);
     unsigned int stack_phys  = pmem_alloc_block();
     unsigned int kstack_phys = pmem_alloc_block();   // стек ЯДРА этой задачи
     if (!code_phys || !stack_phys || !kstack_phys) {
-        if (code_phys)   pmem_free_block(code_phys);
+        if (code_phys)   pmem_free_contig(code_phys, 8);
         if (stack_phys)  pmem_free_block(stack_phys);
         if (kstack_phys) pmem_free_block(kstack_phys);
         return -1;
@@ -113,13 +114,13 @@ int task_create_elf(const unsigned char* image, unsigned int size, const void* a
 
     int entry = exec_load_segments(image, size, TASK_CODE_VIRT, code_phys);
     if (entry < 0) {
-        pmem_free_block(code_phys); pmem_free_block(stack_phys); pmem_free_block(kstack_phys);
+        pmem_free_contig(code_phys, 8); pmem_free_block(stack_phys); pmem_free_block(kstack_phys);
         return -1;
     }
 
     unsigned int pd = paging_task_pd_alloc(code_phys, stack_phys);
     if (!pd) {
-        pmem_free_block(code_phys); pmem_free_block(stack_phys); pmem_free_block(kstack_phys);
+        pmem_free_contig(code_phys, 8); pmem_free_block(stack_phys); pmem_free_block(kstack_phys);
         return -1;
     }
 
@@ -231,7 +232,7 @@ void task_enable(void) { sched_on = 1; }
 void task_reap(void) {
     for (int i = 1; i < TASK_MAX; i++) {
         if (tasks[i].state == TASK_DEAD) {
-            if (tasks[i].code_phys)   pmem_free_block(tasks[i].code_phys);
+            if (tasks[i].code_phys)   pmem_free_contig(tasks[i].code_phys, 8);
             if (tasks[i].stack_phys)  pmem_free_block(tasks[i].stack_phys);
             if (tasks[i].kernel_stack_phys) pmem_free_block(tasks[i].kernel_stack_phys);
             if (tasks[i].pd_phys)     paging_task_pd_free(tasks[i].pd_phys);

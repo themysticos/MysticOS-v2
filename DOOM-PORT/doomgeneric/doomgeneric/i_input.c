@@ -323,16 +323,18 @@ void I_GetEvent(void)
         }
     }
 
-
-                /*
-            case SDL_MOUSEMOTION:
-                event.type = ev_mouse;
-                event.data1 = mouse_button_state;
-                event.data2 = AccelerateMouse(sdlevent.motion.xrel);
-                event.data3 = -AccelerateMouse(sdlevent.motion.yrel);
-                D_PostEvent(&event);
-                break;
-                */
+    // MysticOS: мышь (относительное движение + кнопки) из DG_GetMouse.
+    extern int DG_GetMouse(int* dx, int* dy, int* btns);
+    {
+        int mdx = 0, mdy = 0, mbtn = 0;
+        if (DG_GetMouse(&mdx, &mdy, &mbtn)) {
+            event.type = ev_mouse;
+            event.data1 = mbtn;
+            event.data2 = mdx;
+            event.data3 = -mdy;
+            D_PostEvent(&event);
+        }
+    }
 }
 
 void I_InitInput(void)

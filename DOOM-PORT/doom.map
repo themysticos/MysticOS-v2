@@ -174,7 +174,7 @@ LOAD w_file_mysticos.o
 .plt.sec
  *(.plt.sec)
 
-.text           0x04001000    0x363b4
+.text           0x04001000    0x36a42
  *(.text.unlikely .text.*_unlikely .text.unlikely.*)
  *(.text.exit .text.exit.*)
  *(.text.startup .text.startup.*)
@@ -241,1026 +241,1028 @@ LOAD w_file_mysticos.o
                 0x04003df0                TryRunTics
                 0x04004210                D_RegisterLoopCallbacks
  *fill*         0x0400421a        0x6 
- .text          0x04004220     0x1998 doomgeneric/doomgeneric/d_main.o
+ .text          0x04004220     0x1ab8 doomgeneric/doomgeneric/d_main.o
                 0x04004220                D_GrabMouseCallback
                 0x040046c0                D_ProcessEvents
                 0x04004720                D_Display
                 0x04004740                D_BindVariables
                 0x04004890                doomgeneric_Tick
                 0x040048e0                D_DoomLoop
-                0x040049d0                D_PageTicker
-                0x040049f0                D_PageDrawer
-                0x04004a20                D_AdvanceDemo
-                0x04004a30                D_DoAdvanceDemo
-                0x04004c60                D_StartTitle
-                0x04004c80                D_IdentifyVersion
-                0x04004e60                D_SetGameDescription
-                0x04004f50                PrintDehackedBanners
-                0x04004f60                PrintGameVersion
-                0x04004fb0                D_DoomMain
- *fill*         0x04005bb8        0x8 
- .text          0x04005bc0      0x1e6 doomgeneric/doomgeneric/d_mode.o
-                0x04005bc0                D_ValidGameMode
-                0x04005c00                D_ValidEpisodeMap
-                0x04005cd0                D_GetNumEpisodes
-                0x04005d10                D_ValidGameVersion
-                0x04005d70                D_IsEpisodeMap
-                0x04005d90                D_GameMissionString
- *fill*         0x04005da6        0xa 
- .text          0x04005db0      0x483 doomgeneric/doomgeneric/d_net.o
-                0x04005eb0                D_ConnectNetGame
-                0x04005fb0                D_CheckNetGame
- .text          0x04006233        0x0 doomgeneric/doomgeneric/doomdef.o
- *fill*         0x04006233        0xd 
- .text          0x04006240       0x39 doomgeneric/doomgeneric/doomgeneric.o
-                0x04006240                doomgeneric_Create
- .text          0x04006279        0x0 doomgeneric/doomgeneric/doomstat.o
- .text          0x04006279        0x0 doomgeneric/doomgeneric/dstrings.o
- *fill*         0x04006279        0x7 
- .text          0x04006280        0x1 doomgeneric/doomgeneric/dummy.o
-                0x04006280                I_InitTimidityConfig
- *fill*         0x04006281       0x1f 
- .text          0x040062a0      0xe57 doomgeneric/doomgeneric/f_finale.o
-                0x04006720                F_StartFinale
-                0x040068e0                F_Responder
-                0x04006970                F_TextWrite
-                0x04006aa0                F_StartCast
-                0x04006b20                F_Ticker
-                0x04006c40                F_CastTicker
-                0x04006c70                F_CastResponder
-                0x04006cf0                F_CastPrint
-                0x04006db0                F_CastDrawer
-                0x04006e60                F_DrawPatchCol
-                0x04006ef0                F_BunnyScroll
-                0x04007060                F_Drawer
- *fill*         0x040070f7        0x9 
- .text          0x04007100      0x573 doomgeneric/doomgeneric/f_wipe.o
-                0x04007100                wipe_doColorXForm
-                0x04007190                wipe_exitColorXForm
-                0x040071a0                wipe_doMelt
-                0x04007360                wipe_initColorXForm
-                0x04007390                wipe_exitMelt
-                0x040073c0                wipe_shittyColMajorXform
-                0x04007480                wipe_initMelt
-                0x04007570                wipe_StartScreen
-                0x040075a0                wipe_EndScreen
-                0x040075e0                wipe_ScreenWipe
- *fill*         0x04007673        0xd 
- .text          0x04007680     0x2f0a doomgeneric/doomgeneric/g_game.o
-                0x04007680                G_CmdChecksum
-                0x04007690                G_BuildTiccmd
-                0x04007f30                G_DoLoadLevel
-                0x04008100                G_Responder
-                0x040085b0                G_PlayerFinishLevel
-                0x04008620                G_PlayerReborn
-                0x04008740                G_InitPlayer
-                0x04008750                G_CheckSpot
-                0x04008a30                G_DeathMatchSpawnPlayer
-                0x04008ae0                G_DoReborn
-                0x04008bd0                G_ScreenShot
-                0x04008be0                G_ExitLevel
-                0x04008c00                G_SecretExitLevel
-                0x04008c40                G_DoCompleted
-                0x04009080                G_WorldDone
-                0x040090f0                G_DoWorldDone
-                0x04009130                G_LoadGame
-                0x04009160                G_SaveGame
-                0x04009190                G_DoSaveGame
-                0x04009390                G_DeferedInitNew
-                0x040093c0                G_InitNew
-                0x04009690                G_DoLoadGame
-                0x04009780                G_DoNewGame
-                0x04009820                G_RecordDemo
-                0x040098d0                G_VanillaVersionCode
-                0x04009930                G_BeginRecording
-                0x04009ab0                G_DeferedPlayDemo
-                0x04009ad0                G_DoPlayDemo
-                0x04009da0                G_TimeDemo
-                0x04009de0                G_CheckDemoStatus
-                0x04009f80                G_ReadDemoTiccmd
-                0x0400a010                G_WriteDemoTiccmd
-                0x0400a160                G_Ticker
- *fill*         0x0400a58a       0x16 
- .text          0x0400a5a0      0x3e7 doomgeneric/doomgeneric/gusconf.o
-                0x0400a5a0                GUS_WriteConfig
- *fill*         0x0400a987       0x39 
- .text          0x0400a9c0      0x775 doomgeneric/doomgeneric/hu_lib.o
-                0x0400a9c0                HUlib_init
-                0x0400a9d0                HUlib_clearTextLine
-                0x0400a9f0                HUlib_initTextLine
-                0x0400aa30                HUlib_addCharToTextLine
-                0x0400aa70                HUlib_delCharFromTextLine
-                0x0400aaa0                HUlib_drawTextLine
-                0x0400ab80                HUlib_eraseTextLine
-                0x0400ac50                HUlib_initSText
-                0x0400ace0                HUlib_addLineToSText
-                0x0400ad40                HUlib_addMessageToSText
-                0x0400ae30                HUlib_drawSText
-                0x0400aea0                HUlib_eraseSText
-                0x0400af00                HUlib_initIText
-                0x0400af50                HUlib_delCharFromIText
-                0x0400af80                HUlib_eraseLineFromIText
-                0x0400afd0                HUlib_resetIText
-                0x0400aff0                HUlib_addPrefixToIText
-                0x0400b040                HUlib_keyInIText
-                0x0400b0d0                HUlib_drawIText
-                0x0400b100                HUlib_eraseIText
- *fill*         0x0400b135        0xb 
- .text          0x0400b140      0x9dc doomgeneric/doomgeneric/hu_stuff.o
-                0x0400b140                HU_Init
-                0x0400b190                HU_Stop
-                0x0400b1a0                HU_Start
-                0x0400b390                HU_Drawer
-                0x0400b3e0                HU_Erase
-                0x0400b410                HU_Ticker
-                0x0400b650                HU_queueChatChar
-                0x0400b690                HU_dequeueChatChar
-                0x0400b6c0                HU_Responder
- *fill*         0x0400bb1c        0x4 
- .text          0x0400bb20        0x1 doomgeneric/doomgeneric/i_endoom.o
-                0x0400bb20                I_Endoom
- *fill*         0x0400bb21        0xf 
- .text          0x0400bb30      0x131 doomgeneric/doomgeneric/i_input.o
-                0x0400bb30                I_GetEvent
-                0x0400bc60                I_InitInput
- *fill*         0x0400bc61        0xf 
- .text          0x0400bc70       0xff doomgeneric/doomgeneric/i_joystick.o
-                0x0400bc70                I_ShutdownJoystick
-                0x0400bc80                I_InitJoystick
-                0x0400bc90                I_UpdateJoystick
-                0x0400bca0                I_BindJoystickVariables
- *fill*         0x0400bd6f       0x11 
- .text          0x0400bd80     0x267e doomgeneric/doomgeneric/i_scale.o
-                0x0400e350                I_InitScale
-                0x0400e370                I_ResetScaleTables
- *fill*         0x0400e3fe        0x2 
- .text          0x0400e400      0x33f doomgeneric/doomgeneric/i_sound.o
-                0x0400e400                I_InitSound
-                0x0400e460                I_ShutdownSound
-                0x0400e480                I_GetSfxLumpNum
-                0x0400e4a0                I_UpdateSound
-                0x0400e4c0                I_UpdateSoundParams
-                0x0400e520                I_StartSound
-                0x0400e590                I_StopSound
-                0x0400e5b0                I_SoundIsPlaying
-                0x0400e5d0                I_PrecacheSounds
-                0x0400e5f0                I_InitMusic
-                0x0400e600                I_ShutdownMusic
-                0x0400e610                I_SetMusicVolume
-                0x0400e620                I_PauseSong
-                0x0400e630                I_ResumeSong
-                0x0400e640                I_RegisterSong
-                0x0400e650                I_UnRegisterSong
-                0x0400e660                I_PlaySong
-                0x0400e670                I_StopSong
-                0x0400e680                I_MusicIsPlaying
-                0x0400e690                I_BindSoundVariables
- *fill*         0x0400e73f        0x1 
- .text          0x0400e740      0x5ff doomgeneric/doomgeneric/i_system.o
-                0x0400e740                I_AtExit
-                0x0400e770                I_Tactile
-                0x0400e780                I_PrintBanner
-                0x0400e7d0                I_PrintDivider
-                0x0400e810                I_PrintStartupBanner
-                0x0400e8f0                I_ConsoleStdout
-                0x0400e900                I_Quit
-                0x0400e920                I_Error
-                0x0400eae0                I_ZoneBase
-                0x0400eb70                I_GetMemoryValue
- *fill*         0x0400ed3f        0x1 
- .text          0x0400ed40       0xa1 doomgeneric/doomgeneric/i_timer.o
-                0x0400ed40                I_GetTicks
-                0x0400ed50                I_GetTime
-                0x0400ed90                I_GetTimeMS
-                0x0400edc0                I_Sleep
-                0x0400edd0                I_WaitVBL
-                0x0400ede0                I_InitTimer
- *fill*         0x0400ede1       0x1f 
- .text          0x0400ee00      0x6f1 doomgeneric/doomgeneric/i_video.o
-                0x0400ee00                cmap_to_rgb565
-                0x0400ee80                cmap_to_fb
-                0x0400efa0                I_InitGraphics
-                0x0400f250                I_ShutdownGraphics
-                0x0400f270                I_StartFrame
-                0x0400f280                I_StartTic
-                0x0400f290                I_UpdateNoBlit
-                0x0400f2a0                I_FinishUpdate
-                0x0400f360                I_ReadScreen
-                0x0400f380                I_SetPalette
-                0x0400f3f0                I_GetPaletteIndex
-                0x0400f470                I_BeginRead
-                0x0400f480                I_EndRead
-                0x0400f490                I_SetWindowTitle
-                0x0400f4a0                I_GraphicsCheckCommandLine
-                0x0400f4b0                I_SetGrabMouseCallback
-                0x0400f4c0                I_EnableLoadingDisk
-                0x0400f4d0                I_BindVideoVariables
-                0x0400f4e0                I_DisplayFPSDots
-                0x0400f4f0                I_CheckIsScreensaver
- .text          0x0400f4f1        0x0 doomgeneric/doomgeneric/icon.o
- .text          0x0400f4f1        0x0 doomgeneric/doomgeneric/info.o
- *fill*         0x0400f4f1        0xf 
- .text          0x0400f500      0x165 doomgeneric/doomgeneric/m_argv.o
-                0x0400f500                M_CheckParmWithArgs
-                0x0400f560                M_ParmExists
-                0x0400f5c0                M_CheckParm
-                0x0400f620                M_FindResponseFile
-                0x0400f630                M_GetExecutableName
- *fill*         0x0400f665        0xb 
- .text          0x0400f670       0x54 doomgeneric/doomgeneric/m_bbox.o
-                0x0400f670                M_ClearBox
-                0x0400f690                M_AddToBox
- *fill*         0x0400f6c4        0xc 
- .text          0x0400f6d0       0xdb doomgeneric/doomgeneric/m_cheat.o
-                0x0400f6d0                cht_CheckCheat
-                0x0400f790                cht_GetParam
- *fill*         0x0400f7ab        0x5 
- .text          0x0400f7b0      0x535 doomgeneric/doomgeneric/m_config.o
-                0x0400f860                M_SetConfigFilenames
-                0x0400f880                M_SaveDefaults
-                0x0400f890                M_SaveDefaultsAlternate
-                0x0400f8a0                M_LoadDefaults
-                0x0400f980                M_BindVariable
-                0x0400f9a0                M_SetVariable
-                0x0400fb50                M_GetIntVariable
-                0x0400fb80                M_GetStrVariable
-                0x0400fbc0                M_GetFloatVariable
-                0x0400fc00                M_SetConfigDir
-                0x0400fc80                M_GetSaveGameDir
- *fill*         0x0400fce5        0xb 
- .text          0x0400fcf0      0x881 doomgeneric/doomgeneric/m_controls.o
-                0x0400fcf0                M_BindBaseControls
-                0x0400fec0                M_BindHereticControls
-                0x0400ff60                M_BindHexenControls
-                0x04010020                M_BindStrifeControls
-                0x04010180                M_BindWeaponControls
-                0x04010280                M_BindMapControls
-                0x04010360                M_BindMenuControls
-                0x04010510                M_BindChatControls
-                0x04010570                M_ApplyPlatformDefaults
- *fill*         0x04010571        0xf 
- .text          0x04010580       0x82 doomgeneric/doomgeneric/m_fixed.o
-                0x04010580                FixedMul
-                0x040105a0                FixedDiv
- *fill*         0x04010602       0x3e 
- .text          0x04010640     0x2471 doomgeneric/doomgeneric/m_menu.o
-                0x04010640                M_Sound
-                0x04010660                M_Options
-                0x04010680                M_ChangeMessages
-                0x040106c0                M_ReadThis
-                0x040106e0                M_FinishReadThis
-                0x04010700                M_DrawReadThis2
-                0x04010730                M_DrawMainMenu
-                0x04010750                M_DrawNewGame
-                0x04010790                M_DrawEpisode
-                0x040107b0                M_LoadSelect
-                0x040107f0                M_SaveSelect
-                0x04010850                M_QuitDOOM
-                0x040108e0                M_DrawReadThis1
-                0x040109c0                M_SfxVol
-                0x04010a20                M_MusicVol
-                0x04010a80                M_SizeDisplay
-                0x04010af0                M_ChangeSensitivity
-                0x04010ba0                M_QuitResponse
-                0x04010bc0                M_ChangeDetail
-                0x04010c10                M_EndGame
-                0x04010cb0                M_VerifyNightmare
-                0x04010cf0                M_ChooseSkill
-                0x04010d60                M_EndGameResponse
-                0x04010d90                M_NewGame
-                0x04010e30                M_Episode
-                0x04010ef0                M_ReadThis2
-                0x04010f40                M_QuickLoadResponse
-                0x04010fb0                M_QuickSaveResponse
-                0x04011020                M_ReadSaveStrings
-                0x040110c0                M_LoadGame
-                0x04011130                M_SaveGame
-                0x040111b0                M_DrawSaveLoadBorder
-                0x04011240                M_DoSave
-                0x04011280                M_QuickSave
-                0x04011380                M_QuickLoad
-                0x04011430                M_DrawThermo
-                0x04011510                M_DrawSound
-                0x04011580                M_DrawOptions
-                0x04011650                M_DrawEmptyCell
-                0x04011690                M_DrawSelCell
-                0x040116d0                M_StartMessage
-                0x04011710                M_StopMessage
-                0x04011730                M_StringWidth
-                0x04011790                M_StringHeight
-                0x040117e0                M_WriteText
-                0x04011870                M_DrawLoad
-                0x040118f0                M_DrawSave
-                0x040119d0                M_Responder
-                0x040126c0                M_StartControlPanel
-                0x040126f0                M_Drawer
-                0x04012970                M_ClearMenus
-                0x04012980                M_SetupNextMenu
-                0x040129a0                M_Ticker
-                0x040129e0                M_Init
- *fill*         0x04012ab1        0xf 
- .text          0x04012ac0      0x86e doomgeneric/doomgeneric/m_misc.o
-                0x04012ac0                M_MakeDirectory
-                0x04012ae0                M_FileExists
-                0x04012b30                M_FileLength
-                0x04012b70                M_WriteFile
-                0x04012bc0                M_ReadFile
-                0x04012ca0                M_StrToInt
-                0x04012d30                M_ExtractFileBase
-                0x04012dd0                M_ForceUppercase
-                0x04012e00                M_StrCaseStr
-                0x04012e60                M_StringDuplicate
-                0x04012eb0                M_StringReplace
-                0x04012fe0                M_StringCopy
-                0x04013030                M_StringConcat
-                0x04013090                M_StringStartsWith
-                0x040130f0                M_StringEndsWith
-                0x04013160                M_StringJoin
-                0x04013270                M_TempFile
-                0x04013290                M_vsnprintf
-                0x040132e0                M_snprintf
- *fill*         0x0401332e        0x2 
- .text          0x04013330       0x55 doomgeneric/doomgeneric/m_random.o
-                0x04013330                P_Random
-                0x04013350                M_Random
-                0x04013370                M_ClearRandom
- *fill*         0x04013385        0xb 
- .text          0x04013390      0x296 doomgeneric/doomgeneric/memio.o
-                0x04013390                mem_fopen_read
-                0x040133c0                mem_fread
-                0x04013440                mem_fopen_write
-                0x04013490                mem_fwrite
-                0x04013540                mem_get_buf
-                0x04013560                mem_fclose
-                0x040135b0                mem_ftell
-                0x040135c0                mem_fseek
- *fill*         0x04013626       0x1a 
- .text          0x04013640      0x82a doomgeneric/doomgeneric/mus2mid.o
-                0x04013790                mus2mid
- *fill*         0x04013e6a       0x16 
- .text          0x04013e80      0x546 doomgeneric/doomgeneric/p_ceilng.o
-                0x04013e80                T_MoveCeiling
-                0x040140c0                P_AddActiveCeiling
-                0x04014110                P_RemoveActiveCeiling
-                0x04014160                P_ActivateInStasisCeiling
-                0x040141c0                EV_DoCeiling
-                0x04014360                EV_CeilingCrushStop
- *fill*         0x040143c6        0xa 
- .text          0x040143d0      0xcaa doomgeneric/doomgeneric/p_doors.o
-                0x040143d0                T_VerticalDoor
-                0x040145a0                EV_DoDoor
-                0x04014bd0                EV_DoLockedDoor
-                0x04014ca0                EV_VerticalDoor
-                0x04014fb0                P_SpawnDoorCloseIn30
-                0x04015010                P_SpawnDoorRaiseIn5Mins
- *fill*         0x0401507a        0x6 
- .text          0x04015080     0x264f doomgeneric/doomgeneric/p_enemy.o
-                0x04015080                PIT_VileCheck
-                0x04015140                P_RecursiveSound
-                0x04015220                P_NoiseAlert
-                0x04015250                P_CheckMeleeRange
-                0x040152c0                P_CheckMissileRange
-                0x040153d0                P_Move
-                0x04015510                P_TryWalk
-                0x04015550                P_NewChaseDir
-                0x04015960                P_LookForPlayers
-                0x04015be0                A_KeenDie
-                0x04015c50                A_Look
-                0x04015d50                A_Chase
-                0x04016000                A_FaceTarget
-                0x04016060                A_PosAttack
-                0x040160f0                A_SPosAttack
-                0x04016190                A_CPosAttack
-                0x04016220                A_CPosRefire
-                0x04016280                A_SpidRefire
-                0x040162e0                A_BspiAttack
-                0x04016310                A_TroopAttack
-                0x04016390                A_SargAttack
-                0x04016400                A_HeadAttack
-                0x04016480                A_CyberAttack
-                0x040164b0                A_BruisAttack
-                0x04016520                A_SkelMissile
-                0x04016580                A_Tracer
-                0x04016710                A_SkelWhoosh
-                0x04016740                A_SkelFist
-                0x040167c0                A_VileChase
-                0x04016910                A_VileStart
-                0x04016930                A_Fire
-                0x040169d0                A_StartFire
-                0x040169f0                A_FireCrackle
-                0x04016a10                A_VileTarget
-                0x04016a70                A_VileAttack
-                0x04016b50                A_FatRaise
-                0x04016b70                A_FatAttack1
-                0x04016bf0                A_FatAttack2
-                0x04016c70                A_FatAttack3
-                0x04016d30                A_SkullAttack
-                0x04016df0                A_PainShootSkull
-                0x04016f20                A_PainAttack
-                0x04016f50                A_PainDie
-                0x04016fa0                A_Scream
-                0x04017050                A_XScream
-                0x04017070                A_Pain
-                0x040170a0                A_Fall
-                0x040170b0                A_Explode
-                0x040170d0                A_BossDeath
-                0x04017320                A_Hoof
-                0x04017340                A_Metal
-                0x04017360                A_BabyMetal
-                0x04017380                A_OpenShotgun2
-                0x040173a0                A_LoadShotgun2
-                0x040173c0                A_CloseShotgun2
-                0x040173f0                A_BrainAwake
-                0x04017480                A_BrainPain
-                0x04017490                A_BrainScream
-                0x04017520                A_BrainExplode
-                0x040175a0                A_BrainDie
-                0x040175b0                A_BrainSpit
-                0x04017640                A_SpawnSound
-                0x04017680                A_SpawnFly
-                0x040176a0                A_PlayerScream
- *fill*         0x040176cf        0x1 
- .text          0x040176d0     0x1027 doomgeneric/doomgeneric/p_floor.o
-                0x040176d0                T_MovePlane
-                0x04017950                T_MoveFloor
-                0x04017a10                EV_DoFloor
-                0x04018500                EV_BuildStairs
- *fill*         0x040186f7        0x9 
- .text          0x04018700     0x11b3 doomgeneric/doomgeneric/p_inter.o
-                0x04018700                P_GiveAmmo
-                0x04018880                P_GiveWeapon
-                0x040189d0                P_GiveBody
-                0x04018a00                P_GiveArmor
-                0x04018a30                P_GiveCard
-                0x04018a60                P_GivePower
-                0x04018b30                P_TouchSpecialThing
-                0x04019310                P_KillMobj
-                0x04019540                P_DamageMobj
- *fill*         0x040198b3        0xd 
- .text          0x040198c0      0x4b2 doomgeneric/doomgeneric/p_lights.o
-                0x040198c0                T_StrobeFlash
-                0x04019900                T_Glow
-                0x04019970                T_FireFlicker
-                0x040199c0                T_LightFlash
-                0x04019a20                P_SpawnFireFlicker
-                0x04019a80                P_SpawnLightFlash
-                0x04019af0                P_SpawnStrobeFlash
-                0x04019b80                EV_StartLightStrobing
-                0x04019bd0                EV_TurnTagLightsOff
-                0x04019c80                EV_LightTurnOn
-                0x04019d20                P_SpawnGlowingLight
- *fill*         0x04019d72        0xe 
- .text          0x04019d80     0x1821 doomgeneric/doomgeneric/p_map.o
-                0x04019d80                PIT_StompThing
-                0x04019e20                PIT_CheckLine
-                0x0401a020                PIT_CheckThing
-                0x0401a230                PTR_SlideTraverse
-                0x0401a320                PTR_AimTraverse
-                0x0401a4f0                PTR_ShootTraverse
-                0x0401a820                PTR_UseTraverse
-                0x0401a8b0                PIT_RadiusAttack
-                0x0401a970                P_TeleportMove
-                0x0401ab00                P_CheckPosition
-                0x0401acc0                P_TryMove
-                0x0401ae40                P_ThingHeightClip
-                0x0401aeb0                PIT_ChangeSector
-                0x0401afb0                P_HitSlideLine
-                0x0401b0c0                P_SlideMove
-                0x0401b2f0                P_AimLineAttack
-                0x0401b3a0                P_LineAttack
-                0x0401b430                P_UseLines
-                0x0401b480                P_RadiusAttack
-                0x0401b530                P_ChangeSector
- *fill*         0x0401b5a1       0x1f 
- .text          0x0401b5c0      0xd87 doomgeneric/doomgeneric/p_maputl.o
-                0x0401b650                P_AproxDistance
-                0x0401b690                P_PointOnLineSide
-                0x0401b730                P_BoxOnLineSide
-                0x0401b870                P_PointOnDivlineSide
-                0x0401b930                P_MakeDivline
-                0x0401b960                P_InterceptVector
-                0x0401b9f0                PIT_AddLineIntercepts
-                0x0401bb60                P_LineOpening
-                0x0401bbb0                P_UnsetThingPosition
-                0x0401bc50                P_SetThingPosition
-                0x0401bd10                P_BlockLinesIterator
-                0x0401bdb0                P_BlockThingsIterator
-                0x0401be20                PIT_AddThingIntercepts
-                0x0401bf20                P_TraverseIntercepts
-                0x0401bfb0                P_PathTraverse
- *fill*         0x0401c347       0x19 
- .text          0x0401c360     0x1471 doomgeneric/doomgeneric/p_mobj.o
-                0x0401c360                P_SpawnMobj
-                0x0401c480                P_RemoveMobj
-                0x0401c530                P_SetMobjState
-                0x0401c5c0                P_ExplodeMissile
-                0x0401c640                P_ZMovement
-                0x0401c8c0                P_XYMovement
-                0x0401cc30                P_NightmareRespawn
-                0x0401cd30                P_MobjThinker
-                0x0401ce00                P_RespawnSpecials
-                0x0401cf50                P_SpawnPlayer
-                0x0401d100                P_SpawnMapThing
-                0x0401d380                P_SpawnPuff
-                0x0401d410                P_SpawnBlood
-                0x0401d4d0                P_CheckMissileSpawn
-                0x0401d540                P_SubstNullMobj
-                0x0401d580                P_SpawnMissile
-                0x0401d6a0                P_SpawnPlayerMissile
- *fill*         0x0401d7d1        0xf 
- .text          0x0401d7e0      0x609 doomgeneric/doomgeneric/p_plats.o
-                0x0401d7e0                T_PlatRaise
-                0x0401da20                EV_DoPlat
-                0x0401dca0                P_ActivateInStasis
-                0x0401dd00                EV_StopPlat
-                0x0401dd50                P_AddActivePlat
-                0x0401dd90                P_RemoveActivePlat
- *fill*         0x0401dde9        0x7 
- .text          0x0401ddf0      0xe57 doomgeneric/doomgeneric/p_pspr.o
-                0x0401ddf0                P_SetPsprite
-                0x0401de90                P_CalcSwing
-                0x0401def0                P_BringUpWeapon
-                0x0401df60                P_CheckAmmo
-                0x0401e110                P_FireWeapon
-                0x0401e160                P_DropWeapon
-                0x0401e180                A_WeaponReady
-                0x0401e2d0                A_ReFire
-                0x0401e310                A_CheckReload
-                0x0401e320                A_Lower
-                0x0401e390                A_Raise
-                0x0401e3e0                A_GunFlash
-                0x0401e420                A_Punch
-                0x0401e4e0                A_Saw
-                0x0401e600                A_FireMissile
-                0x0401e630                A_FireBFG
-                0x0401e660                A_FirePlasma
-                0x0401e6c0                P_BulletSlope
-                0x0401e740                P_GunShot
-                0x0401e7c0                A_FirePistol
-                0x0401e840                A_FireShotgun
-                0x0401e8c0                A_FireShotgun2
-                0x0401e9b0                A_FireCGun
-                0x0401ea70                A_Light0
-                0x0401ea80                A_Light1
-                0x0401ea90                A_Light2
-                0x0401eaa0                A_BFGSpray
-                0x0401eb50                A_BFGsound
-                0x0401eb70                P_SetupPsprites
-                0x0401eba0                P_MovePsprites
- *fill*         0x0401ec47       0x19 
- .text          0x0401ec60     0x4a1d doomgeneric/doomgeneric/p_saveg.o
-                0x0401ef60                P_TempSaveGameFile
-                0x0401ef90                P_SaveGameFile
-                0x0401f010                P_WriteSaveGameHeader
-                0x0401f110                P_ReadSaveGameHeader
-                0x0401f210                P_ReadSaveGameEOF
-                0x0401f270                P_WriteSaveGameEOF
-                0x0401f2d0                P_ArchivePlayers
-                0x0401fb60                P_UnArchivePlayers
-                0x040204b0                P_ArchiveWorld
-                0x040206c0                P_UnArchiveWorld
-                0x040208f0                P_ArchiveThinkers
-                0x040210e0                P_UnArchiveThinkers
-                0x040219e0                P_ArchiveSpecials
-                0x04022530                P_UnArchiveSpecials
- *fill*         0x0402367d        0x3 
- .text          0x04023680      0xf9e doomgeneric/doomgeneric/p_setup.o
-                0x04023680                P_LoadVertexes
-                0x04023710                GetSectorAtNullAddress
-                0x04023770                P_LoadSegs
-                0x04023920                P_LoadSubsectors
-                0x040239d0                P_LoadSectors
-                0x04023ac0                P_LoadNodes
-                0x04023ba0                P_LoadThings
-                0x04023c50                P_LoadLineDefs
-                0x04023e40                P_LoadSideDefs
-                0x04023f40                P_LoadBlockMap
-                0x04023fd0                P_GroupLines
-                0x04024290                P_SetupLevel
-                0x04024600                P_Init
- *fill*         0x0402461e        0x2 
- .text          0x04024620      0x4ed doomgeneric/doomgeneric/p_sight.o
-                0x04024620                P_DivlineSide
-                0x040246b0                P_InterceptVector2
-                0x04024740                P_CrossSubsector
-                0x04024970                P_CrossBSPNode
-                0x04024a30                P_CheckSight
- *fill*         0x04024b0d       0x33 
- .text          0x04024b40     0x143c doomgeneric/doomgeneric/p_spec.o
-                0x04024b40                P_InitPicAnims
-                0x04024c50                getSide
-                0x04024c80                getSector
-                0x04024cb0                twoSided
-                0x04024cd0                getNextSector
-                0x04024d00                P_FindLowestFloorSurrounding
-                0x04024d60                P_FindHighestFloorSurrounding
-                0x04024dc0                P_FindNextHighestFloor
-                0x04024ef0                P_FindLowestCeilingSurrounding
-                0x04024f50                P_FindHighestCeilingSurrounding
-                0x04024fb0                P_FindSectorFromLineTag
-                0x04025010                P_FindMinSurroundingLight
-                0x04025070                P_CrossSpecialLine
-                0x040255c0                P_ShootSpecialLine
-                0x04025650                P_PlayerInSpecialSector
-                0x04025790                P_UpdateSpecials
-                0x04025980                EV_DoDonut
-                0x04025c10                P_SpawnSpecials
- *fill*         0x04025f7c        0x4 
- .text          0x04025f80      0x75c doomgeneric/doomgeneric/p_switch.o
-                0x04025f80                P_InitSwitchList
-                0x04026030                P_StartButton
-                0x040260c0                P_ChangeSwitchTexture
-                0x04026270                P_UseSpecialLine
- *fill*         0x040266dc        0x4 
- .text          0x040266e0      0x1aa doomgeneric/doomgeneric/p_telept.o
-                0x040266e0                EV_Teleport
- *fill*         0x0402688a       0x16 
- .text          0x040268a0      0x14e doomgeneric/doomgeneric/p_tick.o
-                0x040268a0                P_InitThinkers
-                0x040268c0                P_AddThinker
-                0x040268e0                P_RemoveThinker
-                0x040268f0                P_AllocateThinker
-                0x04026900                P_RunThinkers
-                0x04026960                P_Ticker
- *fill*         0x040269ee        0x2 
- .text          0x040269f0      0x653 doomgeneric/doomgeneric/p_user.o
-                0x040269f0                P_Thrust
-                0x04026a40                P_CalcHeight
-                0x04026b60                P_MovePlayer
-                0x04026c50                P_DeathThink
-                0x04026d50                P_PlayerThink
- *fill*         0x04027043       0x1d 
- .text          0x04027060      0x6c7 doomgeneric/doomgeneric/r_bsp.o
-                0x04027060                R_ClearDrawSegs
-                0x04027070                R_ClipSolidWallSegment
-                0x040271c0                R_ClipPassWallSegment
-                0x04027280                R_ClearClipSegs
-                0x040272c0                R_AddLine
-                0x04027410                R_CheckBBox
-                0x04027570                R_Subsector
-                0x04027690                R_RenderBSPNode
- *fill*         0x04027727       0x19 
- .text          0x04027740     0x119a doomgeneric/doomgeneric/r_data.o
-                0x040277b0                R_DrawColumnInCache
-                0x04027830                R_GenerateComposite
-                0x04027980                R_GenerateLookup
-                0x04027b90                R_GetColumn
-                0x04027c30                R_InitTextures
-                0x04028270                R_InitFlats
-                0x04028300                R_InitSpriteLumps
-                0x04028410                R_InitColormaps
-                0x04028430                R_InitData
-                0x04028490                R_FlatNumForName
-                0x04028500                R_CheckTextureNumForName
-                0x04028520                R_TextureNumForName
-                0x04028560                R_PrecacheLevel
- *fill*         0x040288da       0x26 
- .text          0x04028900      0xdd1 doomgeneric/doomgeneric/r_draw.o
-                0x04028900                R_DrawColumn
-                0x04028a00                R_DrawColumnLow
-                0x04028b10                R_DrawFuzzColumn
-                0x04028c00                R_DrawFuzzColumnLow
-                0x04028d20                R_DrawTranslatedColumn
-                0x04028e00                R_DrawTranslatedColumnLow
-                0x04028f00                R_InitTranslationTables
-                0x04028fb0                R_DrawSpan
-                0x040290d0                R_DrawSpanLow
-                0x040291f0                R_InitBuffer
-                0x040292b0                R_FillBackScreen
-                0x040295a0                R_VideoErase
-                0x040295d0                R_DrawViewBorder
- *fill*         0x040296d1       0x2f 
- .text          0x04029700      0xbd3 doomgeneric/doomgeneric/r_main.o
-                0x04029700                R_AddPointToBox
-                0x04029730                R_PointOnSide
-                0x040297f0                R_PointOnSegSide
-                0x040298c0                R_PointToAngle
-                0x04029a20                R_PointToAngle2
-                0x04029a50                R_PointToDist
-                0x04029ad0                R_InitPointToAngle
-                0x04029ae0                R_ScaleFromGlobalAngle
-                0x04029b80                R_InitTables
-                0x04029b90                R_InitTextureMapping
-                0x04029cf0                R_InitLightTables
-                0x04029d70                R_SetViewSize
-                0x04029d90                R_ExecuteSetViewSize
-                0x0402a0a0                R_Init
-                0x0402a140                R_PointInSubsector
-                0x0402a1a0                R_SetupFrame
-                0x0402a280                R_RenderPlayerView
- *fill*         0x0402a2d3       0x2d 
- .text          0x0402a300      0x77f doomgeneric/doomgeneric/r_plane.o
-                0x0402a300                R_InitPlanes
-                0x0402a310                R_MapPlane
-                0x0402a4d0                R_ClearPlanes
-                0x0402a590                R_FindPlane
-                0x0402a650                R_CheckPlane
-                0x0402a710                R_MakeSpans
-                0x0402a820                R_DrawPlanes
- *fill*         0x0402aa7f        0x1 
- .text          0x0402aa80     0x1050 doomgeneric/doomgeneric/r_segs.o
-                0x0402aa80                R_RenderMaskedSegRange
-                0x0402ace0                R_RenderSegLoop
-                0x0402b060                R_StoreWallRange
- .text          0x0402bad0        0xb doomgeneric/doomgeneric/r_sky.o
-                0x0402bad0                R_InitSkyMap
- *fill*         0x0402badb       0x25 
- .text          0x0402bb00     0x1251 doomgeneric/doomgeneric/r_things.o
-                0x0402bb00                R_InstallSpriteLump
-                0x0402bcd0                R_InitSpriteDefs
-                0x0402bfa0                R_InitSprites
-                0x0402bff0                R_ClearSprites
-                0x0402c000                R_NewVisSprite
-                0x0402c030                R_DrawMaskedColumn
-                0x0402c100                R_DrawVisSprite
-                0x0402c240                R_ProjectSprite
-                0x0402c540                R_AddSprites
-                0x0402c5b0                R_DrawPSprite
-                0x0402c7d0                R_DrawPlayerSprites
-                0x0402c870                R_SortVisSprites
-                0x0402c950                R_DrawSprite
-                0x0402ccb0                R_DrawMasked
- *fill*         0x0402cd51        0xf 
- .text          0x0402cd60      0xa02 doomgeneric/doomgeneric/s_sound.o
-                0x0402cd60                S_Shutdown
-                0x0402cee0                S_Init
-                0x0402d000                S_StopSound
-                0x0402d050                S_StartSound
-                0x0402d350                S_PauseSound
-                0x0402d380                S_ResumeSound
-                0x0402d3b0                S_UpdateSounds
-                0x0402d480                S_SetMusicVolume
-                0x0402d4d0                S_SetSfxVolume
-                0x0402d510                S_MusicPlaying
-                0x0402d520                S_StopMusic
-                0x0402d590                S_ChangeMusic
-                0x0402d670                S_Start
-                0x0402d750                S_StartMusic
- *fill*         0x0402d762       0x1e 
- .text          0x0402d780     0x1484 doomgeneric/doomgeneric/sha1.o
-                0x0402e880                SHA1_Init
-                0x0402e8c0                SHA1_Update
-                0x0402ea00                SHA1_Final
-                0x0402ebb0                SHA1_UpdateInt32
-                0x0402ebe0                SHA1_UpdateString
- .text          0x0402ec04        0x0 doomgeneric/doomgeneric/sounds.o
- *fill*         0x0402ec04        0xc 
- .text          0x0402ec10      0x4ea doomgeneric/doomgeneric/st_lib.o
-                0x0402ec10                STlib_init
-                0x0402ec30                STlib_initNum
-                0x0402ec70                STlib_drawNum
-                0x0402ee00                STlib_updateNum
-                0x0402ee20                STlib_initPercent
-                0x0402ee60                STlib_updatePercent
-                0x0402eec0                STlib_initMultIcon
-                0x0402eef0                STlib_updateMultIcon
-                0x0402efe0                STlib_initBinIcon
-                0x0402f010                STlib_updateBinIcon
- *fill*         0x0402f0fa        0x6 
- .text          0x0402f100     0x17e6 doomgeneric/doomgeneric/st_stuff.o
-                0x0402f3d0                ST_refreshBackground
-                0x0402f3f0                ST_Responder
-                0x0402fa10                ST_calcPainOffset
-                0x0402fa70                ST_updateFaceWidget
-                0x0402ffa0                ST_updateWidgets
-                0x04030070                ST_Ticker
-                0x040300a0                ST_doPaletteStuff
-                0x04030190                ST_drawWidgets
-                0x040302b0                ST_doRefresh
-                0x040302f0                ST_diffDraw
-                0x04030300                ST_Drawer
-                0x040303b0                ST_loadGraphics
-                0x040303c0                ST_loadData
-                0x040303e0                ST_unloadGraphics
-                0x040303f0                ST_unloadData
-                0x04030400                ST_initData
-                0x040304a0                ST_createWidgets
-                0x04030820                ST_Start
-                0x04030870                ST_Stop
-                0x040308b0                ST_Init
- *fill*         0x040308e6        0xa 
- .text          0x040308f0       0x61 doomgeneric/doomgeneric/statdump.o
-                0x040308f0                StatCopy
-                0x04030950                StatDump
- *fill*         0x04030951        0xf 
- .text          0x04030960       0x2c doomgeneric/doomgeneric/tables.o
-                0x04030960                SlopeDiv
- *fill*         0x0403098c       0x34 
- .text          0x040309c0     0x1238 doomgeneric/doomgeneric/v_video.o
-                0x040309c0                V_MarkRect
-                0x04030a40                V_CopyRect
-                0x04030b70                V_SetPatchClipCallback
-                0x04030b80                V_DrawPatch
-                0x04030d20                V_DrawPatchFlipped
-                0x04030eb0                V_DrawPatchDirect
-                0x04030ec0                V_DrawTLPatch
-                0x04030fe0                V_DrawXlaPatch
-                0x040310e0                V_DrawAltTLPatch
-                0x04031220                V_DrawShadowedPatch
-                0x040313b0                V_LoadTintTable
-                0x040313d0                V_LoadXlaTable
-                0x040313f0                V_DrawBlock
-                0x040314d0                V_DrawFilledBox
-                0x04031560                V_DrawHorizLine
-                0x040315b0                V_DrawVertLine
-                0x040315f0                V_DrawBox
-                0x040316d0                V_DrawRawScreen
-                0x040316f0                V_Init
-                0x04031700                V_UseBuffer
-                0x04031710                V_RestoreBuffer
-                0x04031720                WritePCXfile
-                0x04031860                V_ScreenShot
-                0x040318f0                V_DrawMouseSpeedBox
- *fill*         0x04031bf8        0x8 
- .text          0x04031c00      0x12f doomgeneric/doomgeneric/w_checksum.o
-                0x04031c00                W_Checksum
- *fill*         0x04031d2f        0x1 
- .text          0x04031d30       0x3d doomgeneric/doomgeneric/w_file.o
-                0x04031d30                W_OpenFile
-                0x04031d50                W_CloseFile
-                0x04031d60                W_Read
- *fill*         0x04031d6d        0x3 
- .text          0x04031d70       0x7d doomgeneric/doomgeneric/w_main.o
-                0x04031d70                W_ParseCommandLine
- *fill*         0x04031ded        0x3 
- .text          0x04031df0      0x88f doomgeneric/doomgeneric/w_wad.o
-                0x04031df0                W_LumpNameHash
-                0x04031e30                W_AddFile
-                0x040320f0                W_NumLumps
-                0x04032100                W_CheckNumForName
-                0x04032200                W_GetNumForName
-                0x04032240                W_LumpLength
-                0x04032280                W_ReadLump
-                0x04032300                W_CacheLumpNum
-                0x04032400                W_CacheLumpName
-                0x04032450                W_ReleaseLumpNum
-                0x040324c0                W_ReleaseLumpName
-                0x04032510                W_GenerateHashTable
-                0x04032600                W_CheckCorrectIWAD
- *fill*         0x0403267f        0x1 
- .text          0x04032680     0x2554 doomgeneric/doomgeneric/wi_stuff.o
-                0x04032c70                WI_slamBackground
-                0x04032c90                WI_Responder
-                0x04032ca0                WI_drawLF
-                0x04032db0                WI_drawEL
-                0x04032e20                WI_drawOnLnode
-                0x04032f00                WI_initAnimatedBack
-                0x04032f30                WI_updateAnimatedBack
-                0x04032f60                WI_drawAnimatedBack
-                0x04032fe0                WI_drawNum
-                0x04033150                WI_drawPercent
-                0x04033190                WI_drawTime
-                0x04033290                WI_End
-                0x040332a0                WI_initNoState
-                0x040332c0                WI_updateNoState
-                0x04033300                WI_initShowNextLoc
-                0x04033350                WI_updateShowNextLoc
-                0x040333d0                WI_drawShowNextLoc
-                0x040334c0                WI_drawNoState
-                0x040334d0                WI_fragSum
-                0x04033510                WI_initDeathmatchStats
-                0x040335b0                WI_updateDeathmatchStats
-                0x04033840                WI_drawDeathmatchStats
-                0x04033a50                WI_initNetgameStats
-                0x04033b10                WI_updateNetgameStats
-                0x04033f30                WI_drawNetgameStats
-                0x04034220                WI_initStats
-                0x040342a0                WI_updateStats
-                0x04034660                WI_drawStats
-                0x040347f0                WI_checkForAccelerate
-                0x040348c0                WI_Ticker
-                0x040349a0                WI_loadData
-                0x04034a20                WI_unloadData
-                0x04034a30                WI_Drawer
-                0x04034a90                WI_initVariables
-                0x04034b10                WI_Start
- *fill*         0x04034bd4        0xc 
- .text          0x04034be0      0x698 doomgeneric/doomgeneric/z_zone.o
-                0x04034be0                Z_ClearZone
-                0x04034c20                Z_Init
-                0x04034c70                Z_Free
-                0x04034d30                Z_Malloc
-                0x04034ea0                Z_FreeTags
-                0x04034f20                Z_DumpHeap
-                0x04035010                Z_FileDumpHeap
-                0x040350e0                Z_CheckHeap
-                0x04035180                Z_ChangeTag2
-                0x040351f0                Z_ChangeUser
-                0x04035230                Z_FreeMemory
-                0x04035270                Z_ZoneSize
- *fill*         0x04035278        0x8 
- .text          0x04035280      0x13c ../libc/builtins.o
-                0x04035280                __errno_location
-                0x04035290                __divdi3
-                0x040353a0                __isoc23_sscanf
- *fill*         0x040353bc        0x4 
- .text          0x040353c0      0x166 ../libc/ctype.o
-                0x040353c0                isspace
-                0x040353e0                isdigit
-                0x04035400                isupper
-                0x04035420                islower
-                0x04035440                isalpha
-                0x04035460                isalnum
-                0x04035490                isprint
-                0x040354b0                ispunct
-                0x040354e0                toupper
-                0x04035500                tolower
-                0x04035520                __ctype_b_loc
- *fill*         0x04035526        0xa 
- .text          0x04035530      0x1f9 ../libc/math.o
-                0x04035530                fabs
-                0x04035550                sqrt
-                0x04035560                floor
-                0x040355a0                ceil
-                0x040355e0                sin
-                0x040355f0                cos
-                0x04035600                tan
-                0x04035610                atan2
-                0x04035620                pow
- *fill*         0x04035729        0x7 
- .text          0x04035730      0x1e2 ../libc/posix.o
-                0x04035730                usleep
-                0x04035760                sleep
-                0x04035790                read
-                0x040357a0                write
-                0x040357b0                close
-                0x040357c0                isatty
-                0x040357d0                getpid
-                0x040357e0                unlink
-                0x040357f0                mkdir
-                0x04035800                rmdir
-                0x04035810                getcwd
-                0x04035830                gettimeofday
-                0x04035870                mmap
-                0x04035880                munmap
-                0x04035890                ioctl
-                0x040358a0                tcgetattr
-                0x040358b0                tcsetattr
-                0x040358c0                __libc_assert_fail
-                0x040358f0                time
- *fill*         0x04035912        0xe 
- .text          0x04035920      0xd26 ../libc/stdio.o
-                0x04035f60                vsnprintf
-                0x04035fb0                snprintf
-                0x04036000                sprintf
-                0x04036050                vfprintf
-                0x04036090                printf
-                0x040360d0                fprintf
-                0x04036110                puts
-                0x04036160                putchar
-                0x04036190                vsscanf
-                0x040363e0                sscanf
-                0x04036400                fopen
-                0x040364c0                fclose
-                0x04036500                fread
-                0x04036580                fwrite
-                0x04036590                fseek
-                0x04036600                ftell
-                0x04036620                fflush
-                0x04036630                remove
-                0x04036640                rename
- *fill*         0x04036646       0x3a 
- .text          0x04036680      0x406 ../libc/stdlib.o
-                0x04036680                libc_init_heap
-                0x040366c0                malloc
-                0x04036740                free
-                0x040367b0                calloc
-                0x040367f0                realloc
-                0x04036870                atoi
-                0x04036910                atof
-                0x04036a40                abs
-                0x04036a50                exit
-                0x04036a80                system
- *fill*         0x04036a86       0x3a 
- .text          0x04036ac0      0x5f7 ../libc/string.o
-                0x04036ac0                memcpy
-                0x04036b00                memmove
-                0x04036b70                memset
-                0x04036bc0                memcmp
-                0x04036c10                strlen
-                0x04036c40                strcpy
-                0x04036c70                strncpy
-                0x04036cf0                strcat
-                0x04036d40                strcmp
-                0x04036da0                strncmp
-                0x04036df0                strcasecmp
-                0x04036eb0                strncasecmp
-                0x04036f50                strchr
-                0x04036f90                strrchr
-                0x04036fd0                strstr
-                0x04037050                strdup
- *fill*         0x040370b7        0x9 
- .text          0x040370c0      0x227 doomgeneric_mysticos.o
-                0x040370c0                DG_Init
-                0x04037110                DG_DrawFrame
-                0x04037230                DG_SleepMs
-                0x04037250                DG_GetTicksMs
-                0x04037260                DG_GetKey
-                0x040372a0                DG_SetWindowTitle
-                0x040372b0                _start
- *fill*         0x040372e7        0x9 
- .text          0x040372f0       0xc4 w_file_mysticos.o
-                0x040372f0                W_StdC_Read
+                0x04004a00                D_PageTicker
+                0x04004a20                D_PageDrawer
+                0x04004a50                D_AdvanceDemo
+                0x04004a60                D_DoAdvanceDemo
+                0x04004c90                D_StartTitle
+                0x04004cb0                D_IdentifyVersion
+                0x04004e90                D_SetGameDescription
+                0x04004f80                PrintDehackedBanners
+                0x04004f90                PrintGameVersion
+                0x04004fe0                D_DoomMain
+ *fill*         0x04005cd8        0x8 
+ .text          0x04005ce0      0x1e6 doomgeneric/doomgeneric/d_mode.o
+                0x04005ce0                D_ValidGameMode
+                0x04005d20                D_ValidEpisodeMap
+                0x04005df0                D_GetNumEpisodes
+                0x04005e30                D_ValidGameVersion
+                0x04005e90                D_IsEpisodeMap
+                0x04005eb0                D_GameMissionString
+ *fill*         0x04005ec6        0xa 
+ .text          0x04005ed0      0x483 doomgeneric/doomgeneric/d_net.o
+                0x04005fd0                D_ConnectNetGame
+                0x040060d0                D_CheckNetGame
+ .text          0x04006353        0x0 doomgeneric/doomgeneric/doomdef.o
+ *fill*         0x04006353        0xd 
+ .text          0x04006360       0xb2 doomgeneric/doomgeneric/doomgeneric.o
+                0x04006360                doomgeneric_Create
+ .text          0x04006412        0x0 doomgeneric/doomgeneric/doomstat.o
+ .text          0x04006412        0x0 doomgeneric/doomgeneric/dstrings.o
+ *fill*         0x04006412        0xe 
+ .text          0x04006420        0x1 doomgeneric/doomgeneric/dummy.o
+                0x04006420                I_InitTimidityConfig
+ *fill*         0x04006421       0x1f 
+ .text          0x04006440      0xe57 doomgeneric/doomgeneric/f_finale.o
+                0x040068c0                F_StartFinale
+                0x04006a80                F_Responder
+                0x04006b10                F_TextWrite
+                0x04006c40                F_StartCast
+                0x04006cc0                F_Ticker
+                0x04006de0                F_CastTicker
+                0x04006e10                F_CastResponder
+                0x04006e90                F_CastPrint
+                0x04006f50                F_CastDrawer
+                0x04007000                F_DrawPatchCol
+                0x04007090                F_BunnyScroll
+                0x04007200                F_Drawer
+ *fill*         0x04007297        0x9 
+ .text          0x040072a0      0x573 doomgeneric/doomgeneric/f_wipe.o
+                0x040072a0                wipe_doColorXForm
+                0x04007330                wipe_exitColorXForm
+                0x04007340                wipe_doMelt
+                0x04007500                wipe_initColorXForm
+                0x04007530                wipe_exitMelt
+                0x04007560                wipe_shittyColMajorXform
+                0x04007620                wipe_initMelt
+                0x04007710                wipe_StartScreen
+                0x04007740                wipe_EndScreen
+                0x04007780                wipe_ScreenWipe
+ *fill*         0x04007813       0x2d 
+ .text          0x04007840     0x2f0a doomgeneric/doomgeneric/g_game.o
+                0x04007840                G_CmdChecksum
+                0x04007850                G_BuildTiccmd
+                0x040080f0                G_DoLoadLevel
+                0x040082c0                G_Responder
+                0x04008770                G_PlayerFinishLevel
+                0x040087e0                G_PlayerReborn
+                0x04008900                G_InitPlayer
+                0x04008910                G_CheckSpot
+                0x04008bf0                G_DeathMatchSpawnPlayer
+                0x04008ca0                G_DoReborn
+                0x04008d90                G_ScreenShot
+                0x04008da0                G_ExitLevel
+                0x04008dc0                G_SecretExitLevel
+                0x04008e00                G_DoCompleted
+                0x04009240                G_WorldDone
+                0x040092b0                G_DoWorldDone
+                0x040092f0                G_LoadGame
+                0x04009320                G_SaveGame
+                0x04009350                G_DoSaveGame
+                0x04009550                G_DeferedInitNew
+                0x04009580                G_InitNew
+                0x04009850                G_DoLoadGame
+                0x04009940                G_DoNewGame
+                0x040099e0                G_RecordDemo
+                0x04009a90                G_VanillaVersionCode
+                0x04009af0                G_BeginRecording
+                0x04009c70                G_DeferedPlayDemo
+                0x04009c90                G_DoPlayDemo
+                0x04009f60                G_TimeDemo
+                0x04009fa0                G_CheckDemoStatus
+                0x0400a140                G_ReadDemoTiccmd
+                0x0400a1d0                G_WriteDemoTiccmd
+                0x0400a320                G_Ticker
+ *fill*         0x0400a74a       0x16 
+ .text          0x0400a760      0x3e7 doomgeneric/doomgeneric/gusconf.o
+                0x0400a760                GUS_WriteConfig
+ *fill*         0x0400ab47       0x39 
+ .text          0x0400ab80      0x775 doomgeneric/doomgeneric/hu_lib.o
+                0x0400ab80                HUlib_init
+                0x0400ab90                HUlib_clearTextLine
+                0x0400abb0                HUlib_initTextLine
+                0x0400abf0                HUlib_addCharToTextLine
+                0x0400ac30                HUlib_delCharFromTextLine
+                0x0400ac60                HUlib_drawTextLine
+                0x0400ad40                HUlib_eraseTextLine
+                0x0400ae10                HUlib_initSText
+                0x0400aea0                HUlib_addLineToSText
+                0x0400af00                HUlib_addMessageToSText
+                0x0400aff0                HUlib_drawSText
+                0x0400b060                HUlib_eraseSText
+                0x0400b0c0                HUlib_initIText
+                0x0400b110                HUlib_delCharFromIText
+                0x0400b140                HUlib_eraseLineFromIText
+                0x0400b190                HUlib_resetIText
+                0x0400b1b0                HUlib_addPrefixToIText
+                0x0400b200                HUlib_keyInIText
+                0x0400b290                HUlib_drawIText
+                0x0400b2c0                HUlib_eraseIText
+ *fill*         0x0400b2f5        0xb 
+ .text          0x0400b300      0x9dc doomgeneric/doomgeneric/hu_stuff.o
+                0x0400b300                HU_Init
+                0x0400b350                HU_Stop
+                0x0400b360                HU_Start
+                0x0400b550                HU_Drawer
+                0x0400b5a0                HU_Erase
+                0x0400b5d0                HU_Ticker
+                0x0400b810                HU_queueChatChar
+                0x0400b850                HU_dequeueChatChar
+                0x0400b880                HU_Responder
+ *fill*         0x0400bcdc        0x4 
+ .text          0x0400bce0        0x1 doomgeneric/doomgeneric/i_endoom.o
+                0x0400bce0                I_Endoom
+ *fill*         0x0400bce1        0xf 
+ .text          0x0400bcf0      0x1b1 doomgeneric/doomgeneric/i_input.o
+                0x0400bcf0                I_GetEvent
+                0x0400bea0                I_InitInput
+ *fill*         0x0400bea1        0xf 
+ .text          0x0400beb0       0xff doomgeneric/doomgeneric/i_joystick.o
+                0x0400beb0                I_ShutdownJoystick
+                0x0400bec0                I_InitJoystick
+                0x0400bed0                I_UpdateJoystick
+                0x0400bee0                I_BindJoystickVariables
+ *fill*         0x0400bfaf       0x11 
+ .text          0x0400bfc0     0x267e doomgeneric/doomgeneric/i_scale.o
+                0x0400e590                I_InitScale
+                0x0400e5b0                I_ResetScaleTables
+ *fill*         0x0400e63e        0x2 
+ .text          0x0400e640      0x33f doomgeneric/doomgeneric/i_sound.o
+                0x0400e640                I_InitSound
+                0x0400e6a0                I_ShutdownSound
+                0x0400e6c0                I_GetSfxLumpNum
+                0x0400e6e0                I_UpdateSound
+                0x0400e700                I_UpdateSoundParams
+                0x0400e760                I_StartSound
+                0x0400e7d0                I_StopSound
+                0x0400e7f0                I_SoundIsPlaying
+                0x0400e810                I_PrecacheSounds
+                0x0400e830                I_InitMusic
+                0x0400e840                I_ShutdownMusic
+                0x0400e850                I_SetMusicVolume
+                0x0400e860                I_PauseSong
+                0x0400e870                I_ResumeSong
+                0x0400e880                I_RegisterSong
+                0x0400e890                I_UnRegisterSong
+                0x0400e8a0                I_PlaySong
+                0x0400e8b0                I_StopSong
+                0x0400e8c0                I_MusicIsPlaying
+                0x0400e8d0                I_BindSoundVariables
+ *fill*         0x0400e97f        0x1 
+ .text          0x0400e980      0x5ff doomgeneric/doomgeneric/i_system.o
+                0x0400e980                I_AtExit
+                0x0400e9b0                I_Tactile
+                0x0400e9c0                I_PrintBanner
+                0x0400ea10                I_PrintDivider
+                0x0400ea50                I_PrintStartupBanner
+                0x0400eb30                I_ConsoleStdout
+                0x0400eb40                I_Quit
+                0x0400eb60                I_Error
+                0x0400ed20                I_ZoneBase
+                0x0400edb0                I_GetMemoryValue
+ *fill*         0x0400ef7f        0x1 
+ .text          0x0400ef80       0xa1 doomgeneric/doomgeneric/i_timer.o
+                0x0400ef80                I_GetTicks
+                0x0400ef90                I_GetTime
+                0x0400efd0                I_GetTimeMS
+                0x0400f000                I_Sleep
+                0x0400f010                I_WaitVBL
+                0x0400f020                I_InitTimer
+ *fill*         0x0400f021       0x1f 
+ .text          0x0400f040      0x6f1 doomgeneric/doomgeneric/i_video.o
+                0x0400f040                cmap_to_rgb565
+                0x0400f0c0                cmap_to_fb
+                0x0400f1e0                I_InitGraphics
+                0x0400f490                I_ShutdownGraphics
+                0x0400f4b0                I_StartFrame
+                0x0400f4c0                I_StartTic
+                0x0400f4d0                I_UpdateNoBlit
+                0x0400f4e0                I_FinishUpdate
+                0x0400f5a0                I_ReadScreen
+                0x0400f5c0                I_SetPalette
+                0x0400f630                I_GetPaletteIndex
+                0x0400f6b0                I_BeginRead
+                0x0400f6c0                I_EndRead
+                0x0400f6d0                I_SetWindowTitle
+                0x0400f6e0                I_GraphicsCheckCommandLine
+                0x0400f6f0                I_SetGrabMouseCallback
+                0x0400f700                I_EnableLoadingDisk
+                0x0400f710                I_BindVideoVariables
+                0x0400f720                I_DisplayFPSDots
+                0x0400f730                I_CheckIsScreensaver
+ .text          0x0400f731        0x0 doomgeneric/doomgeneric/icon.o
+ .text          0x0400f731        0x0 doomgeneric/doomgeneric/info.o
+ *fill*         0x0400f731        0xf 
+ .text          0x0400f740      0x165 doomgeneric/doomgeneric/m_argv.o
+                0x0400f740                M_CheckParmWithArgs
+                0x0400f7a0                M_ParmExists
+                0x0400f800                M_CheckParm
+                0x0400f860                M_FindResponseFile
+                0x0400f870                M_GetExecutableName
+ *fill*         0x0400f8a5        0xb 
+ .text          0x0400f8b0       0x54 doomgeneric/doomgeneric/m_bbox.o
+                0x0400f8b0                M_ClearBox
+                0x0400f8d0                M_AddToBox
+ *fill*         0x0400f904        0xc 
+ .text          0x0400f910       0xdb doomgeneric/doomgeneric/m_cheat.o
+                0x0400f910                cht_CheckCheat
+                0x0400f9d0                cht_GetParam
+ *fill*         0x0400f9eb        0x5 
+ .text          0x0400f9f0      0x535 doomgeneric/doomgeneric/m_config.o
+                0x0400faa0                M_SetConfigFilenames
+                0x0400fac0                M_SaveDefaults
+                0x0400fad0                M_SaveDefaultsAlternate
+                0x0400fae0                M_LoadDefaults
+                0x0400fbc0                M_BindVariable
+                0x0400fbe0                M_SetVariable
+                0x0400fd90                M_GetIntVariable
+                0x0400fdc0                M_GetStrVariable
+                0x0400fe00                M_GetFloatVariable
+                0x0400fe40                M_SetConfigDir
+                0x0400fec0                M_GetSaveGameDir
+ *fill*         0x0400ff25        0xb 
+ .text          0x0400ff30      0x881 doomgeneric/doomgeneric/m_controls.o
+                0x0400ff30                M_BindBaseControls
+                0x04010100                M_BindHereticControls
+                0x040101a0                M_BindHexenControls
+                0x04010260                M_BindStrifeControls
+                0x040103c0                M_BindWeaponControls
+                0x040104c0                M_BindMapControls
+                0x040105a0                M_BindMenuControls
+                0x04010750                M_BindChatControls
+                0x040107b0                M_ApplyPlatformDefaults
+ *fill*         0x040107b1        0xf 
+ .text          0x040107c0       0x82 doomgeneric/doomgeneric/m_fixed.o
+                0x040107c0                FixedMul
+                0x040107e0                FixedDiv
+ *fill*         0x04010842       0x3e 
+ .text          0x04010880     0x2471 doomgeneric/doomgeneric/m_menu.o
+                0x04010880                M_Sound
+                0x040108a0                M_Options
+                0x040108c0                M_ChangeMessages
+                0x04010900                M_ReadThis
+                0x04010920                M_FinishReadThis
+                0x04010940                M_DrawReadThis2
+                0x04010970                M_DrawMainMenu
+                0x04010990                M_DrawNewGame
+                0x040109d0                M_DrawEpisode
+                0x040109f0                M_LoadSelect
+                0x04010a30                M_SaveSelect
+                0x04010a90                M_QuitDOOM
+                0x04010b20                M_DrawReadThis1
+                0x04010c00                M_SfxVol
+                0x04010c60                M_MusicVol
+                0x04010cc0                M_SizeDisplay
+                0x04010d30                M_ChangeSensitivity
+                0x04010de0                M_QuitResponse
+                0x04010e00                M_ChangeDetail
+                0x04010e50                M_EndGame
+                0x04010ef0                M_VerifyNightmare
+                0x04010f30                M_ChooseSkill
+                0x04010fa0                M_EndGameResponse
+                0x04010fd0                M_NewGame
+                0x04011070                M_Episode
+                0x04011130                M_ReadThis2
+                0x04011180                M_QuickLoadResponse
+                0x040111f0                M_QuickSaveResponse
+                0x04011260                M_ReadSaveStrings
+                0x04011300                M_LoadGame
+                0x04011370                M_SaveGame
+                0x040113f0                M_DrawSaveLoadBorder
+                0x04011480                M_DoSave
+                0x040114c0                M_QuickSave
+                0x040115c0                M_QuickLoad
+                0x04011670                M_DrawThermo
+                0x04011750                M_DrawSound
+                0x040117c0                M_DrawOptions
+                0x04011890                M_DrawEmptyCell
+                0x040118d0                M_DrawSelCell
+                0x04011910                M_StartMessage
+                0x04011950                M_StopMessage
+                0x04011970                M_StringWidth
+                0x040119d0                M_StringHeight
+                0x04011a20                M_WriteText
+                0x04011ab0                M_DrawLoad
+                0x04011b30                M_DrawSave
+                0x04011c10                M_Responder
+                0x04012900                M_StartControlPanel
+                0x04012930                M_Drawer
+                0x04012bb0                M_ClearMenus
+                0x04012bc0                M_SetupNextMenu
+                0x04012be0                M_Ticker
+                0x04012c20                M_Init
+ *fill*         0x04012cf1        0xf 
+ .text          0x04012d00      0x86e doomgeneric/doomgeneric/m_misc.o
+                0x04012d00                M_MakeDirectory
+                0x04012d20                M_FileExists
+                0x04012d70                M_FileLength
+                0x04012db0                M_WriteFile
+                0x04012e00                M_ReadFile
+                0x04012ee0                M_StrToInt
+                0x04012f70                M_ExtractFileBase
+                0x04013010                M_ForceUppercase
+                0x04013040                M_StrCaseStr
+                0x040130a0                M_StringDuplicate
+                0x040130f0                M_StringReplace
+                0x04013220                M_StringCopy
+                0x04013270                M_StringConcat
+                0x040132d0                M_StringStartsWith
+                0x04013330                M_StringEndsWith
+                0x040133a0                M_StringJoin
+                0x040134b0                M_TempFile
+                0x040134d0                M_vsnprintf
+                0x04013520                M_snprintf
+ *fill*         0x0401356e        0x2 
+ .text          0x04013570       0x55 doomgeneric/doomgeneric/m_random.o
+                0x04013570                P_Random
+                0x04013590                M_Random
+                0x040135b0                M_ClearRandom
+ *fill*         0x040135c5        0xb 
+ .text          0x040135d0      0x296 doomgeneric/doomgeneric/memio.o
+                0x040135d0                mem_fopen_read
+                0x04013600                mem_fread
+                0x04013680                mem_fopen_write
+                0x040136d0                mem_fwrite
+                0x04013780                mem_get_buf
+                0x040137a0                mem_fclose
+                0x040137f0                mem_ftell
+                0x04013800                mem_fseek
+ *fill*         0x04013866       0x1a 
+ .text          0x04013880      0x82a doomgeneric/doomgeneric/mus2mid.o
+                0x040139d0                mus2mid
+ *fill*         0x040140aa       0x16 
+ .text          0x040140c0      0x546 doomgeneric/doomgeneric/p_ceilng.o
+                0x040140c0                T_MoveCeiling
+                0x04014300                P_AddActiveCeiling
+                0x04014350                P_RemoveActiveCeiling
+                0x040143a0                P_ActivateInStasisCeiling
+                0x04014400                EV_DoCeiling
+                0x040145a0                EV_CeilingCrushStop
+ *fill*         0x04014606        0xa 
+ .text          0x04014610      0xcaa doomgeneric/doomgeneric/p_doors.o
+                0x04014610                T_VerticalDoor
+                0x040147e0                EV_DoDoor
+                0x04014e10                EV_DoLockedDoor
+                0x04014ee0                EV_VerticalDoor
+                0x040151f0                P_SpawnDoorCloseIn30
+                0x04015250                P_SpawnDoorRaiseIn5Mins
+ *fill*         0x040152ba        0x6 
+ .text          0x040152c0     0x264f doomgeneric/doomgeneric/p_enemy.o
+                0x040152c0                PIT_VileCheck
+                0x04015380                P_RecursiveSound
+                0x04015460                P_NoiseAlert
+                0x04015490                P_CheckMeleeRange
+                0x04015500                P_CheckMissileRange
+                0x04015610                P_Move
+                0x04015750                P_TryWalk
+                0x04015790                P_NewChaseDir
+                0x04015ba0                P_LookForPlayers
+                0x04015e20                A_KeenDie
+                0x04015e90                A_Look
+                0x04015f90                A_Chase
+                0x04016240                A_FaceTarget
+                0x040162a0                A_PosAttack
+                0x04016330                A_SPosAttack
+                0x040163d0                A_CPosAttack
+                0x04016460                A_CPosRefire
+                0x040164c0                A_SpidRefire
+                0x04016520                A_BspiAttack
+                0x04016550                A_TroopAttack
+                0x040165d0                A_SargAttack
+                0x04016640                A_HeadAttack
+                0x040166c0                A_CyberAttack
+                0x040166f0                A_BruisAttack
+                0x04016760                A_SkelMissile
+                0x040167c0                A_Tracer
+                0x04016950                A_SkelWhoosh
+                0x04016980                A_SkelFist
+                0x04016a00                A_VileChase
+                0x04016b50                A_VileStart
+                0x04016b70                A_Fire
+                0x04016c10                A_StartFire
+                0x04016c30                A_FireCrackle
+                0x04016c50                A_VileTarget
+                0x04016cb0                A_VileAttack
+                0x04016d90                A_FatRaise
+                0x04016db0                A_FatAttack1
+                0x04016e30                A_FatAttack2
+                0x04016eb0                A_FatAttack3
+                0x04016f70                A_SkullAttack
+                0x04017030                A_PainShootSkull
+                0x04017160                A_PainAttack
+                0x04017190                A_PainDie
+                0x040171e0                A_Scream
+                0x04017290                A_XScream
+                0x040172b0                A_Pain
+                0x040172e0                A_Fall
+                0x040172f0                A_Explode
+                0x04017310                A_BossDeath
+                0x04017560                A_Hoof
+                0x04017580                A_Metal
+                0x040175a0                A_BabyMetal
+                0x040175c0                A_OpenShotgun2
+                0x040175e0                A_LoadShotgun2
+                0x04017600                A_CloseShotgun2
+                0x04017630                A_BrainAwake
+                0x040176c0                A_BrainPain
+                0x040176d0                A_BrainScream
+                0x04017760                A_BrainExplode
+                0x040177e0                A_BrainDie
+                0x040177f0                A_BrainSpit
+                0x04017880                A_SpawnSound
+                0x040178c0                A_SpawnFly
+                0x040178e0                A_PlayerScream
+ *fill*         0x0401790f        0x1 
+ .text          0x04017910     0x1027 doomgeneric/doomgeneric/p_floor.o
+                0x04017910                T_MovePlane
+                0x04017b90                T_MoveFloor
+                0x04017c50                EV_DoFloor
+                0x04018740                EV_BuildStairs
+ *fill*         0x04018937        0x9 
+ .text          0x04018940     0x11b3 doomgeneric/doomgeneric/p_inter.o
+                0x04018940                P_GiveAmmo
+                0x04018ac0                P_GiveWeapon
+                0x04018c10                P_GiveBody
+                0x04018c40                P_GiveArmor
+                0x04018c70                P_GiveCard
+                0x04018ca0                P_GivePower
+                0x04018d70                P_TouchSpecialThing
+                0x04019550                P_KillMobj
+                0x04019780                P_DamageMobj
+ *fill*         0x04019af3        0xd 
+ .text          0x04019b00      0x4b2 doomgeneric/doomgeneric/p_lights.o
+                0x04019b00                T_StrobeFlash
+                0x04019b40                T_Glow
+                0x04019bb0                T_FireFlicker
+                0x04019c00                T_LightFlash
+                0x04019c60                P_SpawnFireFlicker
+                0x04019cc0                P_SpawnLightFlash
+                0x04019d30                P_SpawnStrobeFlash
+                0x04019dc0                EV_StartLightStrobing
+                0x04019e10                EV_TurnTagLightsOff
+                0x04019ec0                EV_LightTurnOn
+                0x04019f60                P_SpawnGlowingLight
+ *fill*         0x04019fb2        0xe 
+ .text          0x04019fc0     0x1821 doomgeneric/doomgeneric/p_map.o
+                0x04019fc0                PIT_StompThing
+                0x0401a060                PIT_CheckLine
+                0x0401a260                PIT_CheckThing
+                0x0401a470                PTR_SlideTraverse
+                0x0401a560                PTR_AimTraverse
+                0x0401a730                PTR_ShootTraverse
+                0x0401aa60                PTR_UseTraverse
+                0x0401aaf0                PIT_RadiusAttack
+                0x0401abb0                P_TeleportMove
+                0x0401ad40                P_CheckPosition
+                0x0401af00                P_TryMove
+                0x0401b080                P_ThingHeightClip
+                0x0401b0f0                PIT_ChangeSector
+                0x0401b1f0                P_HitSlideLine
+                0x0401b300                P_SlideMove
+                0x0401b530                P_AimLineAttack
+                0x0401b5e0                P_LineAttack
+                0x0401b670                P_UseLines
+                0x0401b6c0                P_RadiusAttack
+                0x0401b770                P_ChangeSector
+ *fill*         0x0401b7e1       0x1f 
+ .text          0x0401b800      0xd87 doomgeneric/doomgeneric/p_maputl.o
+                0x0401b890                P_AproxDistance
+                0x0401b8d0                P_PointOnLineSide
+                0x0401b970                P_BoxOnLineSide
+                0x0401bab0                P_PointOnDivlineSide
+                0x0401bb70                P_MakeDivline
+                0x0401bba0                P_InterceptVector
+                0x0401bc30                PIT_AddLineIntercepts
+                0x0401bda0                P_LineOpening
+                0x0401bdf0                P_UnsetThingPosition
+                0x0401be90                P_SetThingPosition
+                0x0401bf50                P_BlockLinesIterator
+                0x0401bff0                P_BlockThingsIterator
+                0x0401c060                PIT_AddThingIntercepts
+                0x0401c160                P_TraverseIntercepts
+                0x0401c1f0                P_PathTraverse
+ *fill*         0x0401c587       0x19 
+ .text          0x0401c5a0     0x1471 doomgeneric/doomgeneric/p_mobj.o
+                0x0401c5a0                P_SpawnMobj
+                0x0401c6c0                P_RemoveMobj
+                0x0401c770                P_SetMobjState
+                0x0401c800                P_ExplodeMissile
+                0x0401c880                P_ZMovement
+                0x0401cb00                P_XYMovement
+                0x0401ce70                P_NightmareRespawn
+                0x0401cf70                P_MobjThinker
+                0x0401d040                P_RespawnSpecials
+                0x0401d190                P_SpawnPlayer
+                0x0401d340                P_SpawnMapThing
+                0x0401d5c0                P_SpawnPuff
+                0x0401d650                P_SpawnBlood
+                0x0401d710                P_CheckMissileSpawn
+                0x0401d780                P_SubstNullMobj
+                0x0401d7c0                P_SpawnMissile
+                0x0401d8e0                P_SpawnPlayerMissile
+ *fill*         0x0401da11        0xf 
+ .text          0x0401da20      0x609 doomgeneric/doomgeneric/p_plats.o
+                0x0401da20                T_PlatRaise
+                0x0401dc60                EV_DoPlat
+                0x0401dee0                P_ActivateInStasis
+                0x0401df40                EV_StopPlat
+                0x0401df90                P_AddActivePlat
+                0x0401dfd0                P_RemoveActivePlat
+ *fill*         0x0401e029        0x7 
+ .text          0x0401e030      0xe57 doomgeneric/doomgeneric/p_pspr.o
+                0x0401e030                P_SetPsprite
+                0x0401e0d0                P_CalcSwing
+                0x0401e130                P_BringUpWeapon
+                0x0401e1a0                P_CheckAmmo
+                0x0401e350                P_FireWeapon
+                0x0401e3a0                P_DropWeapon
+                0x0401e3c0                A_WeaponReady
+                0x0401e510                A_ReFire
+                0x0401e550                A_CheckReload
+                0x0401e560                A_Lower
+                0x0401e5d0                A_Raise
+                0x0401e620                A_GunFlash
+                0x0401e660                A_Punch
+                0x0401e720                A_Saw
+                0x0401e840                A_FireMissile
+                0x0401e870                A_FireBFG
+                0x0401e8a0                A_FirePlasma
+                0x0401e900                P_BulletSlope
+                0x0401e980                P_GunShot
+                0x0401ea00                A_FirePistol
+                0x0401ea80                A_FireShotgun
+                0x0401eb00                A_FireShotgun2
+                0x0401ebf0                A_FireCGun
+                0x0401ecb0                A_Light0
+                0x0401ecc0                A_Light1
+                0x0401ecd0                A_Light2
+                0x0401ece0                A_BFGSpray
+                0x0401ed90                A_BFGsound
+                0x0401edb0                P_SetupPsprites
+                0x0401ede0                P_MovePsprites
+ *fill*         0x0401ee87       0x19 
+ .text          0x0401eea0     0x4a1d doomgeneric/doomgeneric/p_saveg.o
+                0x0401f1a0                P_TempSaveGameFile
+                0x0401f1d0                P_SaveGameFile
+                0x0401f250                P_WriteSaveGameHeader
+                0x0401f350                P_ReadSaveGameHeader
+                0x0401f450                P_ReadSaveGameEOF
+                0x0401f4b0                P_WriteSaveGameEOF
+                0x0401f510                P_ArchivePlayers
+                0x0401fda0                P_UnArchivePlayers
+                0x040206f0                P_ArchiveWorld
+                0x04020900                P_UnArchiveWorld
+                0x04020b30                P_ArchiveThinkers
+                0x04021320                P_UnArchiveThinkers
+                0x04021c20                P_ArchiveSpecials
+                0x04022770                P_UnArchiveSpecials
+ *fill*         0x040238bd        0x3 
+ .text          0x040238c0      0xf9e doomgeneric/doomgeneric/p_setup.o
+                0x040238c0                P_LoadVertexes
+                0x04023950                GetSectorAtNullAddress
+                0x040239b0                P_LoadSegs
+                0x04023b60                P_LoadSubsectors
+                0x04023c10                P_LoadSectors
+                0x04023d00                P_LoadNodes
+                0x04023de0                P_LoadThings
+                0x04023e90                P_LoadLineDefs
+                0x04024080                P_LoadSideDefs
+                0x04024180                P_LoadBlockMap
+                0x04024210                P_GroupLines
+                0x040244d0                P_SetupLevel
+                0x04024840                P_Init
+ *fill*         0x0402485e        0x2 
+ .text          0x04024860      0x4ed doomgeneric/doomgeneric/p_sight.o
+                0x04024860                P_DivlineSide
+                0x040248f0                P_InterceptVector2
+                0x04024980                P_CrossSubsector
+                0x04024bb0                P_CrossBSPNode
+                0x04024c70                P_CheckSight
+ *fill*         0x04024d4d       0x33 
+ .text          0x04024d80     0x143c doomgeneric/doomgeneric/p_spec.o
+                0x04024d80                P_InitPicAnims
+                0x04024e90                getSide
+                0x04024ec0                getSector
+                0x04024ef0                twoSided
+                0x04024f10                getNextSector
+                0x04024f40                P_FindLowestFloorSurrounding
+                0x04024fa0                P_FindHighestFloorSurrounding
+                0x04025000                P_FindNextHighestFloor
+                0x04025130                P_FindLowestCeilingSurrounding
+                0x04025190                P_FindHighestCeilingSurrounding
+                0x040251f0                P_FindSectorFromLineTag
+                0x04025250                P_FindMinSurroundingLight
+                0x040252b0                P_CrossSpecialLine
+                0x04025800                P_ShootSpecialLine
+                0x04025890                P_PlayerInSpecialSector
+                0x040259d0                P_UpdateSpecials
+                0x04025bc0                EV_DoDonut
+                0x04025e50                P_SpawnSpecials
+ *fill*         0x040261bc        0x4 
+ .text          0x040261c0      0x75c doomgeneric/doomgeneric/p_switch.o
+                0x040261c0                P_InitSwitchList
+                0x04026270                P_StartButton
+                0x04026300                P_ChangeSwitchTexture
+                0x040264b0                P_UseSpecialLine
+ *fill*         0x0402691c        0x4 
+ .text          0x04026920      0x1aa doomgeneric/doomgeneric/p_telept.o
+                0x04026920                EV_Teleport
+ *fill*         0x04026aca       0x16 
+ .text          0x04026ae0      0x14e doomgeneric/doomgeneric/p_tick.o
+                0x04026ae0                P_InitThinkers
+                0x04026b00                P_AddThinker
+                0x04026b20                P_RemoveThinker
+                0x04026b30                P_AllocateThinker
+                0x04026b40                P_RunThinkers
+                0x04026ba0                P_Ticker
+ *fill*         0x04026c2e        0x2 
+ .text          0x04026c30      0x653 doomgeneric/doomgeneric/p_user.o
+                0x04026c30                P_Thrust
+                0x04026c80                P_CalcHeight
+                0x04026da0                P_MovePlayer
+                0x04026e90                P_DeathThink
+                0x04026f90                P_PlayerThink
+ *fill*         0x04027283       0x1d 
+ .text          0x040272a0      0x6c7 doomgeneric/doomgeneric/r_bsp.o
+                0x040272a0                R_ClearDrawSegs
+                0x040272b0                R_ClipSolidWallSegment
+                0x04027400                R_ClipPassWallSegment
+                0x040274c0                R_ClearClipSegs
+                0x04027500                R_AddLine
+                0x04027650                R_CheckBBox
+                0x040277b0                R_Subsector
+                0x040278d0                R_RenderBSPNode
+ *fill*         0x04027967       0x19 
+ .text          0x04027980     0x11da doomgeneric/doomgeneric/r_data.o
+                0x040279f0                R_DrawColumnInCache
+                0x04027a70                R_GenerateComposite
+                0x04027bc0                R_GenerateLookup
+                0x04027dd0                R_GetColumn
+                0x04027e70                R_InitTextures
+                0x040284b0                R_InitFlats
+                0x04028540                R_InitSpriteLumps
+                0x04028650                R_InitColormaps
+                0x04028670                R_InitData
+                0x04028700                R_FlatNumForName
+                0x04028770                R_CheckTextureNumForName
+                0x04028790                R_TextureNumForName
+                0x040287d0                R_PrecacheLevel
+ *fill*         0x04028b5a       0x26 
+ .text          0x04028b80      0xdd1 doomgeneric/doomgeneric/r_draw.o
+                0x04028b80                R_DrawColumn
+                0x04028c80                R_DrawColumnLow
+                0x04028d90                R_DrawFuzzColumn
+                0x04028e80                R_DrawFuzzColumnLow
+                0x04028fa0                R_DrawTranslatedColumn
+                0x04029080                R_DrawTranslatedColumnLow
+                0x04029180                R_InitTranslationTables
+                0x04029230                R_DrawSpan
+                0x04029350                R_DrawSpanLow
+                0x04029470                R_InitBuffer
+                0x04029530                R_FillBackScreen
+                0x04029820                R_VideoErase
+                0x04029850                R_DrawViewBorder
+ *fill*         0x04029951       0x2f 
+ .text          0x04029980      0xbf3 doomgeneric/doomgeneric/r_main.o
+                0x04029980                R_AddPointToBox
+                0x040299b0                R_PointOnSide
+                0x04029a70                R_PointOnSegSide
+                0x04029b40                R_PointToAngle
+                0x04029ca0                R_PointToAngle2
+                0x04029cd0                R_PointToDist
+                0x04029d50                R_InitPointToAngle
+                0x04029d60                R_ScaleFromGlobalAngle
+                0x04029e00                R_InitTables
+                0x04029e10                R_InitTextureMapping
+                0x04029f70                R_InitLightTables
+                0x04029ff0                R_SetViewSize
+                0x0402a010                R_ExecuteSetViewSize
+                0x0402a320                R_Init
+                0x0402a3e0                R_PointInSubsector
+                0x0402a440                R_SetupFrame
+                0x0402a520                R_RenderPlayerView
+ *fill*         0x0402a573        0xd 
+ .text          0x0402a580      0x77f doomgeneric/doomgeneric/r_plane.o
+                0x0402a580                R_InitPlanes
+                0x0402a590                R_MapPlane
+                0x0402a750                R_ClearPlanes
+                0x0402a810                R_FindPlane
+                0x0402a8d0                R_CheckPlane
+                0x0402a990                R_MakeSpans
+                0x0402aaa0                R_DrawPlanes
+ *fill*         0x0402acff        0x1 
+ .text          0x0402ad00     0x1050 doomgeneric/doomgeneric/r_segs.o
+                0x0402ad00                R_RenderMaskedSegRange
+                0x0402af60                R_RenderSegLoop
+                0x0402b2e0                R_StoreWallRange
+ .text          0x0402bd50        0xb doomgeneric/doomgeneric/r_sky.o
+                0x0402bd50                R_InitSkyMap
+ *fill*         0x0402bd5b       0x25 
+ .text          0x0402bd80     0x1251 doomgeneric/doomgeneric/r_things.o
+                0x0402bd80                R_InstallSpriteLump
+                0x0402bf50                R_InitSpriteDefs
+                0x0402c220                R_InitSprites
+                0x0402c270                R_ClearSprites
+                0x0402c280                R_NewVisSprite
+                0x0402c2b0                R_DrawMaskedColumn
+                0x0402c380                R_DrawVisSprite
+                0x0402c4c0                R_ProjectSprite
+                0x0402c7c0                R_AddSprites
+                0x0402c830                R_DrawPSprite
+                0x0402ca50                R_DrawPlayerSprites
+                0x0402caf0                R_SortVisSprites
+                0x0402cbd0                R_DrawSprite
+                0x0402cf30                R_DrawMasked
+ *fill*         0x0402cfd1        0xf 
+ .text          0x0402cfe0      0xa02 doomgeneric/doomgeneric/s_sound.o
+                0x0402cfe0                S_Shutdown
+                0x0402d160                S_Init
+                0x0402d280                S_StopSound
+                0x0402d2d0                S_StartSound
+                0x0402d5d0                S_PauseSound
+                0x0402d600                S_ResumeSound
+                0x0402d630                S_UpdateSounds
+                0x0402d700                S_SetMusicVolume
+                0x0402d750                S_SetSfxVolume
+                0x0402d790                S_MusicPlaying
+                0x0402d7a0                S_StopMusic
+                0x0402d810                S_ChangeMusic
+                0x0402d8f0                S_Start
+                0x0402d9d0                S_StartMusic
+ *fill*         0x0402d9e2       0x1e 
+ .text          0x0402da00     0x1484 doomgeneric/doomgeneric/sha1.o
+                0x0402eb00                SHA1_Init
+                0x0402eb40                SHA1_Update
+                0x0402ec80                SHA1_Final
+                0x0402ee30                SHA1_UpdateInt32
+                0x0402ee60                SHA1_UpdateString
+ .text          0x0402ee84        0x0 doomgeneric/doomgeneric/sounds.o
+ *fill*         0x0402ee84        0xc 
+ .text          0x0402ee90      0x4ea doomgeneric/doomgeneric/st_lib.o
+                0x0402ee90                STlib_init
+                0x0402eeb0                STlib_initNum
+                0x0402eef0                STlib_drawNum
+                0x0402f080                STlib_updateNum
+                0x0402f0a0                STlib_initPercent
+                0x0402f0e0                STlib_updatePercent
+                0x0402f140                STlib_initMultIcon
+                0x0402f170                STlib_updateMultIcon
+                0x0402f260                STlib_initBinIcon
+                0x0402f290                STlib_updateBinIcon
+ *fill*         0x0402f37a        0x6 
+ .text          0x0402f380     0x17e6 doomgeneric/doomgeneric/st_stuff.o
+                0x0402f650                ST_refreshBackground
+                0x0402f670                ST_Responder
+                0x0402fc90                ST_calcPainOffset
+                0x0402fcf0                ST_updateFaceWidget
+                0x04030220                ST_updateWidgets
+                0x040302f0                ST_Ticker
+                0x04030320                ST_doPaletteStuff
+                0x04030410                ST_drawWidgets
+                0x04030530                ST_doRefresh
+                0x04030570                ST_diffDraw
+                0x04030580                ST_Drawer
+                0x04030630                ST_loadGraphics
+                0x04030640                ST_loadData
+                0x04030660                ST_unloadGraphics
+                0x04030670                ST_unloadData
+                0x04030680                ST_initData
+                0x04030720                ST_createWidgets
+                0x04030aa0                ST_Start
+                0x04030af0                ST_Stop
+                0x04030b30                ST_Init
+ *fill*         0x04030b66        0xa 
+ .text          0x04030b70       0x61 doomgeneric/doomgeneric/statdump.o
+                0x04030b70                StatCopy
+                0x04030bd0                StatDump
+ *fill*         0x04030bd1        0xf 
+ .text          0x04030be0       0x2c doomgeneric/doomgeneric/tables.o
+                0x04030be0                SlopeDiv
+ *fill*         0x04030c0c       0x34 
+ .text          0x04030c40     0x1238 doomgeneric/doomgeneric/v_video.o
+                0x04030c40                V_MarkRect
+                0x04030cc0                V_CopyRect
+                0x04030df0                V_SetPatchClipCallback
+                0x04030e00                V_DrawPatch
+                0x04030fa0                V_DrawPatchFlipped
+                0x04031130                V_DrawPatchDirect
+                0x04031140                V_DrawTLPatch
+                0x04031260                V_DrawXlaPatch
+                0x04031360                V_DrawAltTLPatch
+                0x040314a0                V_DrawShadowedPatch
+                0x04031630                V_LoadTintTable
+                0x04031650                V_LoadXlaTable
+                0x04031670                V_DrawBlock
+                0x04031750                V_DrawFilledBox
+                0x040317e0                V_DrawHorizLine
+                0x04031830                V_DrawVertLine
+                0x04031870                V_DrawBox
+                0x04031950                V_DrawRawScreen
+                0x04031970                V_Init
+                0x04031980                V_UseBuffer
+                0x04031990                V_RestoreBuffer
+                0x040319a0                WritePCXfile
+                0x04031ae0                V_ScreenShot
+                0x04031b70                V_DrawMouseSpeedBox
+ *fill*         0x04031e78        0x8 
+ .text          0x04031e80      0x12f doomgeneric/doomgeneric/w_checksum.o
+                0x04031e80                W_Checksum
+ *fill*         0x04031faf        0x1 
+ .text          0x04031fb0       0x3d doomgeneric/doomgeneric/w_file.o
+                0x04031fb0                W_OpenFile
+                0x04031fd0                W_CloseFile
+                0x04031fe0                W_Read
+ *fill*         0x04031fed        0x3 
+ .text          0x04031ff0       0x7d doomgeneric/doomgeneric/w_main.o
+                0x04031ff0                W_ParseCommandLine
+ *fill*         0x0403206d        0x3 
+ .text          0x04032070      0x8cf doomgeneric/doomgeneric/w_wad.o
+                0x04032070                W_LumpNameHash
+                0x040320b0                W_AddFile
+                0x040323b0                W_NumLumps
+                0x040323c0                W_CheckNumForName
+                0x040324c0                W_GetNumForName
+                0x04032500                W_LumpLength
+                0x04032540                W_ReadLump
+                0x040325c0                W_CacheLumpNum
+                0x040326c0                W_CacheLumpName
+                0x04032710                W_ReleaseLumpNum
+                0x04032780                W_ReleaseLumpName
+                0x040327d0                W_GenerateHashTable
+                0x040328c0                W_CheckCorrectIWAD
+ *fill*         0x0403293f        0x1 
+ .text          0x04032940     0x2554 doomgeneric/doomgeneric/wi_stuff.o
+                0x04032f30                WI_slamBackground
+                0x04032f50                WI_Responder
+                0x04032f60                WI_drawLF
+                0x04033070                WI_drawEL
+                0x040330e0                WI_drawOnLnode
+                0x040331c0                WI_initAnimatedBack
+                0x040331f0                WI_updateAnimatedBack
+                0x04033220                WI_drawAnimatedBack
+                0x040332a0                WI_drawNum
+                0x04033410                WI_drawPercent
+                0x04033450                WI_drawTime
+                0x04033550                WI_End
+                0x04033560                WI_initNoState
+                0x04033580                WI_updateNoState
+                0x040335c0                WI_initShowNextLoc
+                0x04033610                WI_updateShowNextLoc
+                0x04033690                WI_drawShowNextLoc
+                0x04033780                WI_drawNoState
+                0x04033790                WI_fragSum
+                0x040337d0                WI_initDeathmatchStats
+                0x04033870                WI_updateDeathmatchStats
+                0x04033b00                WI_drawDeathmatchStats
+                0x04033d10                WI_initNetgameStats
+                0x04033dd0                WI_updateNetgameStats
+                0x040341f0                WI_drawNetgameStats
+                0x040344e0                WI_initStats
+                0x04034560                WI_updateStats
+                0x04034920                WI_drawStats
+                0x04034ab0                WI_checkForAccelerate
+                0x04034b80                WI_Ticker
+                0x04034c60                WI_loadData
+                0x04034ce0                WI_unloadData
+                0x04034cf0                WI_Drawer
+                0x04034d50                WI_initVariables
+                0x04034dd0                WI_Start
+ *fill*         0x04034e94        0xc 
+ .text          0x04034ea0      0x698 doomgeneric/doomgeneric/z_zone.o
+                0x04034ea0                Z_ClearZone
+                0x04034ee0                Z_Init
+                0x04034f30                Z_Free
+                0x04034ff0                Z_Malloc
+                0x04035160                Z_FreeTags
+                0x040351e0                Z_DumpHeap
+                0x040352d0                Z_FileDumpHeap
+                0x040353a0                Z_CheckHeap
+                0x04035440                Z_ChangeTag2
+                0x040354b0                Z_ChangeUser
+                0x040354f0                Z_FreeMemory
+                0x04035530                Z_ZoneSize
+ *fill*         0x04035538        0x8 
+ .text          0x04035540      0x13c ../libc/builtins.o
+                0x04035540                __errno_location
+                0x04035550                __divdi3
+                0x04035660                __isoc23_sscanf
+ *fill*         0x0403567c        0x4 
+ .text          0x04035680      0x166 ../libc/ctype.o
+                0x04035680                isspace
+                0x040356a0                isdigit
+                0x040356c0                isupper
+                0x040356e0                islower
+                0x04035700                isalpha
+                0x04035720                isalnum
+                0x04035750                isprint
+                0x04035770                ispunct
+                0x040357a0                toupper
+                0x040357c0                tolower
+                0x040357e0                __ctype_b_loc
+ *fill*         0x040357e6        0xa 
+ .text          0x040357f0      0x1f9 ../libc/math.o
+                0x040357f0                fabs
+                0x04035810                sqrt
+                0x04035820                floor
+                0x04035860                ceil
+                0x040358a0                sin
+                0x040358b0                cos
+                0x040358c0                tan
+                0x040358d0                atan2
+                0x040358e0                pow
+ *fill*         0x040359e9        0x7 
+ .text          0x040359f0      0x202 ../libc/posix.o
+                0x040359f0                usleep
+                0x04035a20                sleep
+                0x04035a50                read
+                0x04035a60                write
+                0x04035a70                close
+                0x04035a80                isatty
+                0x04035a90                getpid
+                0x04035aa0                unlink
+                0x04035ab0                mkdir
+                0x04035ac0                rmdir
+                0x04035ad0                getcwd
+                0x04035af0                gettimeofday
+                0x04035b30                mmap
+                0x04035b40                munmap
+                0x04035b50                ioctl
+                0x04035b60                tcgetattr
+                0x04035b70                tcsetattr
+                0x04035b80                ms_debug
+                0x04035ba0                __libc_assert_fail
+                0x04035bd0                time
+ *fill*         0x04035bf2        0xe 
+ .text          0x04035c00      0xff6 ../libc/stdio.o
+                0x040364d0                vsnprintf
+                0x04036520                snprintf
+                0x04036570                sprintf
+                0x040365c0                vfprintf
+                0x04036600                printf
+                0x04036640                fprintf
+                0x04036680                puts
+                0x04036700                putchar
+                0x04036740                vsscanf
+                0x04036980                sscanf
+                0x040369a0                fopen
+                0x04036a70                fclose
+                0x04036ab0                fread
+                0x04036b30                fwrite
+                0x04036b40                fseek
+                0x04036bb0                ftell
+                0x04036bd0                fflush
+                0x04036be0                remove
+                0x04036bf0                rename
+ *fill*         0x04036bf6        0xa 
+ .text          0x04036c00      0x406 ../libc/stdlib.o
+                0x04036c00                libc_init_heap
+                0x04036c40                malloc
+                0x04036cc0                free
+                0x04036d30                calloc
+                0x04036d70                realloc
+                0x04036df0                atoi
+                0x04036e90                atof
+                0x04036fc0                abs
+                0x04036fd0                exit
+                0x04037000                system
+ *fill*         0x04037006       0x3a 
+ .text          0x04037040      0x5f7 ../libc/string.o
+                0x04037040                memcpy
+                0x04037080                memmove
+                0x040370f0                memset
+                0x04037140                memcmp
+                0x04037190                strlen
+                0x040371c0                strcpy
+                0x040371f0                strncpy
+                0x04037270                strcat
+                0x040372c0                strcmp
+                0x04037320                strncmp
+                0x04037370                strcasecmp
+                0x04037430                strncasecmp
+                0x040374d0                strchr
+                0x04037510                strrchr
+                0x04037550                strstr
+                0x040375d0                strdup
+ *fill*         0x04037637        0x9 
+ .text          0x04037640      0x2f7 doomgeneric_mysticos.o
+                0x04037640                DG_Init
+                0x040376a0                DG_DrawFrame
+                0x04037790                DG_SleepMs
+                0x040377b0                DG_GetTicksMs
+                0x040377d0                DG_GetKey
+                0x04037810                DG_SetWindowTitle
+                0x04037820                DG_GetMouse
+                0x040378a0                _start
+ *fill*         0x04037937        0x9 
+ .text          0x04037940      0x102 w_file_mysticos.o
+                0x04037940                W_StdC_Read
  *(.gnu.warning)
 
 .fini
@@ -1271,313 +1273,323 @@ LOAD w_file_mysticos.o
                 0x04038000                        . = ALIGN (CONSTANT (MAXPAGESIZE))
                 0x04038000                        . = SEGMENT_START ("rodata-segment", (ALIGN (CONSTANT (MAXPAGESIZE)) + (. & (CONSTANT (MAXPAGESIZE) - 0x1))))
 
-.rodata         0x04038000    0x18f9c
+.rodata         0x04038000    0x193d0
  *(.rodata .rodata.* .gnu.linkonce.r.*)
  .rodata.str1.1
-                0x04038000     0x2fc2 doomgeneric/doomgeneric/am_map.o
+                0x04038000     0x3415 doomgeneric/doomgeneric/am_map.o
                                  0x67 (size before relaxing)
- *fill*         0x0403afc2       0x1e 
- .rodata        0x0403afe0       0x40 doomgeneric/doomgeneric/am_map.o
+ *fill*         0x0403b415        0xb 
+ .rodata        0x0403b420       0x40 doomgeneric/doomgeneric/am_map.o
  .rodata.str1.1
-                0x0403b020        0x0 doomgeneric/doomgeneric/d_iwad.o
+                0x0403b460        0x0 doomgeneric/doomgeneric/d_iwad.o
                                 0x186 (size before relaxing)
  .rodata.str1.4
-                0x0403b020     0x4272 doomgeneric/doomgeneric/d_iwad.o
+                0x0403b460     0x43ca doomgeneric/doomgeneric/d_iwad.o
                                  0x50 (size before relaxing)
- *fill*         0x0403f292        0xe 
- .rodata        0x0403f2a0       0xe0 doomgeneric/doomgeneric/d_iwad.o
+ *fill*         0x0403f82a       0x16 
+ .rodata        0x0403f840       0xe0 doomgeneric/doomgeneric/d_iwad.o
  .rodata.str1.4
-                0x0403f380        0x0 doomgeneric/doomgeneric/d_loop.o
+                0x0403f920        0x0 doomgeneric/doomgeneric/d_loop.o
                                  0x28 (size before relaxing)
  .rodata.str1.1
-                0x0403f380        0x0 doomgeneric/doomgeneric/d_loop.o
+                0x0403f920        0x0 doomgeneric/doomgeneric/d_loop.o
                                  0x47 (size before relaxing)
  .rodata.str1.1
-                0x0403f380        0x0 doomgeneric/doomgeneric/d_main.o
-                                0x4cd (size before relaxing)
+                0x0403f920        0x0 doomgeneric/doomgeneric/d_main.o
+                                0x682 (size before relaxing)
  .rodata.str1.4
-                0x0403f380        0x0 doomgeneric/doomgeneric/d_main.o
-                                0x4ed (size before relaxing)
- .rodata        0x0403f380      0x178 doomgeneric/doomgeneric/d_main.o
+                0x0403f920        0x0 doomgeneric/doomgeneric/d_main.o
+                                0x53d (size before relaxing)
+ .rodata        0x0403f920      0x178 doomgeneric/doomgeneric/d_main.o
  .rodata.str1.1
-                0x0403f4f8        0x0 doomgeneric/doomgeneric/d_mode.o
+                0x0403fa98        0x0 doomgeneric/doomgeneric/d_mode.o
                                  0x3c (size before relaxing)
- *fill*         0x0403f4f8        0x8 
- .rodata        0x0403f500      0x170 doomgeneric/doomgeneric/d_mode.o
+ *fill*         0x0403fa98        0x8 
+ .rodata        0x0403faa0      0x170 doomgeneric/doomgeneric/d_mode.o
  .rodata.str1.1
-                0x0403f670        0x0 doomgeneric/doomgeneric/d_net.o
+                0x0403fc10        0x0 doomgeneric/doomgeneric/d_net.o
                                  0x6f (size before relaxing)
  .rodata.str1.4
-                0x0403f670        0x0 doomgeneric/doomgeneric/d_net.o
+                0x0403fc10        0x0 doomgeneric/doomgeneric/d_net.o
                                 0x108 (size before relaxing)
+ .rodata.str1.1
+                0x0403fc10        0x0 doomgeneric/doomgeneric/doomgeneric.o
+                                 0xa2 (size before relaxing)
  .rodata.str1.4
-                0x0403f670        0x0 doomgeneric/doomgeneric/dstrings.o
+                0x0403fc10        0x0 doomgeneric/doomgeneric/doomgeneric.o
+                                 0x22 (size before relaxing)
+ .rodata.str1.4
+                0x0403fc10        0x0 doomgeneric/doomgeneric/dstrings.o
                                 0x33b (size before relaxing)
  .rodata.str1.1
-                0x0403f670        0x0 doomgeneric/doomgeneric/f_finale.o
+                0x0403fc10        0x0 doomgeneric/doomgeneric/f_finale.o
                                 0x153 (size before relaxing)
  .rodata.str1.4
-                0x0403f670        0x0 doomgeneric/doomgeneric/f_finale.o
+                0x0403fc10        0x0 doomgeneric/doomgeneric/f_finale.o
                                0x1ddf (size before relaxing)
- .rodata        0x0403f670       0x18 doomgeneric/doomgeneric/f_wipe.o
+ .rodata        0x0403fc10       0x18 doomgeneric/doomgeneric/f_wipe.o
  .rodata.str1.1
-                0x0403f688        0x0 doomgeneric/doomgeneric/g_game.o
+                0x0403fc28        0x0 doomgeneric/doomgeneric/g_game.o
                                 0x13a (size before relaxing)
  .rodata.str1.4
-                0x0403f688        0x0 doomgeneric/doomgeneric/g_game.o
+                0x0403fc28        0x0 doomgeneric/doomgeneric/g_game.o
                                 0x23e (size before relaxing)
- *fill*         0x0403f688       0x18 
- .rodata        0x0403f6a0       0xc0 doomgeneric/doomgeneric/g_game.o
- .rodata.cst4   0x0403f760       0x10 doomgeneric/doomgeneric/g_game.o
+ *fill*         0x0403fc28       0x18 
+ .rodata        0x0403fc40       0xc0 doomgeneric/doomgeneric/g_game.o
+ .rodata.cst4   0x0403fd00       0x10 doomgeneric/doomgeneric/g_game.o
                                   0x4 (size before relaxing)
  .rodata.str1.1
-                0x0403f770        0x0 doomgeneric/doomgeneric/gusconf.o
+                0x0403fd10        0x0 doomgeneric/doomgeneric/gusconf.o
                                  0x3a (size before relaxing)
  .rodata.str1.4
-                0x0403f770        0x0 doomgeneric/doomgeneric/gusconf.o
+                0x0403fd10        0x0 doomgeneric/doomgeneric/gusconf.o
                                  0xdf (size before relaxing)
- .rodata.cst2   0x0403f770        0x2 doomgeneric/doomgeneric/hu_lib.o
+ .rodata.cst2   0x0403fd10        0x2 doomgeneric/doomgeneric/hu_lib.o
  .rodata.str1.1
-                0x0403f772        0x0 doomgeneric/doomgeneric/hu_stuff.o
+                0x0403fd12        0x0 doomgeneric/doomgeneric/hu_stuff.o
                                 0xbaf (size before relaxing)
  .rodata.str1.4
-                0x0403f772        0x0 doomgeneric/doomgeneric/hu_stuff.o
+                0x0403fd12        0x0 doomgeneric/doomgeneric/hu_stuff.o
                                  0x63 (size before relaxing)
- *fill*         0x0403f772        0xe 
- .rodata        0x0403f780       0x80 doomgeneric/doomgeneric/i_input.o
+ *fill*         0x0403fd12        0xe 
+ .rodata        0x0403fd20       0x80 doomgeneric/doomgeneric/i_input.o
  .rodata.str1.1
-                0x0403f800        0x0 doomgeneric/doomgeneric/i_joystick.o
+                0x0403fda0        0x0 doomgeneric/doomgeneric/i_joystick.o
                                  0xa7 (size before relaxing)
  .rodata.str1.4
-                0x0403f800        0x0 doomgeneric/doomgeneric/i_scale.o
+                0x0403fda0        0x0 doomgeneric/doomgeneric/i_scale.o
                                  0xc5 (size before relaxing)
  .rodata.str1.1
-                0x0403f800        0x0 doomgeneric/doomgeneric/i_scale.o
+                0x0403fda0        0x0 doomgeneric/doomgeneric/i_scale.o
                                   0xe (size before relaxing)
- .rodata.cst2   0x0403f800        0x0 doomgeneric/doomgeneric/i_scale.o
+ .rodata.cst2   0x0403fda0        0x0 doomgeneric/doomgeneric/i_scale.o
                                   0x2 (size before relaxing)
  .rodata.str1.1
-                0x0403f800        0x0 doomgeneric/doomgeneric/i_sound.o
+                0x0403fda0        0x0 doomgeneric/doomgeneric/i_sound.o
                                  0x9f (size before relaxing)
  .rodata.str1.4
-                0x0403f800        0x0 doomgeneric/doomgeneric/i_system.o
+                0x0403fda0        0x0 doomgeneric/doomgeneric/i_system.o
                                 0x1c2 (size before relaxing)
  .rodata.str1.1
-                0x0403f800        0x0 doomgeneric/doomgeneric/i_system.o
+                0x0403fda0        0x0 doomgeneric/doomgeneric/i_system.o
                                  0x54 (size before relaxing)
- .rodata        0x0403f800       0x22 doomgeneric/doomgeneric/i_system.o
+ .rodata        0x0403fda0       0x22 doomgeneric/doomgeneric/i_system.o
  .rodata.str1.4
-                0x0403f822        0x0 doomgeneric/doomgeneric/i_video.o
+                0x0403fdc2        0x0 doomgeneric/doomgeneric/i_video.o
                                 0x16d (size before relaxing)
  .rodata.str1.1
-                0x0403f822        0x0 doomgeneric/doomgeneric/i_video.o
+                0x0403fdc2        0x0 doomgeneric/doomgeneric/i_video.o
                                  0x50 (size before relaxing)
  .rodata.str1.1
-                0x0403f822        0x0 doomgeneric/doomgeneric/info.o
+                0x0403fdc2        0x0 doomgeneric/doomgeneric/info.o
                                 0x2b2 (size before relaxing)
  .rodata.str1.4
-                0x0403f822        0x0 doomgeneric/doomgeneric/m_config.o
+                0x0403fdc2        0x0 doomgeneric/doomgeneric/m_config.o
                                  0x76 (size before relaxing)
  .rodata.str1.1
-                0x0403f822        0x0 doomgeneric/doomgeneric/m_config.o
+                0x0403fdc2        0x0 doomgeneric/doomgeneric/m_config.o
                                 0xbab (size before relaxing)
- *fill*         0x0403f822       0x1e 
- .rodata        0x0403f840      0x200 doomgeneric/doomgeneric/m_config.o
+ *fill*         0x0403fdc2       0x1e 
+ .rodata        0x0403fde0      0x200 doomgeneric/doomgeneric/m_config.o
  .rodata.str1.1
-                0x0403fa40        0x0 doomgeneric/doomgeneric/m_controls.o
+                0x0403ffe0        0x0 doomgeneric/doomgeneric/m_controls.o
                                 0x630 (size before relaxing)
  .rodata.str1.1
-                0x0403fa40        0x0 doomgeneric/doomgeneric/m_menu.o
+                0x0403ffe0        0x0 doomgeneric/doomgeneric/m_menu.o
                                 0x157 (size before relaxing)
  .rodata.str1.4
-                0x0403fa40        0x0 doomgeneric/doomgeneric/m_menu.o
+                0x0403ffe0        0x0 doomgeneric/doomgeneric/m_menu.o
                                 0x2c6 (size before relaxing)
- .rodata        0x0403fa40       0x10 doomgeneric/doomgeneric/m_menu.o
+ .rodata        0x0403ffe0       0x10 doomgeneric/doomgeneric/m_menu.o
  .rodata.str1.1
-                0x0403fa50        0x0 doomgeneric/doomgeneric/m_misc.o
+                0x0403fff0        0x0 doomgeneric/doomgeneric/m_misc.o
                                  0x3a (size before relaxing)
  .rodata.str1.4
-                0x0403fa50        0x0 doomgeneric/doomgeneric/m_misc.o
+                0x0403fff0        0x0 doomgeneric/doomgeneric/m_misc.o
                                  0xb5 (size before relaxing)
- *fill*         0x0403fa50       0x10 
- .rodata        0x0403fa60      0x100 doomgeneric/doomgeneric/m_random.o
+ *fill*         0x0403fff0       0x10 
+ .rodata        0x04040000      0x100 doomgeneric/doomgeneric/m_random.o
  .rodata.str1.1
-                0x0403fb60        0x0 doomgeneric/doomgeneric/memio.o
+                0x04040100        0x0 doomgeneric/doomgeneric/memio.o
                                  0x28 (size before relaxing)
- .rodata        0x0403fb60       0x26 doomgeneric/doomgeneric/mus2mid.o
- *fill*         0x0403fb86        0x2 
- .rodata        0x0403fb88       0x30 doomgeneric/doomgeneric/p_ceilng.o
- .rodata        0x0403fbb8       0x40 doomgeneric/doomgeneric/p_doors.o
+ .rodata        0x04040100       0x26 doomgeneric/doomgeneric/mus2mid.o
+ *fill*         0x04040126        0x2 
+ .rodata        0x04040128       0x30 doomgeneric/doomgeneric/p_ceilng.o
+ .rodata        0x04040158       0x40 doomgeneric/doomgeneric/p_doors.o
  .rodata.str1.4
-                0x0403fbf8        0x0 doomgeneric/doomgeneric/p_doors.o
+                0x04040198        0x0 doomgeneric/doomgeneric/p_doors.o
                                 0x13f (size before relaxing)
  .rodata.str1.1
-                0x0403fbf8        0x0 doomgeneric/doomgeneric/p_enemy.o
+                0x04040198        0x0 doomgeneric/doomgeneric/p_enemy.o
                                  0x16 (size before relaxing)
  .rodata.str1.4
-                0x0403fbf8        0x0 doomgeneric/doomgeneric/p_enemy.o
+                0x04040198        0x0 doomgeneric/doomgeneric/p_enemy.o
                                  0x25 (size before relaxing)
- .rodata        0x0403fbf8       0x34 doomgeneric/doomgeneric/p_floor.o
+ .rodata        0x04040198       0x34 doomgeneric/doomgeneric/p_floor.o
  .rodata.str1.1
-                0x0403fc2c        0x0 doomgeneric/doomgeneric/p_inter.o
+                0x040401cc        0x0 doomgeneric/doomgeneric/p_inter.o
                                 0x302 (size before relaxing)
- .rodata        0x0403fc2c       0xb4 doomgeneric/doomgeneric/p_inter.o
+ .rodata        0x040401cc       0xb4 doomgeneric/doomgeneric/p_inter.o
  .rodata.str1.4
-                0x0403fce0        0x0 doomgeneric/doomgeneric/p_inter.o
+                0x04040280        0x0 doomgeneric/doomgeneric/p_inter.o
                                  0xdb (size before relaxing)
  .rodata.str1.1
-                0x0403fce0        0x0 doomgeneric/doomgeneric/p_map.o
+                0x04040280        0x0 doomgeneric/doomgeneric/p_map.o
                                   0x9 (size before relaxing)
  .rodata.str1.4
-                0x0403fce0        0x0 doomgeneric/doomgeneric/p_map.o
+                0x04040280        0x0 doomgeneric/doomgeneric/p_map.o
                                  0x6b (size before relaxing)
- .rodata        0x0403fce0      0x114 doomgeneric/doomgeneric/p_maputl.o
+ .rodata        0x04040280      0x114 doomgeneric/doomgeneric/p_maputl.o
  .rodata.str1.4
-                0x0403fdf4        0x0 doomgeneric/doomgeneric/p_mobj.o
+                0x04040394        0x0 doomgeneric/doomgeneric/p_mobj.o
                                  0x2d (size before relaxing)
  .rodata.str1.4
-                0x0403fdf4        0x0 doomgeneric/doomgeneric/p_plats.o
+                0x04040394        0x0 doomgeneric/doomgeneric/p_plats.o
                                  0x48 (size before relaxing)
- .rodata        0x0403fdf4       0x14 doomgeneric/doomgeneric/p_plats.o
+ .rodata        0x04040394       0x14 doomgeneric/doomgeneric/p_plats.o
  .rodata.str1.4
-                0x0403fe08        0x0 doomgeneric/doomgeneric/p_saveg.o
+                0x040403a8        0x0 doomgeneric/doomgeneric/p_saveg.o
                                  0xa2 (size before relaxing)
  .rodata.str1.1
-                0x0403fe08        0x0 doomgeneric/doomgeneric/p_saveg.o
+                0x040403a8        0x0 doomgeneric/doomgeneric/p_saveg.o
                                  0x45 (size before relaxing)
- .rodata        0x0403fe08       0x20 doomgeneric/doomgeneric/p_saveg.o
+ .rodata        0x040403a8       0x20 doomgeneric/doomgeneric/p_saveg.o
  .rodata.str1.1
-                0x0403fe28        0x0 doomgeneric/doomgeneric/p_setup.o
+                0x040403c8        0x0 doomgeneric/doomgeneric/p_setup.o
                                  0x21 (size before relaxing)
  .rodata.str1.4
-                0x0403fe28        0x0 doomgeneric/doomgeneric/p_setup.o
+                0x040403c8        0x0 doomgeneric/doomgeneric/p_setup.o
                                  0x39 (size before relaxing)
  .rodata.str1.4
-                0x0403fe28        0x0 doomgeneric/doomgeneric/p_sight.o
+                0x040403c8        0x0 doomgeneric/doomgeneric/p_sight.o
                                  0x28 (size before relaxing)
  .rodata.str1.4
-                0x0403fe28        0x0 doomgeneric/doomgeneric/p_spec.o
+                0x040403c8        0x0 doomgeneric/doomgeneric/p_spec.o
                                 0x23c (size before relaxing)
- .rodata        0x0403fe28      0x2b4 doomgeneric/doomgeneric/p_spec.o
+ .rodata        0x040403c8      0x2b4 doomgeneric/doomgeneric/p_spec.o
  .rodata.str1.1
-                0x040400dc        0x0 doomgeneric/doomgeneric/p_spec.o
+                0x0404067c        0x0 doomgeneric/doomgeneric/p_spec.o
                                   0x7 (size before relaxing)
  .rodata.str1.4
-                0x040400dc        0x0 doomgeneric/doomgeneric/p_switch.o
+                0x0404067c        0x0 doomgeneric/doomgeneric/p_switch.o
                                  0x25 (size before relaxing)
- .rodata        0x040400dc      0x210 doomgeneric/doomgeneric/p_switch.o
+ .rodata        0x0404067c      0x210 doomgeneric/doomgeneric/p_switch.o
  .rodata.str1.4
-                0x040402ec        0x0 doomgeneric/doomgeneric/r_bsp.o
+                0x0404088c        0x0 doomgeneric/doomgeneric/r_bsp.o
                                  0x23 (size before relaxing)
  .rodata.str1.4
-                0x040402ec        0x0 doomgeneric/doomgeneric/r_data.o
-                                0x112 (size before relaxing)
+                0x0404088c        0x0 doomgeneric/doomgeneric/r_data.o
+                                0x132 (size before relaxing)
  .rodata.str1.1
-                0x040402ec        0x0 doomgeneric/doomgeneric/r_data.o
-                                 0x48 (size before relaxing)
+                0x0404088c        0x0 doomgeneric/doomgeneric/r_data.o
+                                0x101 (size before relaxing)
  .rodata.str1.1
-                0x040402ec        0x0 doomgeneric/doomgeneric/r_draw.o
+                0x0404088c        0x0 doomgeneric/doomgeneric/r_draw.o
                                  0x85 (size before relaxing)
  .rodata.str1.4
-                0x040402ec        0x0 doomgeneric/doomgeneric/r_draw.o
+                0x0404088c        0x0 doomgeneric/doomgeneric/r_draw.o
                                  0x21 (size before relaxing)
  .rodata.str1.1
-                0x040402ec        0x0 doomgeneric/doomgeneric/r_main.o
-                                  0x2 (size before relaxing)
+                0x0404088c        0x0 doomgeneric/doomgeneric/r_main.o
+                                 0x78 (size before relaxing)
  .rodata.str1.1
-                0x040402ec        0x0 doomgeneric/doomgeneric/r_plane.o
+                0x0404088c        0x0 doomgeneric/doomgeneric/r_plane.o
                                  0x19 (size before relaxing)
  .rodata.str1.4
-                0x040402ec        0x0 doomgeneric/doomgeneric/r_plane.o
+                0x0404088c        0x0 doomgeneric/doomgeneric/r_plane.o
                                  0x94 (size before relaxing)
  .rodata.str1.4
-                0x040402ec        0x0 doomgeneric/doomgeneric/r_segs.o
+                0x0404088c        0x0 doomgeneric/doomgeneric/r_segs.o
                                  0x20 (size before relaxing)
  .rodata.str1.4
-                0x040402ec        0x0 doomgeneric/doomgeneric/r_things.o
+                0x0404088c        0x0 doomgeneric/doomgeneric/r_things.o
                                 0x1df (size before relaxing)
  .rodata.str1.4
-                0x040402ec        0x0 doomgeneric/doomgeneric/s_sound.o
+                0x0404088c        0x0 doomgeneric/doomgeneric/s_sound.o
                                  0x42 (size before relaxing)
  .rodata.str1.1
-                0x040402ec        0x0 doomgeneric/doomgeneric/s_sound.o
+                0x0404088c        0x0 doomgeneric/doomgeneric/s_sound.o
                                  0x27 (size before relaxing)
  .rodata.str1.1
-                0x040402ec        0x0 doomgeneric/doomgeneric/sounds.o
+                0x0404088c        0x0 doomgeneric/doomgeneric/sounds.o
                                 0x191 (size before relaxing)
  .rodata.str1.1
-                0x040402ec        0x0 doomgeneric/doomgeneric/st_lib.o
+                0x0404088c        0x0 doomgeneric/doomgeneric/st_lib.o
                                  0x5b (size before relaxing)
  .rodata.str1.1
-                0x040402ec        0x0 doomgeneric/doomgeneric/st_stuff.o
+                0x0404088c        0x0 doomgeneric/doomgeneric/st_stuff.o
                                 0x18b (size before relaxing)
  .rodata.str1.4
-                0x040402ec        0x0 doomgeneric/doomgeneric/st_stuff.o
+                0x0404088c        0x0 doomgeneric/doomgeneric/st_stuff.o
                                  0x2e (size before relaxing)
  .rodata.str1.1
-                0x040402ec        0x0 doomgeneric/doomgeneric/statdump.o
+                0x0404088c        0x0 doomgeneric/doomgeneric/statdump.o
                                   0xa (size before relaxing)
- *fill*         0x040402ec       0x14 
- .rodata        0x04040300    0x10520 doomgeneric/doomgeneric/tables.o
-                0x04040300                gammatable
-                0x04040800                tantoangle
-                0x04042820                finesine
-                0x0404c820                finetangent
+ *fill*         0x0404088c       0x14 
+ .rodata        0x040408a0    0x10520 doomgeneric/doomgeneric/tables.o
+                0x040408a0                gammatable
+                0x04040da0                tantoangle
+                0x04042dc0                finesine
+                0x0404cdc0                finetangent
  .rodata.str1.1
-                0x04050820        0x0 doomgeneric/doomgeneric/v_video.o
+                0x04050dc0        0x0 doomgeneric/doomgeneric/v_video.o
                                  0x90 (size before relaxing)
  .rodata.str1.4
-                0x04050820        0x0 doomgeneric/doomgeneric/v_video.o
+                0x04050dc0        0x0 doomgeneric/doomgeneric/v_video.o
                                  0x78 (size before relaxing)
- .rodata.cst8   0x04050820       0x10 doomgeneric/doomgeneric/v_video.o
+ .rodata.cst8   0x04050dc0       0x10 doomgeneric/doomgeneric/v_video.o
                                   0x8 (size before relaxing)
  .rodata.str1.1
-                0x04050830        0x0 doomgeneric/doomgeneric/w_file.o
+                0x04050dd0        0x0 doomgeneric/doomgeneric/w_file.o
                                   0x6 (size before relaxing)
  .rodata.str1.1
-                0x04050830        0x0 doomgeneric/doomgeneric/w_main.o
+                0x04050dd0        0x0 doomgeneric/doomgeneric/w_main.o
                                  0x12 (size before relaxing)
  .rodata.str1.1
-                0x04050830        0x0 doomgeneric/doomgeneric/w_wad.o
+                0x04050dd0        0x0 doomgeneric/doomgeneric/w_wad.o
                                  0x9b (size before relaxing)
  .rodata.str1.4
-                0x04050830        0x0 doomgeneric/doomgeneric/w_wad.o
-                                0x15c (size before relaxing)
- *fill*         0x04050830       0x10 
- .rodata        0x04050840       0x20 doomgeneric/doomgeneric/w_wad.o
+                0x04050dd0        0x0 doomgeneric/doomgeneric/w_wad.o
+                                0x1b4 (size before relaxing)
+ *fill*         0x04050dd0       0x10 
+ .rodata        0x04050de0       0x20 doomgeneric/doomgeneric/w_wad.o
  .rodata.str1.1
-                0x04050860        0x0 doomgeneric/doomgeneric/wi_stuff.o
+                0x04050e00        0x0 doomgeneric/doomgeneric/wi_stuff.o
                                  0xe9 (size before relaxing)
  .rodata.str1.4
-                0x04050860        0x0 doomgeneric/doomgeneric/wi_stuff.o
+                0x04050e00        0x0 doomgeneric/doomgeneric/wi_stuff.o
                                  0x22 (size before relaxing)
- .rodata        0x04050860      0x1a0 doomgeneric/doomgeneric/wi_stuff.o
+ .rodata        0x04050e00      0x1a0 doomgeneric/doomgeneric/wi_stuff.o
  .rodata.str1.4
-                0x04050a00        0x0 doomgeneric/doomgeneric/z_zone.o
+                0x04050fa0        0x0 doomgeneric/doomgeneric/z_zone.o
                                 0x27e (size before relaxing)
  .rodata.str1.1
-                0x04050a00        0x0 doomgeneric/doomgeneric/z_zone.o
+                0x04050fa0        0x0 doomgeneric/doomgeneric/z_zone.o
                                  0x32 (size before relaxing)
- .rodata        0x04050a00      0x300 ../libc/ctype.o
- .rodata.cst4   0x04050d00        0x0 ../libc/math.o
+ .rodata        0x04050fa0      0x300 ../libc/ctype.o
+ .rodata.cst4   0x040512a0        0x0 ../libc/math.o
                                   0x4 (size before relaxing)
  .rodata.str1.1
-                0x04050d00        0x0 ../libc/stdio.o
-                                 0x29 (size before relaxing)
- .rodata        0x04050d00       0xdc ../libc/stdio.o
- .rodata.cst4   0x04050ddc        0x0 ../libc/stdio.o
+                0x040512a0        0x0 ../libc/stdio.o
+                                 0x45 (size before relaxing)
+ .rodata        0x040512a0       0xdc ../libc/stdio.o
+ .rodata.cst4   0x0405137c        0x0 ../libc/stdio.o
                                   0x8 (size before relaxing)
- .rodata.cst8   0x04050ddc        0x0 ../libc/stdlib.o
+ .rodata.cst8   0x0405137c        0x0 ../libc/stdlib.o
                                   0x8 (size before relaxing)
- .rodata.cst4   0x04050ddc        0x0 ../libc/stdlib.o
+ .rodata.cst4   0x0405137c        0x0 ../libc/stdlib.o
                                   0x4 (size before relaxing)
+ .rodata.str1.4
+                0x0405137c        0x0 doomgeneric_mysticos.o
+                                 0x6a (size before relaxing)
  .rodata.str1.1
-                0x04050ddc        0x0 doomgeneric_mysticos.o
-                                  0xa (size before relaxing)
- .rodata        0x04050ddc      0x1c0 doomgeneric_mysticos.o
+                0x0405137c        0x0 doomgeneric_mysticos.o
+                                 0x8d (size before relaxing)
+ *fill*         0x0405137c        0x4 
+ .rodata        0x04051380       0x50 doomgeneric_mysticos.o
  .rodata.str1.1
-                0x04050f9c        0x0 w_file_mysticos.o
-                                  0x3 (size before relaxing)
+                0x040513d0        0x0 w_file_mysticos.o
+                                 0x39 (size before relaxing)
 
 .rodata1
  *(.rodata1)
@@ -1586,173 +1598,173 @@ LOAD w_file_mysticos.o
  *(.eh_frame_hdr)
  *(.eh_frame_entry .eh_frame_entry.*)
 
-.eh_frame       0x04050f9c    0x11444
+.eh_frame       0x040513d0    0x115a0
  *(.eh_frame)
- .eh_frame      0x04050f9c      0xa54 doomgeneric/doomgeneric/am_map.o
- .eh_frame      0x040519f0       0x38 doomgeneric/doomgeneric/d_event.o
+ .eh_frame      0x040513d0      0xa54 doomgeneric/doomgeneric/am_map.o
+ .eh_frame      0x04051e24       0x38 doomgeneric/doomgeneric/d_event.o
                                  0x50 (size before relaxing)
- .eh_frame      0x04051a28      0x2c8 doomgeneric/doomgeneric/d_iwad.o
+ .eh_frame      0x04051e5c      0x2c8 doomgeneric/doomgeneric/d_iwad.o
                                 0x2e0 (size before relaxing)
- .eh_frame      0x04051cf0      0x1e8 doomgeneric/doomgeneric/d_loop.o
+ .eh_frame      0x04052124      0x1e8 doomgeneric/doomgeneric/d_loop.o
                                 0x200 (size before relaxing)
- .eh_frame      0x04051ed8      0x8d4 doomgeneric/doomgeneric/d_main.o
-                                0x8ec (size before relaxing)
- .eh_frame      0x040527ac       0xbc doomgeneric/doomgeneric/d_mode.o
+ .eh_frame      0x0405230c      0x8f4 doomgeneric/doomgeneric/d_main.o
+                                0x90c (size before relaxing)
+ .eh_frame      0x04052c00       0xbc doomgeneric/doomgeneric/d_mode.o
                                  0xd4 (size before relaxing)
- .eh_frame      0x04052868      0x198 doomgeneric/doomgeneric/d_net.o
+ .eh_frame      0x04052cbc      0x198 doomgeneric/doomgeneric/d_net.o
                                 0x1b0 (size before relaxing)
- .eh_frame      0x04052a00       0x20 doomgeneric/doomgeneric/doomgeneric.o
-                                 0x38 (size before relaxing)
- .eh_frame      0x04052a20       0x14 doomgeneric/doomgeneric/dummy.o
+ .eh_frame      0x04052e54       0x50 doomgeneric/doomgeneric/doomgeneric.o
+                                 0x68 (size before relaxing)
+ .eh_frame      0x04052ea4       0x14 doomgeneric/doomgeneric/dummy.o
                                  0x2c (size before relaxing)
- .eh_frame      0x04052a34      0x3dc doomgeneric/doomgeneric/f_finale.o
+ .eh_frame      0x04052eb8      0x3dc doomgeneric/doomgeneric/f_finale.o
                                 0x3f4 (size before relaxing)
- .eh_frame      0x04052e10      0x278 doomgeneric/doomgeneric/f_wipe.o
+ .eh_frame      0x04053294      0x278 doomgeneric/doomgeneric/f_wipe.o
                                 0x290 (size before relaxing)
- .eh_frame      0x04053088      0xa14 doomgeneric/doomgeneric/g_game.o
+ .eh_frame      0x0405350c      0xa14 doomgeneric/doomgeneric/g_game.o
                                 0xa2c (size before relaxing)
- .eh_frame      0x04053a9c      0x1d4 doomgeneric/doomgeneric/gusconf.o
+ .eh_frame      0x04053f20      0x1d4 doomgeneric/doomgeneric/gusconf.o
                                 0x1ec (size before relaxing)
- .eh_frame      0x04053c70      0x330 doomgeneric/doomgeneric/hu_lib.o
+ .eh_frame      0x040540f4      0x330 doomgeneric/doomgeneric/hu_lib.o
                                 0x348 (size before relaxing)
- .eh_frame      0x04053fa0      0x280 doomgeneric/doomgeneric/hu_stuff.o
+ .eh_frame      0x04054424      0x280 doomgeneric/doomgeneric/hu_stuff.o
                                 0x298 (size before relaxing)
- .eh_frame      0x04054220       0x14 doomgeneric/doomgeneric/i_endoom.o
+ .eh_frame      0x040546a4       0x14 doomgeneric/doomgeneric/i_endoom.o
                                  0x2c (size before relaxing)
- .eh_frame      0x04054234       0x70 doomgeneric/doomgeneric/i_input.o
-                                 0x88 (size before relaxing)
- .eh_frame      0x040542a4       0xe0 doomgeneric/doomgeneric/i_joystick.o
+ .eh_frame      0x040546b8       0x84 doomgeneric/doomgeneric/i_input.o
+                                 0x9c (size before relaxing)
+ .eh_frame      0x0405473c       0xe0 doomgeneric/doomgeneric/i_joystick.o
                                  0xf8 (size before relaxing)
- .eh_frame      0x04054384      0x5b4 doomgeneric/doomgeneric/i_scale.o
+ .eh_frame      0x0405481c      0x5b4 doomgeneric/doomgeneric/i_scale.o
                                 0x5cc (size before relaxing)
- .eh_frame      0x04054938      0x26c doomgeneric/doomgeneric/i_sound.o
+ .eh_frame      0x04054dd0      0x26c doomgeneric/doomgeneric/i_sound.o
                                 0x284 (size before relaxing)
- .eh_frame      0x04054ba4      0x2f8 doomgeneric/doomgeneric/i_system.o
+ .eh_frame      0x0405503c      0x2f8 doomgeneric/doomgeneric/i_system.o
                                 0x310 (size before relaxing)
- .eh_frame      0x04054e9c       0x90 doomgeneric/doomgeneric/i_timer.o
+ .eh_frame      0x04055334       0x90 doomgeneric/doomgeneric/i_timer.o
                                  0xa8 (size before relaxing)
- .eh_frame      0x04054f2c      0x33c doomgeneric/doomgeneric/i_video.o
+ .eh_frame      0x040553c4      0x33c doomgeneric/doomgeneric/i_video.o
                                 0x354 (size before relaxing)
- .eh_frame      0x04055268      0x10c doomgeneric/doomgeneric/m_argv.o
+ .eh_frame      0x04055700      0x10c doomgeneric/doomgeneric/m_argv.o
                                 0x124 (size before relaxing)
- .eh_frame      0x04055374       0x28 doomgeneric/doomgeneric/m_bbox.o
+ .eh_frame      0x0405580c       0x28 doomgeneric/doomgeneric/m_bbox.o
                                  0x40 (size before relaxing)
- .eh_frame      0x0405539c       0x90 doomgeneric/doomgeneric/m_cheat.o
+ .eh_frame      0x04055834       0x90 doomgeneric/doomgeneric/m_cheat.o
                                  0xa8 (size before relaxing)
- .eh_frame      0x0405542c      0x270 doomgeneric/doomgeneric/m_config.o
+ .eh_frame      0x040558c4      0x270 doomgeneric/doomgeneric/m_config.o
                                 0x288 (size before relaxing)
- .eh_frame      0x0405569c      0x658 doomgeneric/doomgeneric/m_controls.o
+ .eh_frame      0x04055b34      0x658 doomgeneric/doomgeneric/m_controls.o
                                 0x670 (size before relaxing)
- .eh_frame      0x04055cf4       0x5c doomgeneric/doomgeneric/m_fixed.o
+ .eh_frame      0x0405618c       0x5c doomgeneric/doomgeneric/m_fixed.o
                                  0x74 (size before relaxing)
- .eh_frame      0x04055d50      0xc88 doomgeneric/doomgeneric/m_menu.o
+ .eh_frame      0x040561e8      0xc88 doomgeneric/doomgeneric/m_menu.o
                                 0xca0 (size before relaxing)
- .eh_frame      0x040569d8      0x5a0 doomgeneric/doomgeneric/m_misc.o
+ .eh_frame      0x04056e70      0x5a0 doomgeneric/doomgeneric/m_misc.o
                                 0x5b8 (size before relaxing)
- .eh_frame      0x04056f78       0x3c doomgeneric/doomgeneric/m_random.o
+ .eh_frame      0x04057410       0x3c doomgeneric/doomgeneric/m_random.o
                                  0x54 (size before relaxing)
- .eh_frame      0x04056fb4      0x188 doomgeneric/doomgeneric/memio.o
+ .eh_frame      0x0405744c      0x188 doomgeneric/doomgeneric/memio.o
                                 0x1a0 (size before relaxing)
- .eh_frame      0x0405713c      0x2d8 doomgeneric/doomgeneric/mus2mid.o
+ .eh_frame      0x040575d4      0x2d8 doomgeneric/doomgeneric/mus2mid.o
                                 0x2f0 (size before relaxing)
- .eh_frame      0x04057414      0x17c doomgeneric/doomgeneric/p_ceilng.o
+ .eh_frame      0x040578ac      0x17c doomgeneric/doomgeneric/p_ceilng.o
                                 0x194 (size before relaxing)
- .eh_frame      0x04057590      0x3a4 doomgeneric/doomgeneric/p_doors.o
+ .eh_frame      0x04057a28      0x3a4 doomgeneric/doomgeneric/p_doors.o
                                 0x3bc (size before relaxing)
- .eh_frame      0x04057934     0x1310 doomgeneric/doomgeneric/p_enemy.o
+ .eh_frame      0x04057dcc     0x1310 doomgeneric/doomgeneric/p_enemy.o
                                0x1328 (size before relaxing)
- .eh_frame      0x04058c44      0x428 doomgeneric/doomgeneric/p_floor.o
+ .eh_frame      0x040590dc      0x428 doomgeneric/doomgeneric/p_floor.o
                                 0x440 (size before relaxing)
- .eh_frame      0x0405906c      0x37c doomgeneric/doomgeneric/p_inter.o
+ .eh_frame      0x04059504      0x37c doomgeneric/doomgeneric/p_inter.o
                                 0x394 (size before relaxing)
- .eh_frame      0x040593e8      0x298 doomgeneric/doomgeneric/p_lights.o
+ .eh_frame      0x04059880      0x298 doomgeneric/doomgeneric/p_lights.o
                                 0x2b0 (size before relaxing)
- .eh_frame      0x04059680      0x97c doomgeneric/doomgeneric/p_map.o
+ .eh_frame      0x04059b18      0x97c doomgeneric/doomgeneric/p_map.o
                                 0x994 (size before relaxing)
- .eh_frame      0x04059ffc      0x524 doomgeneric/doomgeneric/p_maputl.o
+ .eh_frame      0x0405a494      0x524 doomgeneric/doomgeneric/p_maputl.o
                                 0x53c (size before relaxing)
- .eh_frame      0x0405a520      0x718 doomgeneric/doomgeneric/p_mobj.o
+ .eh_frame      0x0405a9b8      0x718 doomgeneric/doomgeneric/p_mobj.o
                                 0x730 (size before relaxing)
- .eh_frame      0x0405ac38      0x1c0 doomgeneric/doomgeneric/p_plats.o
+ .eh_frame      0x0405b0d0      0x1c0 doomgeneric/doomgeneric/p_plats.o
                                 0x1d8 (size before relaxing)
- .eh_frame      0x0405adf8      0x704 doomgeneric/doomgeneric/p_pspr.o
+ .eh_frame      0x0405b290      0x704 doomgeneric/doomgeneric/p_pspr.o
                                 0x71c (size before relaxing)
- .eh_frame      0x0405b4fc      0x570 doomgeneric/doomgeneric/p_saveg.o
+ .eh_frame      0x0405b994      0x570 doomgeneric/doomgeneric/p_saveg.o
                                 0x588 (size before relaxing)
- .eh_frame      0x0405ba6c      0x538 doomgeneric/doomgeneric/p_setup.o
+ .eh_frame      0x0405bf04      0x538 doomgeneric/doomgeneric/p_setup.o
                                 0x550 (size before relaxing)
- .eh_frame      0x0405bfa4      0x230 doomgeneric/doomgeneric/p_sight.o
+ .eh_frame      0x0405c43c      0x230 doomgeneric/doomgeneric/p_sight.o
                                 0x248 (size before relaxing)
- .eh_frame      0x0405c1d4      0x73c doomgeneric/doomgeneric/p_spec.o
+ .eh_frame      0x0405c66c      0x73c doomgeneric/doomgeneric/p_spec.o
                                 0x754 (size before relaxing)
- .eh_frame      0x0405c910      0x36c doomgeneric/doomgeneric/p_switch.o
+ .eh_frame      0x0405cda8      0x36c doomgeneric/doomgeneric/p_switch.o
                                 0x384 (size before relaxing)
- .eh_frame      0x0405cc7c       0x94 doomgeneric/doomgeneric/p_telept.o
+ .eh_frame      0x0405d114       0x94 doomgeneric/doomgeneric/p_telept.o
                                  0xac (size before relaxing)
- .eh_frame      0x0405cd10       0xc0 doomgeneric/doomgeneric/p_tick.o
+ .eh_frame      0x0405d1a8       0xc0 doomgeneric/doomgeneric/p_tick.o
                                  0xd8 (size before relaxing)
- .eh_frame      0x0405cdd0      0x1c8 doomgeneric/doomgeneric/p_user.o
+ .eh_frame      0x0405d268      0x1c8 doomgeneric/doomgeneric/p_user.o
                                 0x1e0 (size before relaxing)
- .eh_frame      0x0405cf98      0x2d4 doomgeneric/doomgeneric/r_bsp.o
+ .eh_frame      0x0405d430      0x2d4 doomgeneric/doomgeneric/r_bsp.o
                                 0x2ec (size before relaxing)
- .eh_frame      0x0405d26c      0x5d0 doomgeneric/doomgeneric/r_data.o
-                                0x5e8 (size before relaxing)
- .eh_frame      0x0405d83c      0x4a4 doomgeneric/doomgeneric/r_draw.o
+ .eh_frame      0x0405d704      0x5d4 doomgeneric/doomgeneric/r_data.o
+                                0x5ec (size before relaxing)
+ .eh_frame      0x0405dcd8      0x4a4 doomgeneric/doomgeneric/r_draw.o
                                 0x4bc (size before relaxing)
- .eh_frame      0x0405dce0      0x414 doomgeneric/doomgeneric/r_main.o
-                                0x42c (size before relaxing)
- .eh_frame      0x0405e0f4      0x298 doomgeneric/doomgeneric/r_plane.o
+ .eh_frame      0x0405e17c      0x410 doomgeneric/doomgeneric/r_main.o
+                                0x428 (size before relaxing)
+ .eh_frame      0x0405e58c      0x298 doomgeneric/doomgeneric/r_plane.o
                                 0x2b0 (size before relaxing)
- .eh_frame      0x0405e38c      0x1f8 doomgeneric/doomgeneric/r_segs.o
+ .eh_frame      0x0405e824      0x1f8 doomgeneric/doomgeneric/r_segs.o
                                 0x210 (size before relaxing)
- .eh_frame      0x0405e584       0x14 doomgeneric/doomgeneric/r_sky.o
+ .eh_frame      0x0405ea1c       0x14 doomgeneric/doomgeneric/r_sky.o
                                  0x2c (size before relaxing)
- .eh_frame      0x0405e598      0x520 doomgeneric/doomgeneric/r_things.o
+ .eh_frame      0x0405ea30      0x520 doomgeneric/doomgeneric/r_things.o
                                 0x538 (size before relaxing)
- .eh_frame      0x0405eab8      0x3b4 doomgeneric/doomgeneric/s_sound.o
+ .eh_frame      0x0405ef50      0x3b4 doomgeneric/doomgeneric/s_sound.o
                                 0x3cc (size before relaxing)
- .eh_frame      0x0405ee6c      0x140 doomgeneric/doomgeneric/sha1.o
+ .eh_frame      0x0405f304      0x140 doomgeneric/doomgeneric/sha1.o
                                 0x158 (size before relaxing)
- .eh_frame      0x0405efac      0x234 doomgeneric/doomgeneric/st_lib.o
+ .eh_frame      0x0405f444      0x234 doomgeneric/doomgeneric/st_lib.o
                                 0x24c (size before relaxing)
- .eh_frame      0x0405f1e0      0x834 doomgeneric/doomgeneric/st_stuff.o
+ .eh_frame      0x0405f678      0x834 doomgeneric/doomgeneric/st_stuff.o
                                 0x84c (size before relaxing)
- .eh_frame      0x0405fa14       0x48 doomgeneric/doomgeneric/statdump.o
+ .eh_frame      0x0405feac       0x48 doomgeneric/doomgeneric/statdump.o
                                  0x60 (size before relaxing)
- .eh_frame      0x0405fa5c       0x14 doomgeneric/doomgeneric/tables.o
+ .eh_frame      0x0405fef4       0x14 doomgeneric/doomgeneric/tables.o
                                  0x2c (size before relaxing)
- .eh_frame      0x0405fa70      0x638 doomgeneric/doomgeneric/v_video.o
+ .eh_frame      0x0405ff08      0x638 doomgeneric/doomgeneric/v_video.o
                                 0x650 (size before relaxing)
- .eh_frame      0x040600a8       0xc0 doomgeneric/doomgeneric/w_checksum.o
+ .eh_frame      0x04060540       0xc0 doomgeneric/doomgeneric/w_checksum.o
                                  0xd8 (size before relaxing)
- .eh_frame      0x04060168       0x4c doomgeneric/doomgeneric/w_file.o
+ .eh_frame      0x04060600       0x4c doomgeneric/doomgeneric/w_file.o
                                  0x64 (size before relaxing)
- .eh_frame      0x040601b4       0x4c doomgeneric/doomgeneric/w_main.o
+ .eh_frame      0x0406064c       0x4c doomgeneric/doomgeneric/w_main.o
                                  0x64 (size before relaxing)
- .eh_frame      0x04060200      0x4ec doomgeneric/doomgeneric/w_wad.o
-                                0x504 (size before relaxing)
- .eh_frame      0x040606ec      0xd18 doomgeneric/doomgeneric/wi_stuff.o
+ .eh_frame      0x04060698      0x510 doomgeneric/doomgeneric/w_wad.o
+                                0x528 (size before relaxing)
+ .eh_frame      0x04060ba8      0xd18 doomgeneric/doomgeneric/wi_stuff.o
                                 0xd30 (size before relaxing)
- .eh_frame      0x04061404      0x2c0 doomgeneric/doomgeneric/z_zone.o
+ .eh_frame      0x040618c0      0x2c0 doomgeneric/doomgeneric/z_zone.o
                                 0x2d8 (size before relaxing)
- .eh_frame      0x040616c4       0x90 ../libc/builtins.o
+ .eh_frame      0x04061b80       0x90 ../libc/builtins.o
                                  0xa8 (size before relaxing)
- .eh_frame      0x04061754       0xdc ../libc/ctype.o
+ .eh_frame      0x04061c10       0xdc ../libc/ctype.o
                                  0xf4 (size before relaxing)
- .eh_frame      0x04061830       0xe0 ../libc/math.o
+ .eh_frame      0x04061cec       0xe0 ../libc/math.o
                                  0xf8 (size before relaxing)
- .eh_frame      0x04061910      0x1b4 ../libc/posix.o
-                                0x1cc (size before relaxing)
- .eh_frame      0x04061ac4      0x378 ../libc/stdio.o
-                                0x390 (size before relaxing)
- .eh_frame      0x04061e3c      0x170 ../libc/stdlib.o
+ .eh_frame      0x04061dcc      0x1d4 ../libc/posix.o
+                                0x1ec (size before relaxing)
+ .eh_frame      0x04061fa0      0x3c8 ../libc/stdio.o
+                                0x3e0 (size before relaxing)
+ .eh_frame      0x04062368      0x170 ../libc/stdlib.o
                                 0x188 (size before relaxing)
- .eh_frame      0x04061fac      0x2c4 ../libc/string.o
+ .eh_frame      0x040624d8      0x2c4 ../libc/string.o
                                 0x2dc (size before relaxing)
- .eh_frame      0x04062270       0xcc doomgeneric_mysticos.o
-                                 0xe4 (size before relaxing)
- .eh_frame      0x0406233c       0xa4 w_file_mysticos.o
-                                 0xbc (size before relaxing)
+ .eh_frame      0x0406279c      0x11c doomgeneric_mysticos.o
+                                0x134 (size before relaxing)
+ .eh_frame      0x040628b8       0xb8 w_file_mysticos.o
+                                 0xd0 (size before relaxing)
  *(.eh_frame.*)
 
 .sframe
@@ -1772,188 +1784,188 @@ LOAD w_file_mysticos.o
  *(.note.build-id)
 
 .note.GNU-stack
-                0x040623e0        0x0
+                0x04062970        0x0
  *(.note.GNU-stack)
  .note.GNU-stack
-                0x040623e0        0x0 doomgeneric/doomgeneric/am_map.o
+                0x04062970        0x0 doomgeneric/doomgeneric/am_map.o
  .note.GNU-stack
-                0x040623e0        0x0 doomgeneric/doomgeneric/d_event.o
+                0x04062970        0x0 doomgeneric/doomgeneric/d_event.o
  .note.GNU-stack
-                0x040623e0        0x0 doomgeneric/doomgeneric/d_items.o
+                0x04062970        0x0 doomgeneric/doomgeneric/d_items.o
  .note.GNU-stack
-                0x040623e0        0x0 doomgeneric/doomgeneric/d_iwad.o
+                0x04062970        0x0 doomgeneric/doomgeneric/d_iwad.o
  .note.GNU-stack
-                0x040623e0        0x0 doomgeneric/doomgeneric/d_loop.o
+                0x04062970        0x0 doomgeneric/doomgeneric/d_loop.o
  .note.GNU-stack
-                0x040623e0        0x0 doomgeneric/doomgeneric/d_main.o
+                0x04062970        0x0 doomgeneric/doomgeneric/d_main.o
  .note.GNU-stack
-                0x040623e0        0x0 doomgeneric/doomgeneric/d_mode.o
+                0x04062970        0x0 doomgeneric/doomgeneric/d_mode.o
  .note.GNU-stack
-                0x040623e0        0x0 doomgeneric/doomgeneric/d_net.o
+                0x04062970        0x0 doomgeneric/doomgeneric/d_net.o
  .note.GNU-stack
-                0x040623e0        0x0 doomgeneric/doomgeneric/doomdef.o
+                0x04062970        0x0 doomgeneric/doomgeneric/doomdef.o
  .note.GNU-stack
-                0x040623e0        0x0 doomgeneric/doomgeneric/doomgeneric.o
+                0x04062970        0x0 doomgeneric/doomgeneric/doomgeneric.o
  .note.GNU-stack
-                0x040623e0        0x0 doomgeneric/doomgeneric/doomstat.o
+                0x04062970        0x0 doomgeneric/doomgeneric/doomstat.o
  .note.GNU-stack
-                0x040623e0        0x0 doomgeneric/doomgeneric/dstrings.o
+                0x04062970        0x0 doomgeneric/doomgeneric/dstrings.o
  .note.GNU-stack
-                0x040623e0        0x0 doomgeneric/doomgeneric/dummy.o
+                0x04062970        0x0 doomgeneric/doomgeneric/dummy.o
  .note.GNU-stack
-                0x040623e0        0x0 doomgeneric/doomgeneric/f_finale.o
+                0x04062970        0x0 doomgeneric/doomgeneric/f_finale.o
  .note.GNU-stack
-                0x040623e0        0x0 doomgeneric/doomgeneric/f_wipe.o
+                0x04062970        0x0 doomgeneric/doomgeneric/f_wipe.o
  .note.GNU-stack
-                0x040623e0        0x0 doomgeneric/doomgeneric/g_game.o
+                0x04062970        0x0 doomgeneric/doomgeneric/g_game.o
  .note.GNU-stack
-                0x040623e0        0x0 doomgeneric/doomgeneric/gusconf.o
+                0x04062970        0x0 doomgeneric/doomgeneric/gusconf.o
  .note.GNU-stack
-                0x040623e0        0x0 doomgeneric/doomgeneric/hu_lib.o
+                0x04062970        0x0 doomgeneric/doomgeneric/hu_lib.o
  .note.GNU-stack
-                0x040623e0        0x0 doomgeneric/doomgeneric/hu_stuff.o
+                0x04062970        0x0 doomgeneric/doomgeneric/hu_stuff.o
  .note.GNU-stack
-                0x040623e0        0x0 doomgeneric/doomgeneric/i_endoom.o
+                0x04062970        0x0 doomgeneric/doomgeneric/i_endoom.o
  .note.GNU-stack
-                0x040623e0        0x0 doomgeneric/doomgeneric/i_input.o
+                0x04062970        0x0 doomgeneric/doomgeneric/i_input.o
  .note.GNU-stack
-                0x040623e0        0x0 doomgeneric/doomgeneric/i_joystick.o
+                0x04062970        0x0 doomgeneric/doomgeneric/i_joystick.o
  .note.GNU-stack
-                0x040623e0        0x0 doomgeneric/doomgeneric/i_scale.o
+                0x04062970        0x0 doomgeneric/doomgeneric/i_scale.o
  .note.GNU-stack
-                0x040623e0        0x0 doomgeneric/doomgeneric/i_sound.o
+                0x04062970        0x0 doomgeneric/doomgeneric/i_sound.o
  .note.GNU-stack
-                0x040623e0        0x0 doomgeneric/doomgeneric/i_system.o
+                0x04062970        0x0 doomgeneric/doomgeneric/i_system.o
  .note.GNU-stack
-                0x040623e0        0x0 doomgeneric/doomgeneric/i_timer.o
+                0x04062970        0x0 doomgeneric/doomgeneric/i_timer.o
  .note.GNU-stack
-                0x040623e0        0x0 doomgeneric/doomgeneric/i_video.o
+                0x04062970        0x0 doomgeneric/doomgeneric/i_video.o
  .note.GNU-stack
-                0x040623e0        0x0 doomgeneric/doomgeneric/icon.o
+                0x04062970        0x0 doomgeneric/doomgeneric/icon.o
  .note.GNU-stack
-                0x040623e0        0x0 doomgeneric/doomgeneric/info.o
+                0x04062970        0x0 doomgeneric/doomgeneric/info.o
  .note.GNU-stack
-                0x040623e0        0x0 doomgeneric/doomgeneric/m_argv.o
+                0x04062970        0x0 doomgeneric/doomgeneric/m_argv.o
  .note.GNU-stack
-                0x040623e0        0x0 doomgeneric/doomgeneric/m_bbox.o
+                0x04062970        0x0 doomgeneric/doomgeneric/m_bbox.o
  .note.GNU-stack
-                0x040623e0        0x0 doomgeneric/doomgeneric/m_cheat.o
+                0x04062970        0x0 doomgeneric/doomgeneric/m_cheat.o
  .note.GNU-stack
-                0x040623e0        0x0 doomgeneric/doomgeneric/m_config.o
+                0x04062970        0x0 doomgeneric/doomgeneric/m_config.o
  .note.GNU-stack
-                0x040623e0        0x0 doomgeneric/doomgeneric/m_controls.o
+                0x04062970        0x0 doomgeneric/doomgeneric/m_controls.o
  .note.GNU-stack
-                0x040623e0        0x0 doomgeneric/doomgeneric/m_fixed.o
+                0x04062970        0x0 doomgeneric/doomgeneric/m_fixed.o
  .note.GNU-stack
-                0x040623e0        0x0 doomgeneric/doomgeneric/m_menu.o
+                0x04062970        0x0 doomgeneric/doomgeneric/m_menu.o
  .note.GNU-stack
-                0x040623e0        0x0 doomgeneric/doomgeneric/m_misc.o
+                0x04062970        0x0 doomgeneric/doomgeneric/m_misc.o
  .note.GNU-stack
-                0x040623e0        0x0 doomgeneric/doomgeneric/m_random.o
+                0x04062970        0x0 doomgeneric/doomgeneric/m_random.o
  .note.GNU-stack
-                0x040623e0        0x0 doomgeneric/doomgeneric/memio.o
+                0x04062970        0x0 doomgeneric/doomgeneric/memio.o
  .note.GNU-stack
-                0x040623e0        0x0 doomgeneric/doomgeneric/mus2mid.o
+                0x04062970        0x0 doomgeneric/doomgeneric/mus2mid.o
  .note.GNU-stack
-                0x040623e0        0x0 doomgeneric/doomgeneric/p_ceilng.o
+                0x04062970        0x0 doomgeneric/doomgeneric/p_ceilng.o
  .note.GNU-stack
-                0x040623e0        0x0 doomgeneric/doomgeneric/p_doors.o
+                0x04062970        0x0 doomgeneric/doomgeneric/p_doors.o
  .note.GNU-stack
-                0x040623e0        0x0 doomgeneric/doomgeneric/p_enemy.o
+                0x04062970        0x0 doomgeneric/doomgeneric/p_enemy.o
  .note.GNU-stack
-                0x040623e0        0x0 doomgeneric/doomgeneric/p_floor.o
+                0x04062970        0x0 doomgeneric/doomgeneric/p_floor.o
  .note.GNU-stack
-                0x040623e0        0x0 doomgeneric/doomgeneric/p_inter.o
+                0x04062970        0x0 doomgeneric/doomgeneric/p_inter.o
  .note.GNU-stack
-                0x040623e0        0x0 doomgeneric/doomgeneric/p_lights.o
+                0x04062970        0x0 doomgeneric/doomgeneric/p_lights.o
  .note.GNU-stack
-                0x040623e0        0x0 doomgeneric/doomgeneric/p_map.o
+                0x04062970        0x0 doomgeneric/doomgeneric/p_map.o
  .note.GNU-stack
-                0x040623e0        0x0 doomgeneric/doomgeneric/p_maputl.o
+                0x04062970        0x0 doomgeneric/doomgeneric/p_maputl.o
  .note.GNU-stack
-                0x040623e0        0x0 doomgeneric/doomgeneric/p_mobj.o
+                0x04062970        0x0 doomgeneric/doomgeneric/p_mobj.o
  .note.GNU-stack
-                0x040623e0        0x0 doomgeneric/doomgeneric/p_plats.o
+                0x04062970        0x0 doomgeneric/doomgeneric/p_plats.o
  .note.GNU-stack
-                0x040623e0        0x0 doomgeneric/doomgeneric/p_pspr.o
+                0x04062970        0x0 doomgeneric/doomgeneric/p_pspr.o
  .note.GNU-stack
-                0x040623e0        0x0 doomgeneric/doomgeneric/p_saveg.o
+                0x04062970        0x0 doomgeneric/doomgeneric/p_saveg.o
  .note.GNU-stack
-                0x040623e0        0x0 doomgeneric/doomgeneric/p_setup.o
+                0x04062970        0x0 doomgeneric/doomgeneric/p_setup.o
  .note.GNU-stack
-                0x040623e0        0x0 doomgeneric/doomgeneric/p_sight.o
+                0x04062970        0x0 doomgeneric/doomgeneric/p_sight.o
  .note.GNU-stack
-                0x040623e0        0x0 doomgeneric/doomgeneric/p_spec.o
+                0x04062970        0x0 doomgeneric/doomgeneric/p_spec.o
  .note.GNU-stack
-                0x040623e0        0x0 doomgeneric/doomgeneric/p_switch.o
+                0x04062970        0x0 doomgeneric/doomgeneric/p_switch.o
  .note.GNU-stack
-                0x040623e0        0x0 doomgeneric/doomgeneric/p_telept.o
+                0x04062970        0x0 doomgeneric/doomgeneric/p_telept.o
  .note.GNU-stack
-                0x040623e0        0x0 doomgeneric/doomgeneric/p_tick.o
+                0x04062970        0x0 doomgeneric/doomgeneric/p_tick.o
  .note.GNU-stack
-                0x040623e0        0x0 doomgeneric/doomgeneric/p_user.o
+                0x04062970        0x0 doomgeneric/doomgeneric/p_user.o
  .note.GNU-stack
-                0x040623e0        0x0 doomgeneric/doomgeneric/r_bsp.o
+                0x04062970        0x0 doomgeneric/doomgeneric/r_bsp.o
  .note.GNU-stack
-                0x040623e0        0x0 doomgeneric/doomgeneric/r_data.o
+                0x04062970        0x0 doomgeneric/doomgeneric/r_data.o
  .note.GNU-stack
-                0x040623e0        0x0 doomgeneric/doomgeneric/r_draw.o
+                0x04062970        0x0 doomgeneric/doomgeneric/r_draw.o
  .note.GNU-stack
-                0x040623e0        0x0 doomgeneric/doomgeneric/r_main.o
+                0x04062970        0x0 doomgeneric/doomgeneric/r_main.o
  .note.GNU-stack
-                0x040623e0        0x0 doomgeneric/doomgeneric/r_plane.o
+                0x04062970        0x0 doomgeneric/doomgeneric/r_plane.o
  .note.GNU-stack
-                0x040623e0        0x0 doomgeneric/doomgeneric/r_segs.o
+                0x04062970        0x0 doomgeneric/doomgeneric/r_segs.o
  .note.GNU-stack
-                0x040623e0        0x0 doomgeneric/doomgeneric/r_sky.o
+                0x04062970        0x0 doomgeneric/doomgeneric/r_sky.o
  .note.GNU-stack
-                0x040623e0        0x0 doomgeneric/doomgeneric/r_things.o
+                0x04062970        0x0 doomgeneric/doomgeneric/r_things.o
  .note.GNU-stack
-                0x040623e0        0x0 doomgeneric/doomgeneric/s_sound.o
+                0x04062970        0x0 doomgeneric/doomgeneric/s_sound.o
  .note.GNU-stack
-                0x040623e0        0x0 doomgeneric/doomgeneric/sha1.o
+                0x04062970        0x0 doomgeneric/doomgeneric/sha1.o
  .note.GNU-stack
-                0x040623e0        0x0 doomgeneric/doomgeneric/sounds.o
+                0x04062970        0x0 doomgeneric/doomgeneric/sounds.o
  .note.GNU-stack
-                0x040623e0        0x0 doomgeneric/doomgeneric/st_lib.o
+                0x04062970        0x0 doomgeneric/doomgeneric/st_lib.o
  .note.GNU-stack
-                0x040623e0        0x0 doomgeneric/doomgeneric/st_stuff.o
+                0x04062970        0x0 doomgeneric/doomgeneric/st_stuff.o
  .note.GNU-stack
-                0x040623e0        0x0 doomgeneric/doomgeneric/statdump.o
+                0x04062970        0x0 doomgeneric/doomgeneric/statdump.o
  .note.GNU-stack
-                0x040623e0        0x0 doomgeneric/doomgeneric/tables.o
+                0x04062970        0x0 doomgeneric/doomgeneric/tables.o
  .note.GNU-stack
-                0x040623e0        0x0 doomgeneric/doomgeneric/v_video.o
+                0x04062970        0x0 doomgeneric/doomgeneric/v_video.o
  .note.GNU-stack
-                0x040623e0        0x0 doomgeneric/doomgeneric/w_checksum.o
+                0x04062970        0x0 doomgeneric/doomgeneric/w_checksum.o
  .note.GNU-stack
-                0x040623e0        0x0 doomgeneric/doomgeneric/w_file.o
+                0x04062970        0x0 doomgeneric/doomgeneric/w_file.o
  .note.GNU-stack
-                0x040623e0        0x0 doomgeneric/doomgeneric/w_main.o
+                0x04062970        0x0 doomgeneric/doomgeneric/w_main.o
  .note.GNU-stack
-                0x040623e0        0x0 doomgeneric/doomgeneric/w_wad.o
+                0x04062970        0x0 doomgeneric/doomgeneric/w_wad.o
  .note.GNU-stack
-                0x040623e0        0x0 doomgeneric/doomgeneric/wi_stuff.o
+                0x04062970        0x0 doomgeneric/doomgeneric/wi_stuff.o
  .note.GNU-stack
-                0x040623e0        0x0 doomgeneric/doomgeneric/z_zone.o
+                0x04062970        0x0 doomgeneric/doomgeneric/z_zone.o
  .note.GNU-stack
-                0x040623e0        0x0 ../libc/builtins.o
+                0x04062970        0x0 ../libc/builtins.o
  .note.GNU-stack
-                0x040623e0        0x0 ../libc/ctype.o
+                0x04062970        0x0 ../libc/ctype.o
  .note.GNU-stack
-                0x040623e0        0x0 ../libc/math.o
+                0x04062970        0x0 ../libc/math.o
  .note.GNU-stack
-                0x040623e0        0x0 ../libc/posix.o
+                0x04062970        0x0 ../libc/posix.o
  .note.GNU-stack
-                0x040623e0        0x0 ../libc/stdio.o
+                0x04062970        0x0 ../libc/stdio.o
  .note.GNU-stack
-                0x040623e0        0x0 ../libc/stdlib.o
+                0x04062970        0x0 ../libc/stdlib.o
  .note.GNU-stack
-                0x040623e0        0x0 ../libc/string.o
+                0x04062970        0x0 ../libc/string.o
  .note.GNU-stack
-                0x040623e0        0x0 doomgeneric_mysticos.o
+                0x04062970        0x0 doomgeneric_mysticos.o
  .note.GNU-stack
-                0x040623e0        0x0 w_file_mysticos.o
+                0x04062970        0x0 w_file_mysticos.o
 
 .note.gnu.property
  *(.note.gnu.property)

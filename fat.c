@@ -34,6 +34,7 @@ void print_string(const char* str);
 void put_char(char c);
 void print_int(int num);
 extern void ata_read_sector(unsigned int lba, unsigned char* buffer);
+extern void ata_read_sectors(unsigned int lba, unsigned int count, unsigned char* buffer);
 extern void ata_write_sector(unsigned int lba, const unsigned char* buffer);
 
 #define MAX_CLUSTERS_PER_FILE 256
@@ -128,17 +129,29 @@ static void fat12_set(unsigned int fat_start, unsigned int fat_sectors, unsigned
     }
 }
 
+// Кэш FAT-сектора: соседние кластеры в одном секторе FAT -> читаем 1 раз.
+static unsigned int g_fat_cache_lba = 0xFFFFFFFFu;
+static unsigned char g_fat_cache[SECTOR_SIZE];
+
 static unsigned int fat_next_cluster(unsigned int cluster) {
     fat_load_geom();
     unsigned int fat_start = G->reserved_sectors;
     if (G->is_fat16) {
         unsigned int lba = fat_start + (cluster * 2) / SECTOR_SIZE;
         unsigned int off = (cluster * 2) % SECTOR_SIZE;
-        unsigned char buf[SECTOR_SIZE];
-        ata_read_sector(lba, buf);
-        return *(unsigned short*)&buf[off];
+        if (lba != g_fat_cache_lba) {
+            ata_read_sector(lba, g_fat_cache);
+            g_fat_cache_lba = lba;
+        }
+        return *(unsigned short*)&g_fat_cache[off];
     }
     return fat12_get(fat_start, G->sectors_per_fat, cluster);
+}
+
+// Конец цепочки (EOC): FAT12 -> >=0xFF8, FAT16 -> >=0xFFF8.
+static int fat_is_eoc(unsigned int c) {
+    fat_load_geom();
+    return G->is_fat16 ? (c >= 0xFFF8u) : (c >= 0xFF8u);
 }
 
 static int fat_alloc_chain(unsigned int needed, unsigned int* chain) {
@@ -188,7 +201,7 @@ static void fat_write_chain(unsigned int* chain, unsigned int n) {
 static void fat_free_chain(unsigned int first_cluster) {
     fat_load_geom();
     unsigned int c = first_cluster;
-    while (c != 0 && c != 0xFFFF && c != 0xFFF) {
+    while (c >= 2 && !fat_is_eoc(c)) {
         unsigned int next = fat_next_cluster(c);
         for (unsigned int f = 0; f < G->fat_count; f++) {
             unsigned int base = G->reserved_sectors + f * G->sectors_per_fat;
@@ -203,7 +216,7 @@ static void fat_free_chain(unsigned int first_cluster) {
                 fat12_set(base, G->sectors_per_fat, c, 0x000);
             }
         }
-        if (next == 0xFFFF || next == 0xFFF || next == 0) break;
+        if (next < 2 || fat_is_eoc(next)) break;
         c = next;
     }
 }
@@ -255,7 +268,7 @@ static int fat_dir_lookup(unsigned int dir, const unsigned char* fat_name,
         }
         if (dir == 0) { sector++; continue; }
         unsigned int nxt = fat_next_cluster(dir);
-        if (nxt == 0 || nxt == 0xFFFF || nxt == 0xFFF) break;
+        if (nxt < 2 || fat_is_eoc(nxt)) break;
         dir = nxt;
         sector = G->data_start_sector + (dir - 2) * G->sectors_per_cluster;
         end_sector = sector + G->sectors_per_cluster;
@@ -323,15 +336,27 @@ int fat_read_file_buf(const char* path, unsigned char* buf, unsigned int max) {
     unsigned int written = 0;
     unsigned int cluster = fc;
     unsigned char sec[SECTOR_SIZE];
-    while (written < sz && written < max && cluster >= 2 && cluster != 0xFFFF && cluster != 0xFFF) {
-        for (unsigned int s = 0; s < G->sectors_per_cluster && written < sz && written < max; s++) {
-            unsigned int lba = G->data_start_sector + (cluster - 2) * G->sectors_per_cluster + s;
-            ata_read_sector(lba, sec);
-            for (int k = 0; k < SECTOR_SIZE && written < sz && written < max; k++)
-                buf[written++] = sec[k];
+    // ВАЖНО: 0xFFF - конец ТОЛЬКО для FAT12! В FAT16 конец = 0xFFF8..0xFFFF.
+    // Раньше обрывались на нормальном кластере 4095 (0xFFF).
+    while (written < sz && written < max && cluster >= 2 && cluster < 0xFFF8) {
+        // Мультисектор: несколько секторов за одну ATA-команду.
+        unsigned int base_lba = G->data_start_sector + (cluster - 2) * G->sectors_per_cluster;
+        unsigned int need = sz - written;
+        if (need > max - written) need = max - written;
+        unsigned int secs = (need + SECTOR_SIZE - 1) / SECTOR_SIZE;
+        if (secs > G->sectors_per_cluster) secs = G->sectors_per_cluster;
+        if (secs > 255) secs = 255;
+        // Читаем по секторам, копируя РОВНО нужное (не переполнять buf!).
+        for (unsigned int s = 0; s < secs && written < sz && written < max; s++) {
+            ata_read_sector(base_lba + s, sec);
+            unsigned int n = SECTOR_SIZE;
+            if (written + n > sz)  n = sz - written;
+            if (written + n > max) n = max - written;
+            for (unsigned int k = 0; k < n; k++) buf[written + k] = sec[k];
+            written += n;
         }
         unsigned int nxt = fat_next_cluster(cluster);
-        if (nxt == 0 || nxt == 0xFFFF || nxt == 0xFFF) break;
+        if (nxt < 2 || nxt >= 0xFFF8) break;   // FAT16: конец = 0xFFF8..0xFFFF
         cluster = nxt;
     }
     return (int)written;
@@ -379,7 +404,7 @@ int fat_read_dir(int base_dir, const char* path, char* names, int* is_dir,
         }
         if (dir == 0) { sector++; continue; }
         unsigned int nxt = fat_next_cluster(dir);
-        if (nxt == 0 || nxt == 0xFFFF || nxt == 0xFFF) break;
+        if (nxt < 2 || fat_is_eoc(nxt)) break;
         dir = nxt;
         sector = G->data_start_sector + (dir - 2) * G->sectors_per_cluster;
         end_sector = sector + G->sectors_per_cluster;
@@ -438,7 +463,7 @@ void fat_list(int base_dir, const char* path) {
         }
         if (dir == 0) { sector++; continue; }
         unsigned int nxt = fat_next_cluster(dir);
-        if (nxt == 0 || nxt == 0xFFFF || nxt == 0xFFF) break;
+        if (nxt < 2 || fat_is_eoc(nxt)) break;
         dir = nxt;
         sector = G->data_start_sector + (dir - 2) * G->sectors_per_cluster;
         end_sector = sector + G->sectors_per_cluster;

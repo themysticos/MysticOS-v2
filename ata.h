@@ -21,6 +21,8 @@ void ata_probe_all(void);
 int  ata_present(int drive);
 
 void ata_read_sector(unsigned int lba, unsigned char* buffer);
+// Прочитать count последовательных секторов за одну ATA-команду (быстро).
+void ata_read_sectors(unsigned int lba, unsigned int count, unsigned char* buffer);
 void ata_write_sector(unsigned int lba, const unsigned char* buffer);
 
 #endif

@@ -39,6 +39,15 @@ int ioctl(int fd, unsigned long req, ...) { (void)fd; (void)req; return -1; }
 struct termios; int tcgetattr(int fd, struct termios* t) { (void)fd; (void)t; return 0; }
 int tcsetattr(int fd, int act, const struct termios* t) { (void)fd; (void)act; (void)t; return 0; }
 
+// Отладка: строка в serial (COM1). SYS_DEBUG = 700.
+// ВАЖНО: ядро ждёт ebx = указатель на МАССИВ аргументов (как __ms_sc),
+// а не саму строку. Раньше передавали строку напрямую -> мусор.
+void ms_debug(const char* s) {
+    unsigned int args[1];
+    args[0] = (unsigned int)s;
+    __asm__ volatile ("int $0x80" :: "a"(700), "b"(args) : "memory");
+}
+
 // assert.h
 void __libc_assert_fail(const char* expr, const char* file, int line) {
     (void)expr; (void)file; (void)line;

@@ -92,10 +92,41 @@ void ata_read_sector(unsigned int lba, unsigned char* buffer) {
         if (st & 0x01) return;
         if (t >= 1000000u) return;
     }
-    for (int i = 0; i < 256; i++) {
-        unsigned short d = inw(c->io);
-        buffer[i * 2] = d & 0xFF;
-        buffer[i * 2 + 1] = (d >> 8) & 0xFF;
+    // Быстрое чтение сектора: rep insw (256 слов) вместо цикла inw.
+    unsigned short port = c->io;
+    unsigned char* dst = buffer;
+    unsigned int cnt = 256;
+    __asm__ volatile ("cld\n\trep insw"
+        : "+D"(dst), "+c"(cnt)
+        : "d"(port)
+        : "memory");
+}
+
+// Прочитать несколько последовательных секторов за одну ATA-команду.
+// Быстрее, чем ata_read_sector в цикле (одна команда на count секторов).
+void ata_read_sectors(unsigned int lba, unsigned int count, unsigned char* buffer) {
+    if (count == 0) return;
+    if (count > 255) count = 255;   // ATA PIO: 0 = 256, но берём <=255
+    const ata_ch_t* c = &CH[g_drive];
+    for (unsigned int w = 0; inb(c->io + 7) & 0x80; w++) if (w > 1000000u) return;
+    outb(c->io + 6, c->sel | ((lba >> 24) & 0x0F));
+    ata_delay400(c);
+    outb(c->io + 2, (unsigned char)count);   // число секторов
+    outb(c->io + 3, (unsigned char)lba);
+    outb(c->io + 4, (unsigned char)(lba >> 8));
+    outb(c->io + 5, (unsigned char)(lba >> 16));
+    outb(c->io + 7, 0x20);
+    for (unsigned int s = 0; s < count; s++) {
+        for (unsigned int t = 0; ; t++) {
+            unsigned char st = inb(c->io + 7);
+            if (!(st & 0x80) && (st & 0x08)) break;
+            if (st & 0x01) return;
+            if (t >= 1000000u) return;
+        }
+        unsigned short port = c->io;
+        unsigned char* dst = buffer + s * 512u;
+        unsigned int cnt = 256;
+        __asm__ volatile ("cld\n\trep insw" : "+D"(dst), "+c"(cnt) : "d"(port) : "memory");
     }
 }
 

@@ -20,6 +20,7 @@
 #include <stdio.h>
 
 #include "deh_main.h"
+#include "doomgeneric.h"
 #include "i_swap.h"
 #include "i_system.h"
 #include "z_zone.h"
@@ -485,7 +486,9 @@ void R_InitTextures (void)
     
     // Load the patch names from pnames.lmp.
     name[8] = 0;
+    ms_debug("[r] W_CacheLumpName PNAMES...\n");
     names = W_CacheLumpName (DEH_String("PNAMES"), PU_STATIC);
+    ms_debug("[r] PNAMES cached\n");
     nummappatches = LONG ( *((int *)names) );
     name_p = names + 4;
     patchlookup = Z_Malloc(nummappatches*sizeof(*patchlookup), PU_STATIC, NULL);
@@ -702,13 +705,10 @@ void R_InitColormaps (void)
 //
 void R_InitData (void)
 {
-    R_InitTextures ();
-    printf (".");
-    R_InitFlats ();
-    printf (".");
-    R_InitSpriteLumps ();
-    printf (".");
-    R_InitColormaps ();
+    ms_debug("[r] R_InitTextures...\n"); R_InitTextures (); ms_debug("[r] textures done\n");
+    ms_debug("[r] R_InitFlats...\n"); R_InitFlats (); ms_debug("[r] flats done\n");
+    ms_debug("[r] R_InitSpriteLumps...\n"); R_InitSpriteLumps (); ms_debug("[r] sprites done\n");
+    ms_debug("[r] R_InitColormaps...\n"); R_InitColormaps (); ms_debug("[r] colormaps done\n");
 }
 
 

@@ -12,16 +12,22 @@ void D_DoomMain (void);
 
 void doomgeneric_Create(int argc, char **argv)
 {
-	// save arguments
+    ms_debug("[dg] create start\n");
     myargc = argc;
     myargv = argv;
 
-	M_FindResponseFile();
+    ms_debug("[dg] M_FindResponseFile...\n");
+    M_FindResponseFile();
 
-	DG_ScreenBuffer = malloc(DOOMGENERIC_RESX * DOOMGENERIC_RESY * 4);
+    ms_debug("[dg] malloc screenbuffer...\n");
+    DG_ScreenBuffer = malloc(DOOMGENERIC_RESX * DOOMGENERIC_RESY * 4);
+    if (!DG_ScreenBuffer) ms_debug("[dg] SCREENBUFFER MALLOC FAILED!\n");
+    else ms_debug("[dg] screenbuffer ok\n");
 
-	DG_Init();
+    ms_debug("[dg] DG_Init...\n");
+    DG_Init();
 
-	D_DoomMain ();
+    ms_debug("[dg] D_DoomMain...\n");
+    D_DoomMain ();
+    ms_debug("[dg] D_DoomMain returned!\n");
 }
-

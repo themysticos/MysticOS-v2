@@ -28,6 +28,7 @@
 
 #include "doomdef.h"
 #include "d_loop.h"
+#include "doomgeneric.h"
 
 #include "m_bbox.h"
 #include "m_menu.h"
@@ -766,11 +767,9 @@ void R_ExecuteSetViewSize (void)
 
 void R_Init (void)
 {
-    R_InitData ();
-    printf (".");
-    R_InitPointToAngle ();
-    printf (".");
-    R_InitTables ();
+    ms_debug("[r] R_InitData...\n"); R_InitData (); ms_debug("[r] R_InitData done\n");
+    ms_debug("[r] R_InitPointToAngle...\n"); R_InitPointToAngle (); ms_debug("[r] pt done\n");
+    ms_debug("[r] R_InitTables...\n"); R_InitTables (); ms_debug("[r] tables done\n");
     // viewwidth / viewheight / detailLevel are set by the defaults
     printf (".");
 
