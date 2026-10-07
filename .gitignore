@@ -47,6 +47,11 @@ dll/test_msdll
 test_msfs
 test_pe
 
+# Doom: WAD (11 МБ, бинарник) и скриншоты - не в git
+DOOM-PORT/*.WAD
+DOOM-PORT/*.wad
+DOOM-PORT/doomgeneric/screenshots/
+
 # UEFI-загрузчик: мусор сборки (исходники остаются)
 uefi/*.o
 uefi/*.so
