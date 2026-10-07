@@ -84,3 +84,10 @@ qemu-system-x86_64 -drive format=raw,file=mysticos2.img,if=ide,index=0 \
 Активная разработка. Графическая оболочка, оконный менеджер, обои,
 файловый менеджер, редактор и просмотрщик — работают. В планах: MSFS,
 улучшение UX, новые драйверы ФС.
+
+## Лицензия
+
+**Проприетарная.** Copyright (c) 2026 **Mystic Studios™**. Все права
+защищены. См. файл [LICENSE](LICENSE).
+
+"MysticOS" и "Mystic Studios" — товарные знаки Mystic Studios™.
