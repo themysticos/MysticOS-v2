@@ -1,0 +1,78 @@
+name: nightly
+
+on:
+  schedule:
+    # каждый день в 03:00 UTC
+    - cron: '0 3 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  nightly:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install toolchain
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            nasm gcc-multilib binutils dosfstools mtools python3 make
+
+      - name: Build images
+        run: make -j"$(nproc)" all
+
+      - name: Collect metadata
+        id: meta
+        run: |
+          echo "sha_short=$(git rev-parse --short HEAD)" >> "$GITHUB_OUTPUT"
+          echo "date=$(date -u +'%Y-%m-%d')" >> "$GITHUB_OUTPUT"
+
+      - name: Package
+        run: |
+          mkdir -p dist
+          cp mysticos2.img disk2.img dist/
+          cp CHANGELOG.md dist/ 2>/dev/null || true
+          cd dist && zip -9 "../mysticos2-nightly-${{ steps.meta.outputs.date }}.zip" *
+
+      # Удаляем старый тег/релиз nightly, чтобы не копить мусор
+      - name: Delete previous nightly release
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const tag = 'nightly';
+            try {
+              const rel = await github.rest.repos.getReleaseByTag({
+                owner: context.repo.owner, repo: context.repo.repo, tag
+              });
+              await github.rest.repos.deleteRelease({
+                owner: context.repo.owner, repo: context.repo.repo, release_id: rel.data.id
+              });
+            } catch (e) { core.info('no previous nightly release: ' + e.message); }
+            try {
+              await github.rest.git.deleteRef({
+                owner: context.repo.owner, repo: context.repo.repo, ref: 'tags/nightly'
+              });
+            } catch (e) { core.info('no previous nightly tag: ' + e.message); }
+
+      - name: Publish nightly prerelease
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: nightly
+          name: "Nightly build ${{ steps.meta.outputs.date }} (${{ steps.meta.outputs.sha_short }})"
+          prerelease: true
+          body: |
+            Автоматическая ночная сборка MysticOS 2.
+
+            - commit: `${{ github.sha }}`
+            - branch: `${{ github.ref_name }}`
+            - date: `${{ steps.meta.outputs.date }}`
+          files: |
+            mysticos2.img
+            disk2.img
+            mysticos2-nightly-${{ steps.meta.outputs.date }}.zip
+          fail_on_unmatched_files: true

@@ -1,0 +1,50 @@
+name: build
+
+on:
+  push:
+    branches: [ master, main ]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install toolchain
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            nasm gcc-multilib binutils dosfstools mtools python3 make
+
+      - name: Show versions
+        run: |
+          nasm -v
+          gcc --version | head -1
+          ld --version | head -1
+          python3 --version
+
+      - name: Build images
+        run: make -j"$(nproc)" all
+
+      - name: Sanity check
+        run: |
+          ls -lh mysticos2.img disk2.img
+          python3 - <<'EOF'
+          data = open('mysticos2.img','rb').read(512)
+          assert data[510:512] == b'\x55\xAA', 'no boot signature 0xAA55 in MBR!'
+          print('boot signature OK')
+          EOF
+
+      - name: Upload images
+        uses: actions/upload-artifact@v4
+        with:
+          name: mysticos2-images
+          path: |
+            mysticos2.img
+            disk2.img
+          if-no-files-found: error
+          retention-days: 30
