@@ -190,11 +190,39 @@ class Image:
 
 
 def main():
-    if len(sys.argv) < 4:
+    argv = sys.argv[1:]
+    # Batch-режим:  fatput.py <image> --batch src=DEST[=PATH] [src=DEST[=PATH] ...]
+    # Открывает образ ОДИН раз, кладёт все файлы, сохраняет ОДИН раз.
+    if len(argv) >= 2 and argv[1] == '--batch':
+        img_path = argv[0]
+        im = Image(img_path)
+        ok = 0
+        for spec in argv[2:]:
+            # формат: local=DEST или local=DEST=PATH
+            parts = spec.split('=', 2)
+            if len(parts) < 2:
+                print(f"skip bad spec: {spec}")
+                continue
+            local_path, dest_name = parts[0], parts[1]
+            path = parts[2] if len(parts) > 2 else ''
+            try:
+                im.put_file(local_path, dest_name, path)
+                ok += 1
+            except SystemExit as e:
+                print(f"error on {spec}: {e}")
+            except FileNotFoundError:
+                print(f"missing source: {local_path}")
+        im.save()
+        print(f"batch done: {ok}/{len(argv) - 2} files")
+        return 0
+
+    # Обычный режим (обратная совместимость):
+    if len(argv) < 3:
         print("usage: fatput.py <image> <local_file> <DEST.NAME> [PATH]")
+        print("   or: fatput.py <image> --batch src=DEST[=PATH] ...")
         return 1
-    img_path, local_path, dest_name = sys.argv[1:4]
-    path = sys.argv[4] if len(sys.argv) > 4 else ''
+    img_path, local_path, dest_name = argv[0:3]
+    path = argv[3] if len(argv) > 3 else ''
     im = Image(img_path)
     im.put_file(local_path, dest_name, path)
     im.save()

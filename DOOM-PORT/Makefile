@@ -14,8 +14,8 @@ ROOT = ..
 # -nostdinc: НЕ тянуть системные glibc-заголовки (они дают _chk/isoc23).
 # Вместо них - наши include/libc/*.h и include/ (ms/*).
 CFLAGS = -m32 -ffreestanding -nostdlib -nostdinc -fno-builtin -fno-pie -fno-pic -O2 \
-         -I. -I$(DG) -I$(ROOT)/include/libc -I$(ROOT)/include \
-         -DLINUX -DNORMALUNIX \
+         -I. -Iopl -I$(DG) -I$(ROOT)/include/libc -I$(ROOT)/include \
+         -DLINUX -DNORMALUNIX -DFEATURE_SOUND \
          -fno-stack-protector
 
 # Все .c Doom, кроме чужих платформенных слоёв и w_file_stdc (наша замена).
@@ -29,8 +29,14 @@ DG_SRCS = $(filter-out \
 # libc (наша).
 LIBC_SRCS = $(wildcard $(ROOT)/libc/*.c)
 
-# Наш слой + WAD.
-MY_SRCS = doomgeneric_mysticos.c w_file_mysticos.c
+# Наш слой + WAD + звук.
+# SFX -> SYS_SOUND_PCM -> VSS -> HDA. Музыка -> OPL3 (Nuked) + GENMIDI ->
+# SYS_MUSIC_PCM -> кольцо в ядре -> HDA.
+MY_SRCS = doomgeneric_mysticos.c w_file_mysticos.c dg_sound_mysticos.c \
+          i_oplmusic.c midifile.c \
+          opl/opl3.c opl/opl_mysticos.c
+# dg_music_mysticos.c УБРАН: он шлёт SYS_MUSIC_PLAY, которого больше нет в
+# msyscall.h (музыка теперь через OPL -> SYS_MUSIC_PCM в i_sound.c).
 
 OBJS = $(DG_SRCS:.c=.o) $(LIBC_SRCS:.c=.o) $(MY_SRCS:.c=.o)
 
