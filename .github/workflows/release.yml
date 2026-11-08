@@ -1,0 +1,47 @@
+name: release
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install toolchain
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            nasm gcc-multilib binutils dosfstools mtools python3 make
+
+      - name: Build images
+        run: make -j"$(nproc)" all
+
+      - name: Package
+        run: |
+          mkdir -p dist
+          cp mysticos2.img disk2.img dist/
+          # (опционально) добавить README/CHANGELOG в архив
+          cp CHANGELOG.md dist/ 2>/dev/null || true
+          cd dist && zip -9 "../mysticos2-${{ github.ref_name }}.zip" *
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_name }}
+          name: "MysticOS 2 ${{ github.ref_name }}"
+          generate_release_notes: true
+          files: |
+            mysticos2.img
+            disk2.img
+            mysticos2-${{ github.ref_name }}.zip
+          fail_on_unmatched_files: true
