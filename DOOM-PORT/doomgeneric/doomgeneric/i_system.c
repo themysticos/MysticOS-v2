@@ -389,6 +389,11 @@ void I_Error (char *error, ...)
     M_vsnprintf(msgbuf, sizeof(msgbuf), error, argptr);
     va_end(argptr);
 
+    // MysticOS: продублировать ошибку в serial (stderr идёт в окно TERM,
+    // которое не видно при запущенном DOOM).
+    { extern void ms_debug(const char *s);
+      ms_debug("[I_Error] "); ms_debug(msgbuf); ms_debug("\n"); }
+
     // Shutdown. Here might be other errors.
 
     entry = exit_funcs;

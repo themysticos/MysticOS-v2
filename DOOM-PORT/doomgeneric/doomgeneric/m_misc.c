@@ -63,24 +63,11 @@ void M_MakeDirectory(char *path)
 
 // Check if a file exists
 
+// MysticOS: проверка существования через SYS_FS_EXISTS.
+extern int ms_fs_exists(const char *path);
 boolean M_FileExists(char *filename)
 {
-    FILE *fstream;
-
-    fstream = fopen(filename, "r");
-
-    if (fstream != NULL)
-    {
-        fclose(fstream);
-        return true;
-    }
-    else
-    {
-        // If we can't open because the file is a directory, the 
-        // "file" exists at least!
-
-        return errno == EISDIR;
-    }
+    return ms_fs_exists(filename) ? true : false;
 }
 
 //
@@ -109,23 +96,12 @@ long M_FileLength(FILE *handle)
 // M_WriteFile
 //
 
+// MysticOS: бинарная запись через SYS_FS_WRITE_BIN (fwrite в libc — заглушка).
+extern int ms_fs_write_bin(const char *path, const unsigned char *buf, unsigned int len);
 boolean M_WriteFile(char *name, void *source, int length)
 {
-    FILE *handle;
-    int	count;
-	
-    handle = fopen(name, "wb");
-
-    if (handle == NULL)
-	return false;
-
-    count = fwrite(source, 1, length, handle);
-    fclose(handle);
-	
-    if (count < length)
-	return false;
-		
-    return true;
+    int r = ms_fs_write_bin(name, (const unsigned char*)source, (unsigned int)length);
+    return (r > 0) ? true : false;
 }
 
 
@@ -133,28 +109,22 @@ boolean M_WriteFile(char *name, void *source, int length)
 // M_ReadFile
 //
 
+// MysticOS: чтение через SYS_FS_SIZE + SYS_FS_READ (бинарное, целиком).
+extern int ms_fs_size(const char *path);
+extern int ms_fs_read_all(const char *path, unsigned char *buf, unsigned int max);
 int M_ReadFile(char *name, byte **buffer)
 {
-    FILE *handle;
-    int	count, length;
-    byte *buf;
-	
-    handle = fopen(name, "rb");
-    if (handle == NULL)
+    extern void ms_debug(const char *s);
+    int length = ms_fs_size(name);
+    if (length <= 0) {
+	ms_debug("[misc] M_ReadFile: NOT FOUND: "); ms_debug(name); ms_debug("\n");
 	I_Error ("Couldn't read file %s", name);
-
-    // find the size of the file by seeking to the end and
-    // reading the current position
-
-    length = M_FileLength(handle);
-    
-    buf = Z_Malloc (length, PU_STATIC, NULL);
-    count = fread(buf, 1, length, handle);
-    fclose (handle);
-	
+    }
+    ms_debug("[misc] M_ReadFile: "); ms_debug(name); ms_debug("\n");
+    byte *buf = Z_Malloc (length, PU_STATIC, NULL);
+    int count = ms_fs_read_all(name, buf, (unsigned int)length);
     if (count < length)
 	I_Error ("Couldn't read file %s", name);
-		
     *buffer = buf;
     return length;
 }

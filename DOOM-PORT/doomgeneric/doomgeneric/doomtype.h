@@ -98,6 +98,9 @@ typedef uint8_t byte;
 
 #endif
 
+#define PACKEDPREFIX
+#define PACKED_STRUCT(...) struct __VA_ARGS__ PACKEDATTR
+
 #define arrlen(array) (sizeof(array) / sizeof(*array))
 
 #endif

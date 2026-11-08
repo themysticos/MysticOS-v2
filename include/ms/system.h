@@ -41,9 +41,16 @@ static inline const char* ms_arg(void) {
 static inline void ms_beep(unsigned int freq, unsigned int ms) {
     __ms_sc2(SYS_SOUND_BEEP, freq, ms);
 }
-// Звук: 8-бит беззнаковый моно-PCM буфер.
+// Звук: 8-бит беззнаковый моно-PCM буфер (одноразовый SFX).
 static inline void ms_sound_pcm(const unsigned char* buf, unsigned int len, unsigned int rate) {
     __ms_sc3(SYS_SOUND_PCM, (unsigned int)buf, len, rate);
+}
+
+// Музыка: 16-бит знаковый МОНО-PCM в НЕПРЕРЫВНОЕ кольцо (стрим).
+// Возвращает число принятых сэмплов (может быть меньше n, если кольцо полно —
+// тогда подожди и повтори остаток). Идеально для плеера и стриминга.
+static inline int ms_music_pcm(const short* buf, unsigned int n) {
+    return __ms_sc2(SYS_MUSIC_PCM, (unsigned int)buf, n);
 }
 
 // Отладка: вывести строку в serial (COM1). Реализация в libc/posix.c.

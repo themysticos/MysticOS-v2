@@ -4,13 +4,10 @@
 #include <stdlib.h>
 #include <stdint.h>
 
-#ifndef DOOMGENERIC_RESX
-#define DOOMGENERIC_RESX 640
-#endif  // DOOMGENERIC_RESX
-
-#ifndef DOOMGENERIC_RESY
-#define DOOMGENERIC_RESY 400
-#endif  // DOOMGENERIC_RESY
+// Рантайм-разрешение кадра. Задаётся платформой (DG_Init) под размер
+// клиентской области окна, чтобы ядро делало копию 1:1 без масштабирования.
+extern int DOOMGENERIC_RESX;
+extern int DOOMGENERIC_RESY;
 
 
 #ifdef CMAP256

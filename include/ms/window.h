@@ -91,6 +91,30 @@ static inline int ms_frame(int id, const unsigned int* src, int w, int h) {
                     (unsigned int)w, (unsigned int)h);
 }
 
+// Размер КЛИЕНТСКОЙ области окна (без заголовка) как (w<<16)|h.
+static inline int ms_window_client(int id) {
+    return __ms_sc1(SYS_WINDOW_CLIENT, (unsigned int)id);
+}
+
+// Текст с масштабом глифа (для заголовков). scale 1..4.
+static inline void ms_text_scaled(int id, int x, int y, const char* s, unsigned int fg, int scale) {
+    __ms_sc6(SYS_WINDOW_TEXT_SCALED, (unsigned int)id, (unsigned int)x,
+             (unsigned int)y, (unsigned int)s, fg, (unsigned int)scale);
+}
+
+// Нарисовать картинку из ПАМЯТИ (BMP/GIF/PNG) в окно. 1 = успех, 0 = ошибка.
+static inline int ms_image_mem(int id, int x, int y, int w, int h, const void* ptr, unsigned int size) {
+    return __ms_sc7(SYS_WINDOW_IMAGE_MEM, (unsigned int)id, (unsigned int)x,
+                    (unsigned int)y, (unsigned int)w, (unsigned int)h,
+                    (unsigned int)ptr, size);
+}
+
+// Позиция КЛИЕНТСКОЙ области окна в экране как (x<<16)|y.
+// Нужна для пересчёта абсолютных координат мыши при maximize/перемещении.
+static inline int ms_window_pos(int id) {
+    return __ms_sc1(SYS_WINDOW_POS, (unsigned int)id);
+}
+
 // Картинка (BMP), масштабируется до w x h.
 static inline int ms_image(int id, int x, int y, int w, int h, const char* path) {
     return __ms_sc6(SYS_WINDOW_IMAGE, (unsigned int)id, (unsigned int)x,

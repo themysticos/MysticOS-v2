@@ -22,4 +22,20 @@ static inline int ms_mouse_rel(int* dx, int* dy) {
     return __ms_sc2(SYS_MOUSE_REL, (unsigned int)dx, (unsigned int)dy);
 }
 
+// Событие мыши (неблокирующе): -1 если пусто, иначе упакованное событие.
+//   bits 0-11: x; bits 12-23: y; bits 24-27: type (0=move,1=down,2=up);
+//   bits 28-31: button (1=левая, 2=правая).
+static inline int ms_mouse_event(void) {
+    return __ms_sc0(SYS_MOUSE_EVENT);
+}
+
+// Разбор события мыши в поля (type: 0/1/2, button: 1/2, x/y — экранные).
+static inline void ms_mouse_event_split(int ev, int* type, int* button,
+                                        int* x, int* y) {
+    if (type)   *type   = (ev >> 24) & 0xF;
+    if (button) *button = (ev >> 28) & 0xF;
+    if (x)      *x      = ev & 0xFFF;
+    if (y)      *y      = (ev >> 12) & 0xFFF;
+}
+
 #endif

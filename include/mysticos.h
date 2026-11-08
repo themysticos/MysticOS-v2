@@ -20,6 +20,7 @@
 #include "ms/color.h"
 #include "ms/window.h"
 #include "ms/fs.h"
+#include "ms/file.h"
 #include "ms/input.h"
 #include "ms/system.h"
 #include "ms/net.h"

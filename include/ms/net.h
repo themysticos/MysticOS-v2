@@ -35,6 +35,11 @@ static inline int ms_http_start(const char* url) {
 static inline int ms_http_poll(void) {
     return __ms_sc0(SYS_HTTP_POLL);
 }
+// СЫРОЕ тело (без text/binary-фильтра) — для картинок/файлов.
+static inline int ms_http_result_raw(char* buf, unsigned int max) {
+    return __ms_sc2(SYS_HTTP_RESULT_RAW, (unsigned int)buf, max);
+}
+
 static inline int ms_http_result(char* buf, unsigned int max) {
     return __ms_sc2(SYS_HTTP_RESULT, (unsigned int)buf, max);
 }

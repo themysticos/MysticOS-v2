@@ -246,6 +246,14 @@ extern music_module_t music_opl_module;
 
 // For OPL module:
 
+typedef enum
+{
+    opl_doom1_1_666,
+    opl_doom2_1_666,
+    opl_doom_1_9
+} opl_driver_ver_t;
+void I_SetOPLDriverVer(opl_driver_ver_t ver);
+
 extern int opl_io_port;
 
 // For native music module:

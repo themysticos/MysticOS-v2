@@ -22,6 +22,28 @@ long long __divdi3(long long a, long long b) {
     return neg ? -(long long)q : (long long)q;
 }
 
+// ---- __udivdi3: 64-битное БЕЗЗНАКОВОЕ деление (unsigned long long). ----
+unsigned long long __udivdi3(unsigned long long a, unsigned long long b) {
+    if (b == 0) return 0;
+    unsigned long long q = 0, r = 0;
+    for (int i = 63; i >= 0; i--) {
+        r = (r << 1) | ((a >> i) & 1u);
+        if (r >= b) { r -= b; q |= (1ull << i); }
+    }
+    return q;
+}
+
+// ---- __umoddi3: 64-битный БЕЗЗНАКОВЫЙ остаток. ----
+unsigned long long __umoddi3(unsigned long long a, unsigned long long b) {
+    if (b == 0) return 0;
+    unsigned long long r = 0;
+    for (int i = 63; i >= 0; i--) {
+        r = (r << 1) | ((a >> i) & 1u);
+        if (r >= b) r -= b;
+    }
+    return r;
+}
+
 // ---- __isoc23_sscanf: glibc-алиас sscanf (новые версии) ----
 extern int vsscanf(const char* s, const char* fmt, __builtin_va_list ap);
 int __isoc23_sscanf(const char* s, const char* fmt, ...) {

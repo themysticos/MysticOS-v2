@@ -1,9 +1,13 @@
-// files.c - SYSPR: файловый менеджер (в стиле Windows Explorer). ring3 API.
-// Адресная строка с буквой диска, иконки типов, выделение, двойной клик.
+// files.c - SYSPR: файловый менеджер (UI-кит). ring3 API.
+// Тулбар с навигацией, иконки типов, переключатель дисков, хлебные крошки,
+// пустое состояние. Стиль — единый (ms/ui.h).
 #include "../include/mysticos.h"
+#include "../include/ms/ui.h"
 
 #define FMAX 64
-#define ROW_H 14
+#define ROW_H 20
+#define TB_H 24          // высота тулбара
+#define PATHBAR_H 20
 
 static char names[FMAX * 13];
 static int  isdir[FMAX];
@@ -12,32 +16,27 @@ static int  count = 0;
 
 static int win_id = -1, win_w = 0, win_h = 0, win_x = 0, win_y = 0;
 static char path[128] = "/";       // путь БЕЗ префикса диска
-static int  g_drive = 0;            // текущий диск (D0..D3)
-static int sel = -2;              // выделенная строка: -2 ничего, -1 "..", >=0 файл
+static int  g_drive = 0;            // текущий диск
+static int  sel = -2;              // выделенная строка
 
-#define C_BG      0x181820
-#define C_ADDR    0x203860
-#define C_SEL     0x2A4A8A
-#define C_DIR     0xFFD060
-#define C_EXE     0x70E070
-#define C_TXT     0xE0E0F0
-#define C_IMG     0x80D0FF
-#define C_FILE    0xC0C0D0
-#define C_DIM     0x808090
-#define C_STATUS  0x101018
-
-static int strlen8(const char* s);
+// История навигации (для кнопки "назад").
+static char hist[32][128];
+static int  hist_n = 0;
 
 static int at_root(void) { return path[0] == '/' && path[1] == 0; }
 
 static void mkpath(char* out) {
     int p = 0;
-    out[p++] = 'D';
-    out[p++] = (char)('0' + (g_drive % 10));
-    out[p++] = ':';
+    out[p++] = 'D'; out[p++] = (char)('0' + (g_drive % 10)); out[p++] = ':';
     for (int k = 0; path[k] && p < 120; k++) out[p++] = path[k];
     if (p == 3) out[p++] = '/';
     out[p] = 0;
+}
+
+static void hist_push(const char* p) {
+    if (hist_n >= 32) return;
+    ui_strcpy(hist[hist_n], p, 128);
+    hist_n++;
 }
 
 static void reload(void) {
@@ -48,6 +47,7 @@ static void reload(void) {
 }
 
 static void enter(const char* nm) {
+    hist_push(path);
     int n = 0; while (path[n]) n++;
     if (n > 0 && path[n-1] != '/') { if (n < 120) path[n++] = '/'; }
     for (int k = 0; nm[k] && n < 120; k++) path[n++] = nm[k];
@@ -58,9 +58,17 @@ static void enter(const char* nm) {
 static void go_up(void) {
     int n = 0; while (path[n]) n++;
     if (n <= 1) { path[0] = '/'; path[1] = 0; reload(); return; }
+    hist_push(path);
     if (path[n-1] == '/') n--;
     while (n > 1 && path[n-1] != '/') n--;
     if (n <= 1) { path[0] = '/'; path[1] = 0; } else path[n-1] = 0;
+    reload();
+}
+
+static void go_back(void) {
+    if (hist_n <= 0) return;
+    hist_n--;
+    ui_strcpy(path, hist[hist_n], 128);
     reload();
 }
 
@@ -73,35 +81,18 @@ static void full_path(const char* nm, char* out) {
     out[n] = 0;
 }
 
-static void addr_string(char* out) {
-    int p = 0;
-    out[p++] = 'D';
-    out[p++] = (char)('0' + (g_drive % 10));
-    out[p++] = ':';
-    out[p++] = '\\';
-    int k = (path[0] == '/') ? 1 : 0;
-    for (; path[k] && p < 120; k++) out[p++] = (path[k] == '/') ? '\\' : path[k];
-    out[p] = 0;
-}
-
-static void type_of(const char* nm, int is_d, int* kind, char* icon, unsigned int* col) {
-    if (is_d) { *kind = 0; icon[0]='<'; icon[1]='D'; icon[2]='>'; icon[3]=0; *col = C_DIR; return; }
+// Иконка/цвет по типу файла.
+static void type_of(const char* nm, int is_d, int* ic, unsigned int* col) {
+    if (is_d) { *ic = UI_IC_FOLDER; *col = UI_FOLDER; return; }
     for (int k = 0; nm[k]; k++) {
         if (nm[k] == '.') {
             char a = nm[k+1]|0x20, b = nm[k+2]|0x20, c = nm[k+3]|0x20;
-            if (a=='e'&&b=='l'&&c=='f') { *kind=1; icon[0]='['; icon[1]='E'; icon[2]=']'; icon[3]=0; *col=C_EXE; return; }
-            if (a=='t'&&b=='x'&&c=='t') { *kind=2; icon[0]='['; icon[1]='T'; icon[2]=']'; icon[3]=0; *col=C_TXT; return; }
-            if (a=='b'&&b=='m'&&c=='p') { *kind=3; icon[0]='['; icon[1]='I'; icon[2]=']'; icon[3]=0; *col=C_IMG; return; }
+            if (a=='e'&&b=='l'&&c=='f') { *ic=UI_IC_ELF; *col=UI_EXE; return; }
+            if (a=='t'&&b=='x'&&c=='t') { *ic=UI_IC_TXT; *col=UI_TXT; return; }
+            if (a=='b'&&b=='m'&&c=='p') { *ic=UI_IC_IMG; *col=UI_IMG; return; }
         }
     }
-    *kind = 4; icon[0]='['; icon[1]=' '; icon[2]=']'; icon[3]=0; *col = C_FILE;
-}
-
-static int is_elf(const char* nm) {
-    for (int k = 0; nm[k]; k++)
-        if (nm[k] == '.' && (nm[k+1]|0x20)=='e' && (nm[k+2]|0x20)=='l' && (nm[k+3]|0x20)=='f')
-            return 1;
-    return 0;
+    *ic = UI_IC_FILE; *col = 0xC0C0D0;
 }
 
 static int has_ext3(const char* nm, char a, char b, char c) {
@@ -111,91 +102,103 @@ static int has_ext3(const char* nm, char a, char b, char c) {
     return 0;
 }
 
-static void num_to_str(int v, char* out) {
-    int p = 0;
-    if (v == 0) { out[p++]='0'; out[p]=0; return; }
-    char tmp[12]; int t = 0;
-    while (v) { tmp[t++] = '0' + (v % 10); v /= 10; }
-    while (t) out[p++] = tmp[--t];
-    out[p] = 0;
-}
+static void render(int mx, int my, int left, int pl) {
+    ms_fill(win_id, 0, 0, win_w, win_h, UI_BG);
 
-static void render(void) {
-    ms_fill(win_id, 0, 0, win_w, win_h, C_BG);
+    // --- Тулбар ---
+    ui_panel(win_id, 0, 0, win_w, TB_H, UI_PANEL);
+    int bx = 2;
+    ui_icon_button(win_id, bx, 1, UI_IC_BACK, mx, my, left, pl); bx += 24;
+    ui_icon_button(win_id, bx, 1, UI_IC_UP,   mx, my, left, pl); bx += 24;
+    ui_icon_button(win_id, bx, 1, UI_IC_HOME, mx, my, left, pl); bx += 24;
+    ui_icon_button(win_id, bx, 1, UI_IC_REFRESH, mx, my, left, pl); bx += 30;
 
-    ms_fill(win_id, 0, 0, win_w, 16, C_ADDR);
-    ms_text_bg(win_id, 6, 4, "Up", 0xFFFFFF, C_ADDR);
-    char addr[130]; addr_string(addr);
-    ms_text_bg(win_id, 40, 4, addr, 0xD0E0FF, C_ADDR);
-
-    int y = 20;
-    int special = at_root() ? 0 : 1;
-    int maxrows = (win_h - y - 14) / ROW_H;
-    if (maxrows < 1) maxrows = 1;
-
-    if (special) {
-        unsigned int rbg = (sel == -1) ? C_SEL : C_BG;
-        ms_text_bg(win_id, 6, y, "<U> ..", 0xFFC060, rbg);
-        y += ROW_H;
+    // --- Переключатель дисков D0..D3 (только реально существующие) ---
+    for (int d = 0; d < 2; d++) {
+        int bw = 30;
+        int hov = (mx >= bx && mx < bx + bw && my >= 2 && my < TB_H - 2);
+        unsigned int bg = (d == g_drive) ? UI_ACCENT : (hov ? UI_PANEL2 : UI_PANEL);
+        ms_fill(win_id, bx, 2, bw, TB_H - 4, bg);
+        ms_rect(win_id, bx, 2, bw, TB_H - 4, UI_BORDER);
+        char dl[3]; dl[0] = 'D'; dl[1] = '0' + d; dl[2] = 0;
+        ms_text(win_id, bx + 6, 8, dl, (d == g_drive) ? 0xFFFFFF : UI_TEXT);
+        bx += bw + 2;
     }
 
-    if (count == 0 && !special) {
-        ms_text_bg(win_id, 6, y + 4, "(empty folder)", C_DIM, C_BG);
+    // --- Панель пути (хлебные крошки) ---
+    ui_panel(win_id, 0, TB_H, win_w, PATHBAR_H, UI_PANEL2);
+    int px = 6;
+    char dl[4]; dl[0]='D'; dl[1]='0'+g_drive; dl[2]=':'; dl[3]=0;
+    ms_text(win_id, px, TB_H + 6, dl, UI_ACCENT); px += 24;   // "D0:" = 3 символа x 8px
+    ms_text(win_id, px, TB_H + 6, path, UI_TEXT);
+
+    // --- Список ---
+    int y0 = TB_H + PATHBAR_H;
+    int maxrows = (win_h - y0 - 16) / ROW_H;
+    if (maxrows < 1) maxrows = 1;
+
+    if (count == 0) {
+        ui_empty(win_id, win_w / 2, y0 + (win_h - y0) / 2 - 10, "This folder is empty");
     }
 
     for (int i = 0; i < count && i < maxrows; i++) {
-        int ry = y + i * ROW_H;
-        unsigned int rbg = (sel == i) ? C_SEL : C_BG;
-        int kind; char icon[4]; unsigned int col;
-        type_of(names + i * 13, isdir[i], &kind, icon, &col);
-        ms_text_bg(win_id, 6, ry, icon, col, rbg);
-        ms_text_bg(win_id, 6 + 4 * 8, ry, names + i * 13, col, rbg);
-        if (!isdir[i]) {
-            char sz[16]; num_to_str((int)sizes[i], sz);
-            ms_text_bg(win_id, win_w - 6 - (int)strlen8(sz) * 8, ry, sz, C_DIM, rbg);
-        }
+        int ry = y0 + i * ROW_H;
+        int ic; unsigned int col;
+        type_of(names + i * 13, isdir[i], &ic, &col);
+        char sz[16]; sz[0] = 0;
+        if (!isdir[i]) ui_size_str(sizes[i], sz);
+        ui_list_row(win_id, 0, ry, win_w, ROW_H, ic, col, names + i * 13, sz, sel == i);
     }
 
-    ms_fill(win_id, 0, win_h - 12, win_w, 12, C_STATUS);
-    char st[80]; int p = 0;
-    const char* pr = "items: ";
-    for (int k = 0; pr[k]; k++) st[p++] = pr[k];
-    char num[12]; num_to_str(count, num);
+    // --- Статусбар ---
+    char st[96]; int p = 0;
+    char num[12]; ui_int_str(count, num);
+    const char* a = "items: ";
+    for (int k = 0; a[k]; k++) st[p++] = a[k];
     for (int k = 0; num[k]; k++) st[p++] = num[k];
-    const char* hint = "   dbl-click = open";
-    for (int k = 0; hint[k] && p < 78; k++) st[p++] = hint[k];
+    const char* b = "   double-click to open";
+    for (int k = 0; b[k] && p < 94; k++) st[p++] = b[k];
     st[p] = 0;
-    ms_text_bg(win_id, 4, win_h - 10, st, C_DIM, C_STATUS);
+    ui_statusbar(win_id, win_w, win_h, st);
 }
 
-static int strlen8(const char* s) { int n = 0; while (s[n]) n++; return n; }
-
 static int pick(int mx, int my) {
-    int lx = mx - win_x, ly = my - (win_y + 20);
+    int lx = mx - win_x, ly = my - win_y;
     if (lx < 0 || lx >= win_w || ly < 0 || ly >= win_h) return -2;
-    int special = at_root() ? 0 : 1;
-    if (special && ly >= 20 && ly < 20 + ROW_H) return -1;
-    int base = 20 + special * ROW_H;
-    if (ly < base) return -2;
-    int i = (ly - base) / ROW_H;
+    int y0 = TB_H + PATHBAR_H;
+    if (ly < y0) return -2;
+    int i = (ly - y0) / ROW_H;
     if (i >= 0 && i < count) return i;
     return -2;
 }
 
+// Обработка клика по тулбару. Возвращает 1 если что-то сделано.
+static int toolbar_click(int mx, int my, int pl) {
+    int lx = mx - win_x, ly = my - win_y;
+    if (ly < 0 || ly >= TB_H) return 0;
+    int bx = 2;
+    if (lx >= bx && lx < bx + 22) { go_back(); return 1; } bx += 24;
+    if (lx >= bx && lx < bx + 22) { go_up(); return 1; } bx += 24;
+    if (lx >= bx && lx < bx + 22) { hist_push(path); path[0]='/'; path[1]=0; reload(); return 1; } bx += 24;
+    if (lx >= bx && lx < bx + 22) { reload(); return 1; } bx += 30;
+    for (int d = 0; d < 2; d++) {
+        if (lx >= bx && lx < bx + 30) { hist_push(path); g_drive = d; path[0]='/'; path[1]=0; reload(); return 1; }
+        bx += 32;
+    }
+    return 0;
+}
+
 int _start(void) {
-    // Стартовый путь: из аргумента (ms_arg) или корень D0.
     const char* a = ms_arg();
     g_drive = 0;
     path[0] = '/'; path[1] = 0;
     if (a && a[0]) {
         const char* rest = a;
         if (a[0] == 'D' && a[1] >= '0' && a[1] <= '9' && a[2] == ':') {
-            g_drive = a[1] - '0';
-            rest = a + 3;
+            g_drive = a[1] - '0'; rest = a + 3;
         }
         int rlen = 0; while (rest[rlen]) rlen++;
-        int is_dir_like = (rlen == 0) || rest[rlen-1] == '/';
-        if (is_dir_like) {
+        if (rlen == 0 || rest[rlen-1] == '/') {
             int k = 0;
             if (rest[0] == '/') { path[k++] = '/'; rest++; }
             while (*rest && k < 120) { path[k++] = *rest++; }
@@ -203,33 +206,42 @@ int _start(void) {
             path[k] = 0;
         }
     }
-    win_w = 380; win_h = 240; win_x = 380; win_y = 120;
+    win_w = 400; win_h = 260; win_x = 360; win_y = 110;
     win_id = ms_window("Files", win_x, win_y, win_w, win_h);
     if (win_id < 0) ms_exit(1);
+    // win_x/win_y теперь = origin КЛИЕНТСКОЙ области (см. ui_client_geom).
+    { int vp = ms_window_pos(win_id); win_x = (vp >> 16) & 0xFFFF; win_y = vp & 0xFFFF; }
 
     reload();
-    render();
-
     int prev_left = 0, last_idx = -3;
     unsigned int last_tick = 0;
+    int mx = 0, my = 0, ml = 0;
+    int frame = 0;
+    render(mx, my, ml, prev_left);
+
     while (!ms_key_avail()) {
-        int mx = ms_mouse_x(), my = ms_mouse_y();
-        int ml = ms_mouse_left();
+        // Реакция на maximize/перемещение: опрашиваем геометрию раз в 4 кадра
+        // (на глаз незаметно, но снимает нагрузку с каждого кадра).
+        if ((frame++ & 3) == 0)
+            ui_client_geom(win_id, &win_x, &win_y, &win_w, &win_h);
+        mx = ms_mouse_x(); my = ms_mouse_y(); ml = ms_mouse_left();
+        // Перед обработкой клика — свежая геометрия (вдруг maximize/сдвиг).
+        if (ml && !prev_left)
+            ui_client_geom(win_id, &win_x, &win_y, &win_w, &win_h);
+        int lx = mx - win_x, ly = my - win_y;
         if (ml && !prev_left) {
-            int lx = mx - win_x, ly = my - (win_y + 20);
-            if (lx >= 0 && lx < 36 && ly >= 0 && ly < 16) {
-                go_up(); render();
+            if (ly >= 0 && ly < TB_H) {
+                toolbar_click(mx, my, prev_left);
             } else {
                 int idx = pick(mx, my);
                 if (idx != -2) {
                     unsigned int now = ms_ticks();
                     if (idx == last_idx && (now - last_tick) < 40) {
-                        if (idx == -1) go_up();
-                        else if (isdir[idx]) enter(names + idx * 13);
+                        if (isdir[idx]) enter(names + idx * 13);
                         else {
                             const char* nm = names + idx * 13;
                             char full[160]; full_path(nm, full);
-                            if (is_elf(nm)) {
+                            if (has_ext3(nm, 'e', 'l', 'f')) {
                                 ms_run(full);
                                 ms_window_close(win_id);
                                 ms_exit(0);
@@ -241,14 +253,13 @@ int _start(void) {
                         }
                         last_idx = -3;
                     } else {
-                        sel = idx;
-                        last_idx = idx; last_tick = now;
+                        sel = idx; last_idx = idx; last_tick = now;
                     }
-                    render();
                 }
             }
         }
         prev_left = ml;
+        render(mx, my, ml, prev_left);
         ms_yield();
         ms_sleep(20);
     }

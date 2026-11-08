@@ -41,5 +41,8 @@ static inline int __ms_sc5(int n, unsigned int a, unsigned int b, unsigned int c
 static inline int __ms_sc6(int n, unsigned int a, unsigned int b, unsigned int c, unsigned int d, unsigned int e, unsigned int f) {
     unsigned int v[6] = { a, b, c, d, e, f }; return __ms_sc(n, v);
 }
+static inline int __ms_sc7(int n, unsigned int a, unsigned int b, unsigned int c, unsigned int d, unsigned int e, unsigned int f, unsigned int g) {
+    unsigned int v[7] = { a, b, c, d, e, f, g }; return __ms_sc(n, v);
+}
 
 #endif

@@ -46,14 +46,21 @@
 #define SYS_WINDOW_STATIC_TEXT  110 // (id, x, y, s*, fg)
 #define SYS_WINDOW_STATIC_CLEAR 111 // (id)
 #define SYS_WINDOW_FRAME        112 // (id, src*, w, h) — быстрый blit кадра
+#define SYS_WINDOW_CLIENT       115 // (id) -> (w<<16)|h — размер клиентской области окна
+#define SYS_WINDOW_POS          116 // (id) -> (x<<16)|y — позиция окна (client origin в экране)
+#define SYS_WINDOW_IMAGE_MEM    118 // (id,x,y,w,h,ptr,size) -> 1/0 — картинка из памяти (BMP/GIF/PNG)
+#define SYS_WINDOW_TEXT_SCALED  119 // (id, x, y, s*, fg, scale) — текст с масштабом глифа
 
 // Мышь для игр (v5): захват + относительная дельта (свободный разворот).
 #define SYS_MOUSE_GRAB  113  // (on) -> 0   (1 = захватить, курсор ОС стоит)
 #define SYS_MOUSE_REL   114  // (dx*, dy*) -> 1/0   (забрать дельту, обнуляет)
+#define SYS_MOUSE_EVENT 117  // () -> событие (см. pic.c) или -1
 
 // Звук (v5): PCM-вывод (системные звуки, игры).
 #define SYS_SOUND_BEEP  120  // (freq_hz, ms) -> 0   простой тон
 #define SYS_SOUND_PCM   121  // (buf*, len, rate) -> 0   8-бит беззнаковый моно-PCM
+#define SYS_MUSIC_PCM   122  // (short* buf, n_samples) -> принято  (Doom шлёт готовый PCM)
+#define SYS_MUSIC_STOP  123  // () -> 0                    остановить музыку
 
 // ============================================================
 // Память (v5): программа просит RAM у ядра (из pmem).
@@ -73,6 +80,13 @@
 #define SYS_FS_EXISTS 203  // (path*) -> 1/0
 #define SYS_FS_WRITE  204  // (path*, content*) -> 1/0
 #define SYS_FORMAT    205  // (drive, fs, version) -> 1/0
+#define SYS_FS_WRITE_BIN 206 // (path*, buf*, len) -> записано байт (бинарный файл)
+// Файловый дескриптор (стриминг): open/read/seek/close/size
+#define SYS_FILE_OPEN  210  // (path*) -> fd (>=0) или -1
+#define SYS_FILE_READ  211  // (fd, buf*, n) -> число байт
+#define SYS_FILE_SEEK  212  // (fd, pos) -> новая позиция или -1
+#define SYS_FILE_CLOSE 213  // (fd) -> 0
+#define SYS_FILE_SIZE  214  // (fd) -> размер или -1
 
 // ============================================================
 // Система
@@ -100,5 +114,6 @@
 #define SYS_HTTP_START       402  // (url*) -> 0/-1  начать запрос (не ждёт)
 #define SYS_HTTP_POLL        403  // () -> 0=в процессе, 1=готово, -1=ошибка
 #define SYS_HTTP_RESULT      404  // (buf*, max) -> длина тела или -1 (скопировать результат)
+#define SYS_HTTP_RESULT_RAW  405  // (buf*, max) -> длина СЫРОГО тела (без text/binary-фильтра) — для картинок
 
 #endif // MSYSCALL_H

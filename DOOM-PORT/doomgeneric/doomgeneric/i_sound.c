@@ -18,7 +18,9 @@
 #include <stdio.h>
 #include <stdlib.h>
 
-#if defined(FEATURE_SOUND) && !defined(__DJGPP__)
+// MysticOS: SDL_mixer не используется — звук идёт через DG_sound_module
+// (наш модуль -> SYS_SOUND_PCM -> VSS -> HDA). См. dg_sound_mysticos.c.
+#if 0
 #include <SDL_mixer.h>
 #endif
 
@@ -131,7 +133,8 @@ static void InitSfxModule(boolean use_sfx_prefix)
 static void InitMusicModule(void)
 {
 #ifdef FEATURE_SOUND
-    music_module = &DG_music_module;
+    extern music_module_t music_opl_module;   // из i_oplmusic.c (OPL2/OPL3)
+    music_module = &music_opl_module;
 #endif /* FEATURE_SOUND */
 }
 
@@ -222,6 +225,8 @@ int I_GetSfxLumpNum(sfxinfo_t *sfxinfo)
     }
 }
 
+void ms_music_pump(void);   // forward (опр. ниже)
+
 void I_UpdateSound(void)
 {
     if (sound_module != NULL)
@@ -233,6 +238,47 @@ void I_UpdateSound(void)
     {
         music_module->Poll();
     }
+
+    // MysticOS: "насос" OPL-музыки (см. ms_music_pump в конце файла).
+    ms_music_pump();
+}
+
+// Генерация музыки: OPL рендерит пачку сэмплов, шлём ядру (SYS_MUSIC_PCM).
+// Зовётся из I_UpdateSound (тик игры) и DG_DrawFrame (кадр) — чтобы кольцо
+// в ядре не пустело между тиками. Пишем столько, сколько примет ядро.
+extern uint32_t DG_GetTicksMs(void);
+void ms_music_pump(void) {
+    extern int  opl_mysticos_active(void);
+    extern void opl_mysticos_render(short* out, unsigned int nsamples);
+    extern int  ms_music_pcm(const short* buf, unsigned int n);
+    if (!opl_mysticos_active()) return;
+    static short mixbuf[8192 * 2];
+    static short mono[8192];
+    // Генерируем по НАКОПЛЕННОМУ времени, без потери на округлении.
+    // ms_ticks() квантует по 10 мс (PIT 100 Гц): простое "now-last" теряет
+    // до 10 мс/кадр -> кольцо пустеет (underrun). Считаем want = now*48
+    // (сколько сэмплов ДОЛЖНО быть к этому моменту) минус произведённое.
+    static uint32_t base_ms = 0;   // момент старта
+    static unsigned long long produced = 0;
+    uint32_t now = DG_GetTicksMs();
+    if (base_ms == 0) { base_ms = now; produced = 0; return; }
+    unsigned long long want = (unsigned long long)(now - base_ms) * 48ull;
+    if (want <= produced) return;
+    unsigned long long need = want - produced;
+    unsigned int n = (need > 8192ull) ? 8192u : (unsigned int)need;
+    produced += n;
+    if (n == 0) return;
+    opl_mysticos_render(mixbuf, n);
+    for (unsigned int i = 0; i < n; i++) {
+        int m = ((int)mixbuf[i*2] + (int)mixbuf[i*2+1]) / 2;
+        // Анти-клиппинг: музыка суммируется в HDA-микшере с SFX-голосами.
+        // Без запаса сумма > int16 -> срез (треск/«белый шум» на громких
+        // нотах). Убавляем музыку на ~25% (умножение на 3/4): слышно, но
+        // с запасом под SFX. (Проверено: /2 убирало шум полностью.)
+        m = (m * 3) / 4;
+        mono[i] = (short)m;
+    }
+    ms_music_pcm(mono, n);
 }
 
 static void CheckVolumeSeparation(int *vol, int *sep)

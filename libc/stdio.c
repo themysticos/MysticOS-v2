@@ -13,10 +13,8 @@
 // ============================================================
 static void out_char(char c) {
     __ms_sc1(SYS_PUTCHAR, (unsigned int)(unsigned char)c);
-    // Дубль в serial (SYS_DEBUG=700) - для отладки в qemu -serial.
-    char b[2]; b[0] = c; b[1] = 0;
-    unsigned int args[1]; args[0] = (unsigned int)b;
-    __asm__ volatile ("int $0x80" :: "a"(700), "b"(args) : "memory");
+    // Serial-дубль УБРАН: каждый символ через int 0x80 в COM1 чудовищно
+    // тормозил (serial в QEMU медленный), а printf зовётся в горячем пути.
 }
 static void out_str(const char* s) { while (*s) out_char(*s++); }
 
@@ -184,7 +182,11 @@ FILE* fopen(const char* path, const char* mode) {
     f->data = (unsigned char*)malloc((size_t)sz);
     if (!f->data) { free(f); return 0; }
     int got = __ms_sc3(SYS_FS_READ, (unsigned int)path, (unsigned int)f->data, (unsigned int)sz);
-    printf("[fopen] %s: size=%d got=%d\n", path, (int)sz, got);
+    { extern void ms_debug(const char*);
+      char _b[32]; int _n=0, _v=got; if(!_v)_b[_n++]='0'; while(_v){_b[_n++]='0'+_v%10;_v/=10;}
+      ms_debug("[fopen] "); ms_debug(path); ms_debug(" got=");
+      while(_n) ms_debug((char[]){_b[--_n],0});
+      ms_debug("\n"); }
     if (got < 0) { free(f->data); free(f); return 0; }
     f->size = (size_t)got;
     f->pos = 0;
@@ -207,6 +209,24 @@ size_t fread(void* buf, size_t size, size_t nmemb, FILE* f) {
     memcpy(buf, f->data + f->pos, want);
     f->pos += want;
     return want / (size ? size : 1);
+}
+
+int fgetc(FILE* f) {
+    if (!f || f->is_console) return -1;
+    if (f->pos >= f->size) return -1;
+    return (int)f->data[f->pos++];
+}
+
+// FILE над буфером в памяти (чтение). Буфер НЕ копируется — должен жить,
+// пока используется поток. Полезно для парсеров (MIDI/MUS из памяти).
+FILE* fmemopen(const void* buf, size_t size) {
+    FILE* f = (FILE*)malloc(sizeof(FILE));
+    if (!f) return 0;
+    f->data = (unsigned char*)buf;
+    f->size = size;
+    f->pos = 0;
+    f->is_console = 0;
+    return f;
 }
 
 size_t fwrite(const void* buf, size_t size, size_t nmemb, FILE* f) {
