@@ -24,6 +24,7 @@ static const ata_ch_t CH[ATA_MAX_DRIVES] = {
 
 static int g_drive = 0;
 static int g_present[ATA_MAX_DRIVES] = {0, 0, 0, 0};
+static unsigned int g_sectors[ATA_MAX_DRIVES] = {0, 0, 0, 0};
 
 void ata_select(int drive) {
     if (drive < 0) drive = 0;
@@ -42,7 +43,8 @@ static void ata_delay400(const ata_ch_t* c) {
 }
 
 // IDENTIFY для устройства. Возвращает 1, если устройство есть и ATA.
-static int ata_identify(const ata_ch_t* c) {
+// В *out_sectors кладёт число секторов LBA28 (0, если неизвестно).
+static int ata_identify(const ata_ch_t* c, unsigned int* out_sectors) {
     // Выбрать устройство.
     outb(c->io + 6, c->sel);
     ata_delay400(c);
@@ -63,15 +65,25 @@ static int ata_identify(const ata_ch_t* c) {
     }
     if (st & 0x01) return 0;             // ERR — не ATA
     if (!(st & 0x08)) return 0;          // нет DRQ
-    // Прочитать 256 слов (иначе устройство зависнет).
-    for (int i = 0; i < 256; i++) inw(c->io);
+    // Прочитать 256 слов IDENTIFY-данных.
+    unsigned short id[256];
+    for (int i = 0; i < 256; i++) id[i] = inw(c->io);
+    // Слова 60..61: LBA28 capacity (в секторах), младшие 28 бит.
+    unsigned int cap = ((unsigned int)id[61] << 16) | id[60];
+    if (out_sectors) *out_sectors = cap & 0x0FFFFFFFu;
     return 1;
 }
 
 void ata_probe_all(void) {
     for (int d = 0; d < ATA_MAX_DRIVES; d++) {
-        g_present[d] = ata_identify(&CH[d]);
+        g_sectors[d] = 0;
+        g_present[d] = ata_identify(&CH[d], &g_sectors[d]);
     }
+}
+
+unsigned int ata_total_sectors(int drive) {
+    if (drive < 0 || drive >= ATA_MAX_DRIVES) return 0;
+    return g_sectors[drive];
 }
 
 void ata_read_sector(unsigned int lba, unsigned char* buffer) {
@@ -151,6 +163,38 @@ void ata_write_sector(unsigned int lba, const unsigned char* buffer) {
     for (int i = 0; i < 256; i++) {
         outw(c->io, buffer[i * 2] | (buffer[i * 2 + 1] << 8));
     }
+    for (unsigned int t = 0; ; t++) {
+        if (!(inb(c->io + 7) & 0x80)) break;
+        if (t >= 1000000u) return;
+    }
+}
+
+// Записать несколько последовательных секторов за одну ATA-команду.
+void ata_write_sectors(unsigned int lba, unsigned int count, const unsigned char* buffer) {
+    if (count == 0) return;
+    if (count > 255) count = 255;   // ATA PIO: 0 = 256, но берём <=255
+    const ata_ch_t* c = &CH[g_drive];
+    for (unsigned int w = 0; inb(c->io + 7) & 0x80; w++) if (w > 1000000u) return;
+    outb(c->io + 6, c->sel | ((lba >> 24) & 0x0F));
+    ata_delay400(c);
+    outb(c->io + 2, (unsigned char)count);   // число секторов
+    outb(c->io + 3, (unsigned char)lba);
+    outb(c->io + 4, (unsigned char)(lba >> 8));
+    outb(c->io + 5, (unsigned char)(lba >> 16));
+    outb(c->io + 7, 0x30);                    // WRITE SECTORS
+    for (unsigned int s = 0; s < count; s++) {
+        for (unsigned int t = 0; ; t++) {
+            unsigned char st = inb(c->io + 7);
+            if (!(st & 0x80) && (st & 0x08)) break;
+            if (st & 0x01) return;
+            if (t >= 1000000u) return;
+        }
+        const unsigned char* src = buffer + s * 512u;
+        for (int i = 0; i < 256; i++) {
+            outw(c->io, src[i * 2] | (src[i * 2 + 1] << 8));
+        }
+    }
+    // Дождаться завершения последнего сектора.
     for (unsigned int t = 0; ; t++) {
         if (!(inb(c->io + 7) & 0x80)) break;
         if (t >= 1000000u) return;

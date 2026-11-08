@@ -69,11 +69,20 @@ static int fat_drv_write(const char* path, const char* content) {
     fat_drv_write_impl(path, content);
     return 1;
 }
+static int fat_drv_write_bin(const char* path, const unsigned char* content, unsigned int len) {
+    return fat_write_path_bin(0, path, content, len);
+}
+// Файловый дескриптор — прямо в fat.c.
+static int  fat_drv_fopen(const char* path, void* fh)         { return fat_file_open(path, fh); }
+static int  fat_drv_fread(void* fh, unsigned char* buf, unsigned int n) { return fat_file_read(fh, buf, n); }
+static int  fat_drv_fseek(void* fh, unsigned int pos)         { return fat_file_seek(fh, pos); }
+static void fat_drv_fclose(void* fh)                          { fat_file_close(fh); }
 
 static const fs_driver_t FAT16_DRIVER = {
     "fat16", FS_FAT16, fat_probe,
     fat_drv_find, fat_drv_read_dir, fat_drv_read_file,
-    fat_drv_size, fat_drv_mkdir, fat_drv_write
+    fat_drv_size, fat_drv_mkdir, fat_drv_write, fat_drv_write_bin,
+    fat_drv_fopen, fat_drv_fread, fat_drv_fseek, fat_drv_fclose
 };
 
 // ============================================================
@@ -97,7 +106,8 @@ static int msfs_drv_write(const char* path, const char* content) {
 static const fs_driver_t MSFS_DRIVER = {
     "msfs", FS_MSFS, msfs_probe_drv,
     msfs_drv_find, msfs_drv_read_dir, msfs_drv_read_file,
-    msfs_drv_size, msfs_drv_mkdir, msfs_drv_write
+    msfs_drv_size, msfs_drv_mkdir, msfs_drv_write, 0,
+    0, 0, 0, 0   // write_bin и файловый дескриптор пока не поддержаны
 };
 
 // ============================================================
@@ -154,14 +164,16 @@ const char* vfs_type_name(void) {
 void vfs_resolve_drive(const char* path, int* drive, char* out) {
     int d = 0;
     const char* p = path ? path : "";
+    // Префикс диска: "D<n>:" (напр. "D0:"). Остаток — путь; допустимы
+    // и "D0://foo/bar" (формат Dx://), и "D0:/foo/bar".
     if (p[0] == 'D' && p[1] >= '0' && p[1] <= '9' && p[2] == ':') {
         d = p[1] - '0';
         p += 3;                     // пропускаем "Dx:"
-        if (p[0] != '/') { out[0] = '/'; vfs_normalize(p, out + 1); }
-        else vfs_normalize(p, out);
-    } else {
-        vfs_normalize(p, out);
     }
+    // p теперь начинается с '/' или '//' (или пуст/относителен).
+    // vfs_normalize принимает ведущие слэши в любом количестве и сам
+    // приводит путь к каноническому виду ('/dir/file').
+    vfs_normalize(p, out);
     if (drive) *drive = d;
 }
 
@@ -218,6 +230,79 @@ int vfs_write(const char* path, const char* content) {
     return drv->write ? drv->write(clean, content) : 0;
 }
 
+// Бинарная запись: len явно, внутри могут быть нули (сейвы DOOM). 1/0.
+int vfs_write_bin(const char* path, const unsigned char* content, unsigned int len) {
+    int d; char clean[FS_PATH_MAX];
+    vfs_resolve_drive(path, &d, clean);
+    const fs_driver_t* drv = drv_for(d);
+    if (!drv || !drv->write_bin) return 0;
+    vfs_switch(d);
+    return drv->write_bin(clean, content, len);
+}
+
+// ============================================================
+// Файловый дескриптор (стриминг). Пул открытых файлов.
+// ============================================================
+#define VFS_MAX_FILES 8
+static fs_file_t g_files[VFS_MAX_FILES];
+
+int vfs_file_open(const char* path) {
+    // Найти свободный слот.
+    int fd = -1;
+    for (int i = 0; i < VFS_MAX_FILES; i++) if (!g_files[i].used) { fd = i; break; }
+    if (fd < 0) return -1;
+    int d; char clean[FS_PATH_MAX];
+    vfs_resolve_drive(path, &d, clean);
+    const fs_driver_t* drv = drv_for(d);
+    if (!drv || !drv->file_open) return -1;
+    vfs_switch(d);
+    fs_file_t* f = &g_files[fd];
+    f->drive = d;
+    f->pos = 0;
+    int k = 0; while (clean[k] && k < FS_PATH_MAX - 1) { f->path[k] = clean[k]; k++; }
+    f->path[k] = 0;
+    if (!drv->file_open(clean, f->fh)) { f->used = 0; return -1; }
+    f->size = (unsigned int)vfs_size(path);
+    if ((int)f->size < 0) f->size = 0;
+    f->used = 1;
+    return fd;
+}
+
+int vfs_file_read(int fd, unsigned char* buf, unsigned int n) {
+    if (fd < 0 || fd >= VFS_MAX_FILES || !g_files[fd].used) return -1;
+    fs_file_t* f = &g_files[fd];
+    const fs_driver_t* drv = drv_for(f->drive);
+    if (!drv || !drv->file_read) return -1;
+    vfs_switch(f->drive);
+    int r = drv->file_read(f->fh, buf, n);
+    if (r > 0) f->pos += (unsigned int)r;
+    return r;
+}
+
+int vfs_file_seek(int fd, unsigned int pos) {
+    if (fd < 0 || fd >= VFS_MAX_FILES || !g_files[fd].used) return -1;
+    fs_file_t* f = &g_files[fd];
+    const fs_driver_t* drv = drv_for(f->drive);
+    if (!drv || !drv->file_seek) return -1;
+    vfs_switch(f->drive);
+    int r = drv->file_seek(f->fh, pos);
+    if (r >= 0) f->pos = (unsigned int)r;
+    return r;
+}
+
+void vfs_file_close(int fd) {
+    if (fd < 0 || fd >= VFS_MAX_FILES || !g_files[fd].used) return;
+    fs_file_t* f = &g_files[fd];
+    const fs_driver_t* drv = drv_for(f->drive);
+    if (drv && drv->file_close) { vfs_switch(f->drive); drv->file_close(f->fh); }
+    f->used = 0;
+}
+
+int vfs_file_size(int fd) {
+    if (fd < 0 || fd >= VFS_MAX_FILES || !g_files[fd].used) return -1;
+    return (int)g_files[fd].size;
+}
+
 // Размер файла: реализуем через драйвер, если он умеет; для FAT — через
 // перечисление каталога (как делал api_fs_size в kernel.c).
 int vfs_size(const char* path) {
@@ -230,9 +315,11 @@ int vfs_size(const char* path) {
         return drv->size(clean);
     }
     // FAT: перечисляем корень и ищем запись.
+    // ВАЖНО: зовём драйвер напрямую для диска d — vfs_read_dir("/") без
+    // префикса сбросил бы диск на 0 (vfs_resolve_drive считает "/" диском 0).
     vfs_switch(d);
     char names[64 * 13]; int isdir[64]; unsigned int sizes[64];
-    int n = vfs_read_dir("/", names, isdir, sizes, 64);
+    int n = (drv && drv->read_dir) ? drv->read_dir("/", names, isdir, sizes, 64) : -1;
     if (n <= 0) return -1;
     const char* b = clean;
     if (b[0] == '/') b++;

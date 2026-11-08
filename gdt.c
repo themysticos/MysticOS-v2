@@ -18,12 +18,14 @@ typedef struct {
     unsigned int ldt;
     unsigned short trap;
     unsigned short iomap_base;
+    unsigned char  irb[32];      // VME: interrupt redirection bitmap (1 = в IDT)
+    unsigned char  iomap[8192];  // I/O permission bitmap (0 = разрешить port I/O)
 } __attribute__((packed)) tss_t;
 
 static tss_t g_tss;
 
 // Адрес стека ядра для ring3->ring0 (совпадает с entry.asm: esp=0x90000).
-#define KERNEL_STACK_TOP 0x90000u
+#define KERNEL_STACK_TOP 0x700000u   // синхронизировано с entry.asm
 
 // Внешние (entry.asm):
 void gdt_init(unsigned int tss_base, unsigned int tss_limit);
@@ -44,7 +46,12 @@ void gdt_init_all(void) {
     for (unsigned int i = 0; i < sizeof(g_tss); i++) p[i] = 0;
     g_tss.ss0 = 0x10;               // сегмент данных ядра (ring0)
     g_tss.esp0 = KERNEL_STACK_TOP;  // стек ядра для входа из ring3
-    g_tss.iomap_base = sizeof(g_tss);
+    // VME: перенаправлять ВСЕ int n из V86 в protected-mode IDT (1 = в IDT).
+    // Без этого int 21h уходит по реальному IVT -> hlt -> #GP не на той инструкции.
+    for (unsigned int i = 0; i < sizeof(g_tss.irb); i++) g_tss.irb[i] = 0xFF;
+    // I/O bitmap: 0 = port I/O разрешён (пусть DOS-программы лезут в порты).
+    for (unsigned int i = 0; i < sizeof(g_tss.iomap); i++) g_tss.iomap[i] = 0x00;
+    g_tss.iomap_base = (unsigned short)((unsigned char*)&g_tss.iomap - (unsigned char*)&g_tss);
 
     // Заполнить GDT (ring3-сегменты + TSS-дескриптор) и загрузить.
     gdt_init((unsigned int)&g_tss, sizeof(g_tss) - 1);

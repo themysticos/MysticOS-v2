@@ -216,11 +216,13 @@ void gpu_flush(v_u32 x, v_u32 y, v_u32 w, v_u32 h) {
         for (unsigned int row = 0; row < h; row++) {
             const unsigned char* s = (const unsigned char*)BB_SRC_ADDR
                 + ((v_u64)(y + row) * g_scanout_w + x) * 3u;
-            unsigned char* d = (unsigned char*)GPU_BB_ADDR
-                + ((v_u64)(y + row) * g_scanout_w + x) * 4u;
+            v_u32* d = (v_u32*)((unsigned char*)GPU_BB_ADDR
+                + ((v_u64)(y + row) * g_scanout_w + x) * 4u);
+            // 24->32: одна 32-битная запись на пиксель вместо 4 байтовых.
+            // BGRA little-endian = B | G<<8 | R<<16 | A<<24; A=0 (не важно для XRGB).
             for (unsigned int i = 0; i < w; i++) {
-                d[0] = s[0]; d[1] = s[1]; d[2] = s[2]; d[3] = 0;
-                s += 3; d += 4;
+                d[i] = (v_u32)s[0] | ((v_u32)s[1] << 8) | ((v_u32)s[2] << 16);
+                s += 3;
             }
         }
     }

@@ -3,12 +3,15 @@
 #include "serial.h"
 #include "net.h"
 
+extern unsigned int timer_ticks(void);   // PIT 100 Гц = 10 мс/тик
+extern void net_wait_tick(void);         // ожидание тика с sti (для syscall)
+
 extern int net_ip_send(const unsigned char* dst_ip, n_u8 proto,
                        const void* payload, unsigned int plen);
 
 static tcp_conn_t* g_conn = 0;
 
-#define TCP_RXBUF 2048
+#define TCP_RXBUF 16384   // TLS: сертификат 2-3 КБ, нужен запас
 static unsigned char g_rxbuf[TCP_RXBUF];
 static unsigned int  g_rxlen = 0;
 
@@ -62,12 +65,21 @@ static int tcp_send_segment(tcp_conn_t* c, n_u8 flags,
     // пакет (TCP уходил в никуда, SYN-ACK не приходил).
     t->checksum = be16(tcp_checksum((const unsigned char*)net_our_ip(),
                                      c->dst_ip, pkt, total));
+    serial_print("[tcp] seg flags="); serial_print_hex(flags);
+    serial_print(" total="); serial_print_int((int)total);
+    serial_print(" seq="); serial_print_hex(c->send_seq);
+    serial_print(" csum="); serial_print_hex((unsigned int)t->checksum);
+    serial_print("\n");
     return net_ip_send(c->dst_ip, 6, pkt, total);
 }
 
 static unsigned short g_next_src_port = 40000;
 
 int net_tcp_connect(tcp_conn_t* c, const unsigned char* ip, unsigned short port) {
+    // ВАЖНО: g_rxbuf глобальный (один на все соединения) и не очищается.
+    // Без сброса остатки предыдущего ответа (напр. хвост HTTP от example.com)
+    // попадали в следующий протокол (TLS читал 'e' из "HTTP" -> type=101).
+    g_rxlen = 0;
     for (int i = 0; i < 4; i++) c->dst_ip[i] = ip[i];
     c->dst_port = port;
     c->src_port = g_next_src_port++;
@@ -86,10 +98,14 @@ int net_tcp_connect(tcp_conn_t* c, const unsigned char* ip, unsigned short port)
     // Отправляем SYN, ждём SYN-ACK. 3 попытки.
     for (int attempt = 0; attempt < 3; attempt++) {
         tcp_send_segment(c, TCP_SYN, 0, 0);
-        c->send_seq++;
+        // ВАЖНО: send_seq НЕ инкрементим здесь! Все SYNs (и retransmit)
+        // идут с ОДНИМ seq (ISN). Иначе сервер видит 2 разных SYN и RST'ит.
+        // Bump делается в tcp_handle_segment при получении SYN-ACK.
         serial_print("[tcp] SYN sent (attempt "); serial_print_int(attempt+1); serial_print(")\n");
-        for (unsigned int i = 0; i < 2000000u; i++) {
-            net_poll();
+        // Ожидание SYN-ACK ПО ВРЕМЕНИ (3 сек), а не по итерациям.
+        { unsigned int t0 = timer_ticks();
+          while ((timer_ticks() - t0) < 300) {
+            net_wait_tick();
             if (c->state == TCP_ESTABLISHED) {
                 serial_print("[tcp] ESTABLISHED\n");
                 return 0;
@@ -98,6 +114,7 @@ int net_tcp_connect(tcp_conn_t* c, const unsigned char* ip, unsigned short port)
                 serial_print("[tcp] RST\n");
                 return -1;
             }
+          }
         }
     }
     serial_print("[tcp] connect timeout\n");
@@ -107,13 +124,16 @@ int net_tcp_connect(tcp_conn_t* c, const unsigned char* ip, unsigned short port)
 int net_tcp_send(tcp_conn_t* c, const void* data, unsigned int len) {
     if (c->state != TCP_ESTABLISHED) return -1;
     if (len > 1400) return -1;
-    tcp_send_segment(c, TCP_ACK | TCP_PSH, data, len);
+    tcp_send_segment(c, TCP_ACK, data, len);   // без PSH — проверим, не в нём ли дело
     c->send_seq += len;
     serial_print("[tcp] sent "); serial_print_int((int)len); serial_print("\n");
-    for (unsigned int i = 0; i < 500000u; i++) {
-        net_poll();
+    // Ожидание ACK ПО ВРЕМЕНИ (2 сек), а не по итерациям.
+    { unsigned int t0 = timer_ticks();
+      while ((timer_ticks() - t0) < 200) {
+        net_wait_tick();
         if (c->last_ack_from_peer == c->send_seq) break;
         if (c->state != TCP_ESTABLISHED) break;
+      }
     }
     return (int)len;
 }
@@ -193,6 +213,7 @@ void tcp_handle_segment(const unsigned char* ip_src,
 
     if (g_conn->state == TCP_SYN_SENT && (fl & TCP_SYN) && (fl & TCP_ACK)) {
         g_conn->recv_ack = seq + 1;
+        g_conn->send_seq++;   // SYN съел один seq: 0x1000 -> 0x1001
         g_conn->state = TCP_ESTABLISHED;
         tcp_send_segment(g_conn, TCP_ACK, 0, 0);
         return;

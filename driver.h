@@ -9,7 +9,7 @@
 // Аналогия в этом же проекте: vfs.c (fs_driver_t) — та же идея
 // для файловых систем.
 //
-// Классы: NET, GPU, BLK, INPUT, OTHER.
+// Классы: NET, GPU, BLK, INPUT, AUDIO, OTHER.
 // Уровни: EARLY (PCI, консоль), NORMAL (сеть, GPU), LATE (USB).
 #ifndef DRIVER_H
 #define DRIVER_H
@@ -22,6 +22,7 @@
 #define DRV_GPU     2
 #define DRV_BLK     3
 #define DRV_INPUT   4
+#define DRV_AUDIO   5
 
 // Уровни инициализации
 #define DRV_LEVEL_EARLY   0

@@ -20,9 +20,14 @@ void ata_probe_all(void);
 // Есть ли устройство drive (0..3). 1/0.
 int  ata_present(int drive);
 
+// Число секторов (LBA28) на устройстве drive (0, если нет).
+unsigned int ata_total_sectors(int drive);
+
 void ata_read_sector(unsigned int lba, unsigned char* buffer);
 // Прочитать count последовательных секторов за одну ATA-команду (быстро).
 void ata_read_sectors(unsigned int lba, unsigned int count, unsigned char* buffer);
 void ata_write_sector(unsigned int lba, const unsigned char* buffer);
+// Записать count последовательных секторов за одну ATA-команду.
+void ata_write_sectors(unsigned int lba, unsigned int count, const unsigned char* buffer);
 
 #endif

@@ -149,6 +149,30 @@ void draw_icon(int x, int y, const icon_t* ic) {
     }
 }
 
+// Нарисовать иконку с масштабом (ближайший сосед). num=scale*100,
+// напр. scale=110 -> иконка на 10% больше. Отрисовка центрируется
+// относительно исходного прямоугольника w x h, чтобы иконка «росла»
+// из центра (hover-эффект). Без альфа-блендинга — как draw_icon.
+void draw_icon_scaled(int x, int y, const icon_t* ic, int scale100) {
+    if (!ic->pixels || scale100 <= 0) return;
+    int dw = (ic->w * scale100 + 50) / 100;
+    int dh = (ic->h * scale100 + 50) / 100;
+    if (dw <= 0 || dh <= 0) return;
+    // Смещение, чтобы центр совпал с центром исходной иконки.
+    int ox = x - (dw - ic->w) / 2;
+    int oy = y - (dh - ic->h) / 2;
+    for (int row = 0; row < dh; row++) {
+        int sy = (row * ic->h) / dh;
+        for (int col = 0; col < dw; col++) {
+            int sx = (col * ic->w) / dw;
+            unsigned int px = ic->pixels[sy * ic->w + sx];
+            unsigned int a = (px >> 24) & 0xFF;
+            if (a == 0) continue;
+            fb_backbuffer_pixel(ox + col, oy + row, px & 0xFFFFFF);
+        }
+    }
+}
+
 icon_t ICON_TERMINAL = { 32, 32, 0 };
 icon_t ICON_FILES    = { 32, 32, 0 };
 icon_t ICON_SETTINGS = { 32, 32, 0 };

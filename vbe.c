@@ -44,8 +44,11 @@ int vbe_init(void) {
     g_lfb_bpp = (int)bpp;
     // PITCH из ModeInfo (BytesPerScanLine). Проверено на ноуте: 1664 — ВЕРНЫЙ.
     // (Попытка вычислить w*bpp/8=1600 сделала хуже — значит BIOS НЕ врёт.)
-    // ТЕСТ: pitch = w*bpp/8 (1600), НЕ из ModeInfo (1664).
-    g_pitch = (unsigned int)g_w * (bpp / 8u);
+    // PITCH: из параметра (0x9004), куда stage2 пишет LinBytesPerScanLine
+    // (LFB pitch, VBE ModeInfo offset 0x32). Раньше брали banked (0x10) или
+    // вычисляли w*bpp/8 — оба давали "полоски" (pitch mismatch).
+    g_pitch = *(volatile unsigned short*)(VBE_PARAM_ADDR + 4);
+    if (g_pitch == 0) g_pitch = (unsigned int)g_w * (bpp / 8u);  // fallback
     // МАСКИ КАНАЛОВ из ModeInfo (stage2 пишет 0x900C..0x9011).
     // Реальный формат (565 vs 555) узнаём по маскам — как Linux vesafb.c.
     g_red_pos   = *(volatile unsigned char*)(VBE_PARAM_ADDR + 0x0C);
@@ -274,6 +277,148 @@ void fb_backbuffer_blit_key_alpha(int dx, int dy, const unsigned char* src,
                 d[2] = (unsigned char)((s[2] * alpha + d[2] * ia) / 255);
             }
             s += 3; d += 3;
+        }
+    }
+}
+
+// ============================================================
+// blend_pixel: смешать ОДИН пиксель с тем, что уже в backbuffer.
+//   dst = (color * alpha + dst * (255 - alpha)) / 255
+// alpha: 0 = прозрачно (ничего), 255 = плотно (затирает).
+// Нужно для мягких теней и скруглённых углов (Волна 1 редизайна).
+// ============================================================
+// read_pixel: прочитать пиксель из backbuffer (0xRRGGBB). Нужно для
+// сохранения/восстановления угловых пикселей при скруглении окон.
+unsigned int fb_backbuffer_read_pixel(int x, int y) {
+    if (!g_bb) return 0;
+    if (x < 0 || y < 0 || x >= g_w || y >= g_h) return 0;
+    const unsigned char* p = g_bb + ((unsigned int)y * (unsigned int)g_w + (unsigned int)x) * 3u;
+    return ((unsigned int)p[2] << 16) | ((unsigned int)p[1] << 8) | p[0];
+}
+
+void fb_backbuffer_blend_pixel(int x, int y, unsigned int color, unsigned int alpha) {
+    if (!g_bb) return;
+    if (x < 0 || y < 0 || x >= g_w || y >= g_h) return;
+    if (alpha == 0) return;
+    unsigned char* p = g_bb + ((unsigned int)y * (unsigned int)g_w + (unsigned int)x) * 3u;
+    if (alpha >= 255) {
+        p[0] = (unsigned char)(color & 0xFF);
+        p[1] = (unsigned char)((color >> 8) & 0xFF);
+        p[2] = (unsigned char)((color >> 16) & 0xFF);
+        return;
+    }
+    unsigned int ia = 255 - alpha;
+    unsigned int sb = color & 0xFF, sg = (color >> 8) & 0xFF, sr = (color >> 16) & 0xFF;
+    p[0] = (unsigned char)((sb * alpha + p[0] * ia) / 255);
+    p[1] = (unsigned char)((sg * alpha + p[1] * ia) / 255);
+    p[2] = (unsigned char)((sr * alpha + p[2] * ia) / 255);
+}
+
+// shade_rect: затемнить/подсветить прямоугольник наложением цвета с альфой.
+// Работает по пикселям backbuffer. Дёшево для теней (плоские заливки).
+void fb_backbuffer_shade_rect(int x, int y, int w, int h, unsigned int color, unsigned int alpha) {
+    if (!g_bb) return;
+    if (w <= 0 || h <= 0 || alpha == 0) return;
+    if (x < 0) { w += x; x = 0; }
+    if (y < 0) { h += y; y = 0; }
+    if (x + w > g_w) w = g_w - x;
+    if (y + h > g_h) h = g_h - y;
+    if (w <= 0 || h <= 0) return;
+    unsigned int ia = 255 - alpha;
+    unsigned int sb = color & 0xFF, sg = (color >> 8) & 0xFF, sr = (color >> 16) & 0xFF;
+    for (int yy = y; yy < y + h; yy++) {
+        unsigned char* row = g_bb + ((unsigned int)yy * (unsigned int)g_w + (unsigned int)x) * 3u;
+        for (int xx = 0; xx < w; xx++) {
+            row[0] = (unsigned char)((sb * alpha + row[0] * ia) / 255);
+            row[1] = (unsigned char)((sg * alpha + row[1] * ia) / 255);
+            row[2] = (unsigned char)((sr * alpha + row[2] * ia) / 255);
+            row += 3;
+        }
+    }
+}
+
+// ============================================================
+// round_rect_alpha: СКРУГЛЁННЫЙ прямоугольник с общей альфой и
+// сглаженными углами. Единый примитив для тени, окна, меню.
+//   color  — цвет заливки (0xRRGGBB)
+//   alpha  — общая непрозрачность 0..255
+//   radius — радиус скругления углов
+// Углы смешиваются с backbuffer по доле покрытия круга (антиалиасинг).
+// Прямые участки заливаются/смешиваются построчно (быстро).
+// ============================================================
+void fb_backbuffer_round_rect_alpha(int x, int y, int w, int h, int radius,
+                                    unsigned int color, unsigned int alpha) {
+    if (!g_bb) return;
+    if (w <= 0 || h <= 0 || alpha == 0) return;
+    if (radius < 0) radius = 0;
+    if (radius > w / 2) radius = w / 2;
+    if (radius > h / 2) radius = h / 2;
+    unsigned char cb = (unsigned char)(color & 0xFF);
+    unsigned char cg = (unsigned char)((color >> 8) & 0xFF);
+    unsigned char cr = (unsigned char)((color >> 16) & 0xFF);
+    unsigned int ia = 255 - alpha;
+
+    for (int ry = 0; ry < h; ry++) {
+        int py = y + ry;
+        if (py < 0 || py >= g_h) continue;
+        // На сколько пикселей этот ряд «вдавлен» слева/справа (для скругления).
+        int inset = 0;
+        if (radius > 0) {
+            int dy;   // расстояние от ближайшего «прямого» края (сверху или снизу)
+            if (ry < radius) dy = radius - ry - 1;          // верхняя зона
+            else if (ry >= h - radius) dy = ry - (h - radius); // нижняя зона
+            else dy = -1;                                    // прямая зона
+            if (dy >= 0) {
+                // ищем минимальный inset по кругу: x^2 + dy^2 <= r^2
+                // inset = r - floor(sqrt(r^2 - dy_mid^2)), но для
+                // антиалиасинга считаем по каждому пикселю ниже.
+                inset = -1;   // спец-значение: ряд в угловой зоне
+            }
+        }
+        int px0 = x, px1 = x + w;   // [px0, px1)
+        if (inset == -1) {
+            // Угловой ряд: для каждого пикселя считаем покрытие.
+            int dy;
+            if (ry < radius) dy = radius - ry - 1; else dy = ry - (h - radius);
+            for (int rx = 0; rx < w; rx++) {
+                int px = x + rx;
+                if (px < 0 || px >= g_w) continue;
+                // расстояние от ближайшего углового центра
+                int ddx, ddy = dy;
+                if (rx < radius) ddx = radius - rx - 1;
+                else if (rx >= w - radius) ddx = rx - (w - radius);
+                else { // прямая зона по X — плотный пиксель
+                    unsigned char* p = g_bb + ((unsigned int)py * (unsigned int)g_w + (unsigned int)px) * 3u;
+                    if (alpha >= 255) { p[0]=cb; p[1]=cg; p[2]=cr; }
+                    else { p[0]=(unsigned char)((cb*alpha+p[0]*ia)/255); p[1]=(unsigned char)((cg*alpha+p[1]*ia)/255); p[2]=(unsigned char)((cr*alpha+p[2]*ia)/255); }
+                    continue;
+                }
+                // центр пикселя на +0.5, радиус в удвоенном масштабе
+                int d2 = (ddx*2+1)*(ddx*2+1) + (ddy*2+1)*(ddy*2+1);
+                int rr = radius*2;
+                int rr2 = rr*rr;
+                int cov;
+                if (d2 <= rr2) cov = 255;
+                else {
+                    int rr_out = (rr+2)*(rr+2);
+                    if (d2 >= rr_out) cov = 0;
+                    else cov = 255 - ((d2 - rr2) * 255) / (rr_out - rr2);
+                }
+                if (cov <= 0) continue;
+                unsigned int a = (alpha * (unsigned int)cov) / 255u;
+                unsigned char* p = g_bb + ((unsigned int)py * (unsigned int)g_w + (unsigned int)px) * 3u;
+                if (a >= 255) { p[0]=cb; p[1]=cg; p[2]=cr; }
+                else { unsigned int iaa = 255 - a; p[0]=(unsigned char)((cb*a+p[0]*iaa)/255); p[1]=(unsigned char)((cg*a+p[1]*iaa)/255); p[2]=(unsigned char)((cr*a+p[2]*iaa)/255); }
+            }
+        } else {
+            // Прямой ряд: заливаем [px0, px1) с общей альфой.
+            if (px0 < 0) px0 = 0;
+            if (px1 > g_w) px1 = g_w;
+            for (int px = px0; px < px1; px++) {
+                unsigned char* p = g_bb + ((unsigned int)py * (unsigned int)g_w + (unsigned int)px) * 3u;
+                if (alpha >= 255) { p[0]=cb; p[1]=cg; p[2]=cr; }
+                else { p[0]=(unsigned char)((cb*alpha+p[0]*ia)/255); p[1]=(unsigned char)((cg*alpha+p[1]*ia)/255); p[2]=(unsigned char)((cr*alpha+p[2]*ia)/255); }
+            }
         }
     }
 }

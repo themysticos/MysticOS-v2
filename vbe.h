@@ -29,6 +29,19 @@ void fb_backbuffer_pixel(int x, int y, unsigned int color);
 void fb_backbuffer_fill(int x, int y, int w, int h, unsigned int color);
 void fb_backbuffer_line(int x0, int y0, int x1, int y1, unsigned int color);
 void fb_backbuffer_rect(int x, int y, int w, int h, unsigned int color);
+
+// read_pixel: прочитать пиксель из backbuffer (0xRRGGBB).
+unsigned int fb_backbuffer_read_pixel(int x, int y);
+
+// blend_pixel: смешать ОДИН пиксель с backbuffer по альфе (0..255).
+// Нужно для мягких теней и скруглённых углов.
+void fb_backbuffer_blend_pixel(int x, int y, unsigned int color, unsigned int alpha);
+// shade_rect: наложить цвет с альфой на прямоугольник (мягкие тени).
+void fb_backbuffer_shade_rect(int x, int y, int w, int h, unsigned int color, unsigned int alpha);
+// round_rect_alpha: скруглённый прямоугольник с общей альфой и
+// сглаженными углами (единый примитив для тени/окна/меню).
+void fb_backbuffer_round_rect_alpha(int x, int y, int w, int h, int radius,
+                                    unsigned int color, unsigned int alpha);
 // Быстрый блит буфера (24bpp) в backbuffer со сдвигом и обрезкой.
 // stride — длина строки источника в байтах.
 void fb_backbuffer_blit(int dx, int dy, const unsigned char* src, int w, int h, int stride);

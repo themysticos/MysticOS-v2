@@ -34,7 +34,7 @@ REM   whpx      = try hardware accel (fast, but may show a black screen
 REM               on some systems - then it does NOT auto-fallback,
 REM               because QEMU stays alive; use plain run instead)
 set EXTRA=
-set ACCEL=-accel tcg
+set ACCEL=-accel whpx
 if /I "%~1"=="full"     set EXTRA=-full-screen
 if /I "%~1"=="snapshot" set EXTRA=-snapshot
 if /I "%~1"=="whpx"     set ACCEL=-accel whpx
@@ -51,8 +51,8 @@ REM  Add "whpx" argument to try hardware acceleration instead.
 REM ============================================================
 echo Starting MysticOS 2 (accelerator: %ACCEL%) ...
 
-"%QEMU%" %ACCEL% -m 256 -name "MysticOS 2" -rtc base=localtime ^
-  -drive file=mysticos2.img,format=raw,media=disk,if=ide ^
-  %DISK2% %EXTRA%
+"%QEMU%" %ACCEL% -m 512 -name "MysticOS 2" -rtc base=localtime ^
+  -drive file=mysticos2.img,format=raw,media=disk,if=ide -device intel-hda -device hda-duplex ^
+  %DISK2% -device intel-hda -device hda-duplex %EXTRA%
 
 endlocal

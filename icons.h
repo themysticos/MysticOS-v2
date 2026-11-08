@@ -8,6 +8,9 @@ typedef struct {
 } icon_t;
 
 void draw_icon(int x, int y, const icon_t* ic);
+// Масштабированная отрисовка (ближайший сосед). scale100 = масштаб*100
+// (110 => +10%). Центрируется относительно (x,y,ic->w,ic->h) — hover-эффект.
+void draw_icon_scaled(int x, int y, const icon_t* ic, int scale100);
 
 // Заглушки заполняются в icons_init(). После — указывают на реальные
 // массивы (в т.ч. сгенерированные png2icon.py).

@@ -70,13 +70,18 @@ int pci_bar_info(int bus, int slot, int func, int bar_idx,
     int type = (orig >> 1) & 0x3;
     int is64 = (type == 0x2);   // MMIO64
 
-    pci_write32(bus, slot, func, offset, 0xFFFFFFFFu);
-    unsigned int mask = pci_read32(bus, slot, func, offset);
-    pci_write32(bus, slot, func, offset, orig);
+    // ВАЖНО (WHPX-фикс): НЕ пишем 0xFFFFFFFF в BAR для определения размера!
+    // Запись "все единицы" в MMIO-BAR заставляет QEMU снять и заново
+    // поставить memory_region устройства. Под WHPX это даёт
+    // "failed to unmap GPA range" (QEMU не может снять GPA-регион).
+    // Размер BAR нам не нужен: virtio modern использует offset из
+    // capabilities, а не размер. Читаем только текущее значение.
+    (void)orig;
 
     if (io) {
-        unsigned int sz = ~(mask & 0xFFFFFFFCu) + 1u;
-        *size = sz;
+        // Размер не вычисляем (см. выше — нельзя писать в BAR).
+        // Вернём 0: адрес BAR нам важнее, размер virtio не использует.
+        *size = 0;
         *is_io = 1;
         *is_64 = 0;
         *addr_lo = orig & 0xFFFFFFFCu;
@@ -84,8 +89,7 @@ int pci_bar_info(int bus, int slot, int func, int bar_idx,
         return 1;
     }
 
-    unsigned int sz = ~(mask & 0xFFFFFFF0u) + 1u;
-    *size = sz;
+    *size = 0;
     *is_io = 0;
     *is_64 = is64;
     *addr_lo = orig & 0xFFFFFFF0u;

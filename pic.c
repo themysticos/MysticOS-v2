@@ -38,6 +38,13 @@ static const char sc_lower[128] = {
     0,'a','s','d','f','g','h','j','k','l',';','\'','`',
     0,'\\','z','x','c','v','b','n','m',',','.','/',0,'*',0,' '
 };
+// Shift-символы (0 = нет shift-версии).
+static const char sc_shift[128] = {
+    0, 27, '!','@','#','$','%','^','&','*','(',')','_','+','\b',
+    '\t','Q','W','E','R','T','Y','U','I','O','P','{','}','\n',
+    0,'A','S','D','F','G','H','J','K','L',':','"','~',
+    0,'|','Z','X','C','V','B','N','M','<','>','?',0,'*',0,' '
+};
 
 static void kb_push(char c) {
     unsigned int n = (kb_head + 1) % KB_SIZE;
@@ -83,6 +90,35 @@ void mouse_set_grab(int on) {
 // Забрать накопленную относительную дельту (обнуляет).
 void mouse_take_rel(int* dx, int* dy) { *dx = g_rel_x; *dy = g_rel_y; g_rel_x = 0; g_rel_y = 0; }
 int mouse_grabbed(void) { return g_mouse_grab; }
+
+// --- Очередь СОБЫТИЙ мыши (для UI-программ, event-driven). ---
+// Кодировка одного 32-бит события:
+//   bits 0-11 : x (0..4095)
+//   bits 12-23: y (0..4095)
+//   bits 24-27: type (0=move, 1=down, 2=up)
+//   bits 28-31: button (для down/up: 1=левая, 2=правая; для move: маска)
+#define MEV_SIZE 128
+static volatile unsigned int mev_buf[MEV_SIZE];
+static volatile unsigned int mev_head = 0, mev_tail = 0;
+
+static void mouse_push_event(int type, int button, int x, int y) {
+    if (x < 0) x = 0; if (x > 0xFFF) x = 0xFFF;
+    if (y < 0) y = 0; if (y > 0xFFF) y = 0xFFF;
+    unsigned int ev = ((unsigned int)x & 0xFFFu)
+                    | (((unsigned int)y & 0xFFFu) << 12)
+                    | (((unsigned int)type & 0xFu) << 24)
+                    | (((unsigned int)button & 0xFu) << 28);
+    unsigned int n = (mev_head + 1) % MEV_SIZE;
+    if (n != mev_tail) { mev_buf[mev_head] = ev; mev_head = n; }
+}
+int mouse_event_available(void) { return mev_head != mev_tail; }
+// Неблокирующий: -1 если пусто, иначе событие (см. кодировку выше).
+int mouse_get_event(void) {
+    if (mev_head == mev_tail) return -1;
+    unsigned int ev = mev_buf[mev_tail];
+    mev_tail = (mev_tail + 1) % MEV_SIZE;
+    return (int)ev;
+}
 static unsigned char mouse_cycle = 0;
 static unsigned char mouse_packet[3];
 static void (*g_move_hook)(int dx, int dy) = 0;
@@ -114,9 +150,23 @@ void mouse_init(void) {
     mouse_write(0xF4); mouse_read();
 }
 
+// Аудио-миксер (HDA). Вызывается из IRQ0, чтобы звук не зависел от
+// частоты главного цикла: 100 вызовов/сек, каждый доливает ~480 сэмплов.
+extern void hda_poll(void);
+extern void apic_eoi(void);
+extern int  apic_active(void);
+
+extern void hda_poll(void);
+
 void irq_handler(registers_t* r) {
     unsigned int irq = r->int_no - 0x20;
-    if (irq == 0) { g_ticks++; }
+    if (irq == 0) {
+        g_ticks++;
+        // Микшируем HDA-кольцо из таймера (100 Гц): равномерно, не зависит
+        // от того, что главный цикл уступил программе. Защита от
+        // реентерабельности — g_in_mix внутри hda_poll.
+        hda_poll();
+    }
     else if (irq == 1) {
         // Читаем, ПОКА есть байты, и ТОЛЬКО клавиатурные (статус бит 5 = 0).
         // Иначе при удержании клавиши (auto-repeat) захватим байт мыши -> курсор слетает.
@@ -141,8 +191,14 @@ void irq_handler(registers_t* r) {
         else if (sc == 0x9D) { /* release Ctrl */ }
         else if (sc == 0x3C) kb_push((char)0x02);
         else if (pressed && sc < 128) {
-            char c = sc_lower[sc];
-            if (c >= 'a' && c <= 'z' && (shift ^ caps)) c -= 32;
+            char c;
+            if (shift) {
+                c = sc_shift[sc];
+                if (!c) c = sc_lower[sc];   // нет shift-версии (стрелки/спец)
+            } else {
+                c = sc_lower[sc];
+                if (c >= 'a' && c <= 'z' && caps) c -= 32;
+            }
             if (c) kb_push(c);
         }
         }   // end while (клавиатурные байты)
@@ -175,15 +231,21 @@ void irq_handler(registers_t* r) {
                         if (m_y < 0) m_y = 0;
                         if (m_x > (int)vbe_width() - 1)  m_x = (int)vbe_width() - 1;
                         if (m_y > (int)vbe_height() - 1) m_y = (int)vbe_height() - 1;
-                        if (g_move_hook) g_move_hook(dx, -dy);
+                        if (g_move_hook) g_move_hook(dx, -dy); mouse_push_event(0, 0, m_x, m_y);
                     }
                 }
-                m_left = flags & 0x01; m_right = flags & 0x02;
+                { int nl = (flags & 0x01) ? 1 : 0; int nr = (flags & 0x02) ? 1 : 0; if (nl != m_left) mouse_push_event(nl ? 1 : 2, 1, m_x, m_y); if (nr != m_right) mouse_push_event(nr ? 1 : 2, 2, m_x, m_y); m_left = nl; m_right = nr; }
             }
         }
     }
-    if (irq >= 8) outb(PIC2_CMD, PIC_EOI);
-    outb(PIC1_CMD, PIC_EOI);
+    // EOI: если таймер обслуживает APIC — шлём EOI в LAPIC и НЕ трогаем PIC.
+    // Иначе (PIC-режим) — как раньше, EOI в 8259.
+    if (apic_active()) {
+        apic_eoi();
+    } else {
+        if (irq >= 8) outb(PIC2_CMD, PIC_EOI);
+        outb(PIC1_CMD, PIC_EOI);
+    }
 }
 
 void pic_remap(void) {
@@ -191,7 +253,8 @@ void pic_remap(void) {
     outb(PIC1_DATA, 0x20); outb(PIC2_DATA, 0x28);
     outb(PIC1_DATA, 0x04); outb(PIC2_DATA, 0x02);
     outb(PIC1_DATA, 0x01); outb(PIC2_DATA, 0x01);
-    // PIC1: IRQ0(таймер),1(клава),2(cascade),5(SB16). 0xD8 = биты 0,1,2,5 = 0.
+    // PIC1: IRQ0(таймер),1(клава),2(cascade),5(свободен). 0xD8 = биты 0,1,2,5 = 0.
+    // (SB16 удалён; Intel HDA использует PCI IRQ/MSI, не ISA IRQ5.)
     outb(PIC1_DATA, 0xD8);
     outb(PIC2_DATA, 0xEF);
 }

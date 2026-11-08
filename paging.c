@@ -23,7 +23,9 @@ static unsigned int g_pd[1024] __attribute__((aligned(4096)));
 
 unsigned int* paging_kernel_pd(void) { return g_pd; }
 
-#define PMAX_TASK_PD 8
+#define PMAX_TASK_PD 12   // должно быть >= TASK_MAX (см. task.h):
+                          // по одному PD (page directory, 4 КБ) на задачу-программу.
+                          // Раньше 8 — при 7 открытых программах 8-я не запускалась.
 static unsigned int g_task_pd[PMAX_TASK_PD][1024] __attribute__((aligned(4096)));
 static unsigned int g_pd_used_mask = 0;
 
@@ -34,7 +36,8 @@ static unsigned int g_pd_used_mask = 0;
 // Раньше был 1 PDE (4 МБ) - мало для Doom (WAD 11 МБ).
 #define PDE_CODE_BLOCKS 8
 
-unsigned int paging_task_pd_alloc(unsigned int code_phys, unsigned int stack_phys) {
+unsigned int paging_task_pd_alloc(unsigned int code_phys, unsigned int stack_phys,
+                                  unsigned int code_blocks) {
     int slot = -1;
     for (int i = 0; i < PMAX_TASK_PD; i++) {
         if (!(g_pd_used_mask & (1u << i))) { slot = i; break; }
@@ -48,8 +51,10 @@ unsigned int paging_task_pd_alloc(unsigned int code_phys, unsigned int stack_phy
     // Шаг 2: только stack+code. Ядру и shared-страницам (окна, DLL) —
     // пока НЕ ставим user: ring3 не должен писать в ядро.
     pd[PDE_IDX_STACK] = stack_phys | PDE_PRESENT | PDE_RW | PDE_USER | PDE_PS;
-    // Код+heap: 8 PDE (32 МБ), непрерывные физ. блоки от code_phys.
-    for (int b = 0; b < PDE_CODE_BLOCKS; b++)
+    // Код+heap: code_blocks PDE (1 или 8), непрерывные физ. блоки от
+    // code_phys. Мапим РОВНО столько, сколько выделено — иначе лишние PDE
+    // указывали бы на невыделенную/чужую физпамять.
+    for (unsigned int b = 0; b < code_blocks; b++)
         pd[PDE_IDX_CODE + b] = (code_phys + b * 0x400000u) | PDE_PRESENT | PDE_RW | PDE_USER | PDE_PS;
     // DLL-регион (0x64000000, PDE[400]) — тоже USER: ring3-программы
     // исполняют код DLL и читают её данные. Иначе #PF (PG 0x05) на EIP=0x64001000.

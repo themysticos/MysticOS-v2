@@ -78,6 +78,9 @@ int bmp_decode_scaled(const unsigned char* src, unsigned int src_size,
             if (sx >= bi_w) sx = bi_w - 1;
             const unsigned char* sp = srow + (unsigned int)sx * (unsigned int)src_bpp_bytes;
             // BMP хранит B,G,R — совпадает с форматом backbuffer MysticOS 2.
+            // ПРОЗРАЧНОСТЬ: пиксели цвета-ключа 0xFF00FF (маджента) НЕ рисуются —
+            // остаётся фон под ними (для иконок с прозрачным фоном).
+            if (sp[0] == 0xFF && sp[1] == 0x00 && sp[2] == 0xFF) continue;
             drow[x * 3 + 0] = sp[0];
             drow[x * 3 + 1] = sp[1];
             drow[x * 3 + 2] = sp[2];

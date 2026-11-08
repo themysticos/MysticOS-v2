@@ -8,6 +8,10 @@
 #include "net.h"
 #include "virtio_net.h"
 #include "serial.h"
+#include "tcp.h"
+
+extern unsigned int timer_ticks(void);   // PIT 100 Гц = 10 мс/тик
+void net_wait_tick(void);                 // ожидание тика с sti (для syscall)
 
 // ============================================================
 // Наши адреса
@@ -55,10 +59,12 @@ static int ip_zero(const unsigned char* a) {
 }
 
 static unsigned short ip_checksum(const void* data, unsigned int len) {
-    const n_u16* p = (const n_u16*)data;
+    // ВАЖНО: байты в сетевом порядке (BE). Читаем побайтово, а не как n_u16*
+    // (на x86 n_u16* даёт LE-сумму -> неверный checksum -> QEMU дропает).
+    const n_u8* p = (const n_u8*)data;
     unsigned int sum = 0;
-    while (len > 1) { sum += *p++; len -= 2; }
-    if (len) sum += *(const n_u8*)p;
+    while (len > 1) { sum += ((unsigned int)p[0] << 8) | p[1]; p += 2; len -= 2; }
+    if (len) sum += (unsigned int)p[0] << 8;
     while (sum >> 16) sum = (sum & 0xFFFF) + (sum >> 16);
     return (n_u16)(~sum);
 }
@@ -227,7 +233,10 @@ int net_ip_send(const unsigned char* dst_ip, n_u8 proto,
     ip->checksum = 0;
     for (int i = 0; i < 4; i++) ip->src[i] = g_ip[i];
     for (int i = 0; i < 4; i++) ip->dst[i] = dst_ip[i];
-    ip->checksum = ip_checksum(pkt, 20);
+    ip->checksum = be16(ip_checksum(pkt, 20));
+    serial_print("[ip] send plen="); serial_print_int((int)plen);
+    serial_print(" ipcsum="); serial_print_hex((unsigned int)ip->checksum);
+    serial_print("\n");
     const unsigned char* pp = (const unsigned char*)payload;
     for (unsigned int i = 0; i < plen; i++) pkt[20 + i] = pp[i];
     return eth_send(e->mac, ETH_TYPE_IP, pkt, 20 + plen);
@@ -299,6 +308,7 @@ int net_udp_send(const unsigned char* dst_ip, unsigned short src_port,
 
 static void handle_dhcp(const unsigned char* p, unsigned int len);
 static void handle_dns(const unsigned char* p, unsigned int len);
+void net_test_tcp(void);
 
 static void handle_udp(const unsigned char* ip_src,
                        const unsigned char* p, unsigned int len) {
@@ -463,6 +473,8 @@ static void handle_dhcp(const unsigned char* p, unsigned int len) {
         serial_print(" mask ");
         for (int k = 0; k < 4; k++) { serial_print_int(g_mask[k]); if (k<3) serial_print("."); }
         serial_print("\n");
+        // ТЕСТ: после DHCP — проверить TCP+HTTP на example.com.
+        net_test_tcp();
     }
 }
 
@@ -514,16 +526,19 @@ int net_dns_resolve(const char* name, unsigned char* out_ip) {
     // Шаг 1: разрешить ARP для DNS-сервера (10.0.2.3).
     // Иначе net_udp_send вернёт -1.
     net_arp_request(g_dns_server);
-    for (int i = 0; i < 50000; i++) net_poll();
-    // Шаг 2: отправить один раз. net_udp_send возвращает число байт
-    // при успехе (положительное!) или -1 при ошибке.
+    // ARP-ожидание ТОЖЕ по времени (500 мс), а не по итерациям — на WHPX
+    // 50k итераций net_poll пролетают быстрее, чем ARP-ответ.
+    { unsigned int t0 = timer_ticks();
+      while ((timer_ticks() - t0) < 50) net_wait_tick(); }   // 50 тиков * 10мс = 500 мс
     int sent = net_udp_send(g_dns_server, 53000, 53, query, (unsigned int)off);
     if (sent < 0) {
         serial_print("[dns] send failed\n");
         return -1;
     }
-    for (unsigned int spin = 0; spin < 2000000u; spin++) {
-        net_poll();
+    // Ожидание ответа — 5 секунд по времени (а не 2M итераций).
+    { unsigned int t0 = timer_ticks();
+      while ((timer_ticks() - t0) < 500) {
+        net_wait_tick();
         if (g_dns_got_reply) {
             for (int i = 0; i < 4; i++) out_ip[i] = g_dns_result_ip[i];
             serial_print("[dns] resolved "); serial_print(name); serial_print(" -> ");
@@ -531,6 +546,7 @@ int net_dns_resolve(const char* name, unsigned char* out_ip) {
             serial_print("\n");
             return 0;
         }
+      }
     }
     serial_print("[dns] timeout\n");
     return -1;
@@ -620,6 +636,19 @@ static void eth_handle(const unsigned char* p, unsigned int len) {
     }
 }
 
+int net_poll(void);   // определён ниже
+// Ожидание одного тика с ПОЛЛИНГОМ сети. Нужно для busy-wait циклов,
+// вызываемых из syscall (int 0x80 -> IF=0): без sti таймер стоит и цикл
+// по timer_ticks() не завершится никогда. Флаги сохраняем/восстанавливаем,
+// поэтому безопасно и в контексте ядра (IF=1), и в syscall (IF=0).
+void net_wait_tick(void) {
+    unsigned int fl;
+    __asm__ volatile ("pushf; pop %0" : "=r"(fl));
+    __asm__ volatile ("sti; hlt");
+    __asm__ volatile ("push %0; popf" :: "r"(fl));
+    net_poll();
+}
+
 int net_poll(void) {
     int n = virtio_net_recv(g_rxbuf, sizeof(g_rxbuf));
     if (n <= 0) return 0;
@@ -694,4 +723,93 @@ void net_dump(void) {
     serial_print(", IP ");
     for (int i = 0; i < 4; i++) { serial_print_int(g_ip[i]); if (i<3) serial_print("."); }
     serial_print("\n");
+}
+
+// ТЕСТ TCP+HTTP при загрузке (после DHCP). Блокирующий, зовётся ОДИН раз.
+// DNS example.com -> connect :80 -> GET / -> recv -> serial.
+void net_test_tcp(void) {
+    extern int net_dns_resolve(const char* name, unsigned char* out_ip);
+    extern int net_tcp_connect(tcp_conn_t* c, const unsigned char* ip, unsigned short port);
+    extern int net_tcp_send(tcp_conn_t* c, const void* data, unsigned int len);
+    extern int net_tcp_recv_nb(tcp_conn_t* c, void* buf, unsigned int max);
+    serial_print("[test] TCP START\n");
+    unsigned char ip[4];
+    int dns_ok = 0;
+    for (int attempt = 0; attempt < 3 && !dns_ok; attempt++) {
+        if (net_dns_resolve("example.com", ip) == 0) { dns_ok = 1; break; }
+        serial_print("[test] DNS retry\n");
+    }
+    if (!dns_ok) { serial_print("[test] DNS FAIL\n"); return; }
+    serial_print("[test] DNS OK: ");
+    for (int i = 0; i < 4; i++) { serial_print_int(ip[i]); if (i<3) serial_print("."); }
+    serial_print("\n");
+    tcp_conn_t c;
+    if (net_tcp_connect(&c, ip, 80) != 0) { serial_print("[test] CONNECT FAIL\n"); return; }
+    serial_print("[test] CONNECTED\n");
+    const char* req = "GET / HTTP/1.0\r\nHost: example.com\r\n\r\n";
+    unsigned int rl = 0; while (req[rl]) rl++;
+    net_tcp_send(&c, req, rl);
+    serial_print("[test] REQ SENT\n");
+    // Ждём данные ПО ВРЕМЕНИ (5 сек), а не по итерациям: на WHPX 5M
+    // итераций net_poll пролетают быстрее, чем HTML идёт по сети.
+    unsigned char buf[512];
+    int got = 0;
+    { unsigned int t0 = timer_ticks();
+      while ((timer_ticks() - t0) < 500) {
+        net_wait_tick();
+        got = net_tcp_recv_nb(&c, buf, sizeof(buf) - 1);
+        if (got != 0) break;
+      }
+    }
+    if (got <= 0) { serial_print("[test] NO DATA\n"); return; }
+    buf[got] = 0;
+    serial_print("[test] GOT "); serial_print_int(got); serial_print(" bytes:\n");
+    for (int i = 0; i < got && i < 200; i++) {
+        char ch = (char)buf[i];
+        if (ch == '\r') continue;
+        if (ch == '\n') { serial_print("\n"); continue; }
+        serial_print((char[]){ch, 0});
+    }
+    serial_print("\n[test] TCP DONE\n");
+
+    // ТЕСТ TLS: google.com:443 (точно HTTPS, TLS 1.2 + RSA).
+    {
+        extern void* tls_connect(const unsigned char*, unsigned short, const char*);
+        extern int tls_send(void*, const void*, unsigned int);
+        extern int tls_recv(void*, void*, unsigned int);
+        extern int tls_ready(const void*);
+        serial_print("[test] TLS START (google.com:443)\n");
+        unsigned char gip[4];
+        if (net_dns_resolve("google.com", gip) != 0) { serial_print("[test] DNS google FAIL\n"); return; }
+        serial_print("[test] google.com = ");
+        for (int i = 0; i < 4; i++) { serial_print_int(gip[i]); if (i<3) serial_print("."); }
+        serial_print("\n");
+        void* ts = tls_connect(gip, 443, "google.com");
+        if (!ts) { serial_print("[test] TLS CONNECT FAIL\n"); return; }
+        if (!tls_ready(ts)) { serial_print("[test] TLS NOT READY\n"); return; }
+        serial_print("[test] TLS READY!\n");
+        const char* req2 = "GET / HTTP/1.0\r\nHost: google.com\r\n\r\n";
+        unsigned int rl2 = 0; while (req2[rl2]) rl2++;
+        tls_send(ts, req2, rl2);
+        serial_print("[test] TLS REQ SENT\n");
+        unsigned char buf2[512];
+        int got2 = 0;
+        { unsigned int t0 = timer_ticks();
+          while ((timer_ticks() - t0) < 500) {
+            int n = tls_recv(ts, buf2, sizeof(buf2) - 1);
+            if (n > 0) { got2 = n; break; }
+            net_poll();
+          }
+        }
+        if (got2 <= 0) { serial_print("[test] TLS NO DATA\n"); return; }
+        buf2[got2] = 0;
+        serial_print("[test] TLS GOT "); serial_print_int(got2); serial_print(" bytes:\n");
+        for (int i = 0; i < got2 && i < 100; i++) {
+            char ch = (char)buf2[i];
+            if (ch == '\r') continue;
+            if (ch == '\n') { serial_print("\n"); continue; }
+            serial_print((char[]){ch, 0});
+        }
+        serial_print("\n[test] TLS DONE\n");
+    }
 }

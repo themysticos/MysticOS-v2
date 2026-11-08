@@ -299,7 +299,9 @@ static int fat_resolve(int base_dir, const char* path,
     unsigned int dir = (unsigned int)base_dir;
     unsigned int fc = 0, size = 0; unsigned char attr = 0;
     int i = 0;
-    if (path[0] == '/') { dir = 0; i = 1; }
+    // Путь приходит УЖЕ без префикса диска (его срезает vfs_resolve_drive).
+    // Здесь просто пропускаем ведущие слэши (в т.ч. '//' от формата Dx://).
+    while (path[i] == '/') i++;
     char comp[64];
     while (path[i]) {
         while (path[i] == '/') i++;
@@ -362,6 +364,105 @@ int fat_read_file_buf(const char* path, unsigned char* buf, unsigned int max) {
     return (int)written;
 }
 
+// ============================================================
+// Файловый дескриптор (стриминг): open/read/seek/close.
+// ============================================================
+// Состояние — в fh (его выделяет VFS, размер >= FS_FH_MAX).
+// Храним: первый кластер, размер, текущую позицию, текущий кластер,
+// позицию внутри текущего кластера и остаток.
+typedef struct {
+    unsigned int first_cluster;   // первый кластер файла
+    unsigned int size;            // полный размер (байт)
+    unsigned int pos;             // текущая позиция (байт, абсолютная)
+    unsigned int cluster;         // текущий кластер
+    unsigned int cl_start;        // байтовая позиция начала текущего кластера
+    int          valid;
+} fat_file_state_t;
+
+// Перемотать состояние на позицию pos: пройти цепочку от first_cluster.
+static void fat_file_wind(fat_file_state_t* s, unsigned int pos) {
+    fat_load_geom();
+    unsigned int cl_bytes = G->sectors_per_cluster * SECTOR_SIZE;
+    unsigned int c = s->first_cluster;
+    unsigned int start = 0;
+    // Идём по кластерам, пока не покроем pos.
+    while (c >= 2 && !fat_is_eoc(c) && start + cl_bytes <= pos) {
+        unsigned int nxt = fat_next_cluster(c);
+        if (nxt < 2 || fat_is_eoc(nxt)) break;
+        c = nxt;
+        start += cl_bytes;
+    }
+    s->cluster = c;
+    s->cl_start = start;
+    s->pos = pos;
+}
+
+int fat_file_open(const char* path, void* fh) {
+    fat_file_state_t* s = (fat_file_state_t*)fh;
+    unsigned int fc, sz; unsigned char at;
+    if (!fat_resolve(0, path, 0, &fc, &sz, &at)) return 0;
+    if (at & 0x10) return 0;   // каталог
+    s->first_cluster = fc;
+    s->size = sz;
+    s->valid = 1;
+    fat_file_wind(s, 0);
+    return 1;
+}
+
+int fat_file_seek(void* fh, unsigned int pos) {
+    fat_file_state_t* s = (fat_file_state_t*)fh;
+    if (!s->valid) return -1;
+    if (pos > s->size) pos = s->size;
+    fat_file_wind(s, pos);
+    return (int)s->pos;
+}
+
+int fat_file_read(void* fh, unsigned char* buf, unsigned int n) {
+    fat_file_state_t* s = (fat_file_state_t*)fh;
+    if (!s->valid) return -1;
+    fat_load_geom();
+    unsigned int cl_bytes = G->sectors_per_cluster * SECTOR_SIZE;
+    unsigned int total = 0;
+    unsigned char sec[SECTOR_SIZE];
+    while (n > 0 && s->pos < s->size && s->cluster >= 2 && !fat_is_eoc(s->cluster)) {
+        // Смещение внутри текущего кластера.
+        unsigned int in_cl = s->pos - s->cl_start;
+        unsigned int base_lba = G->data_start_sector + (s->cluster - 2) * G->sectors_per_cluster;
+        unsigned int sec_idx = in_cl / SECTOR_SIZE;
+        unsigned int sec_off = in_cl % SECTOR_SIZE;
+        if (sec_idx >= G->sectors_per_cluster) {
+            // перейти к следующему кластеру
+            unsigned int nxt = fat_next_cluster(s->cluster);
+            if (nxt < 2 || fat_is_eoc(nxt)) break;
+            s->cluster = nxt; s->cl_start += cl_bytes;
+            continue;
+        }
+        ata_read_sector(base_lba + sec_idx, sec);
+        unsigned int chunk = SECTOR_SIZE - sec_off;
+        // Не выходить за кластер, файл и запрос.
+        unsigned int cl_left = cl_bytes - in_cl;
+        if (chunk > cl_left) chunk = cl_left;
+        if (chunk > n) chunk = n;
+        if (chunk > s->size - s->pos) chunk = s->size - s->pos;
+        for (unsigned int k = 0; k < chunk; k++) buf[total + k] = sec[sec_off + k];
+        total += chunk;
+        s->pos += chunk;
+        n -= chunk;
+        // Если дошли до конца кластера — перейти к следующему.
+        if (s->pos - s->cl_start >= cl_bytes) {
+            unsigned int nxt = fat_next_cluster(s->cluster);
+            if (nxt < 2 || fat_is_eoc(nxt)) break;
+            s->cluster = nxt; s->cl_start += cl_bytes;
+        }
+    }
+    return (int)total;
+}
+
+void fat_file_close(void* fh) {
+    fat_file_state_t* s = (fat_file_state_t*)fh;
+    s->valid = 0;
+}
+
 // Заполняет массивы списком каталога (для эксплорера).
 int fat_read_dir(int base_dir, const char* path, char* names, int* is_dir,
                  unsigned int* sizes, int max) {
@@ -415,7 +516,7 @@ int fat_read_dir(int base_dir, const char* path, char* names, int* is_dir,
 void fat_list(int base_dir, const char* path) {
     unsigned int dir = (unsigned int)base_dir;
     // Корень ("/" или пусто) — сразу dir=0, без resolve.
-    if (path && path[0] && !(path[0] == '/' && path[1] == 0)) {
+    if (path && path[0] && !(path[0] == 'D', '0', ':', '/', '/' && path[1] == 0)) {
         unsigned int fc, sz; unsigned char at;
         if (!fat_resolve(base_dir, path, &dir, &fc, &sz, &at)) {
             print_string("ls: no such directory\n"); return;
@@ -561,6 +662,74 @@ void fat_write_path(int base_dir, const char* path, const char* content) {
     ata_write_sector(ws, buf);
     // Успешная запись НЕ печатает: вывод в консоль (LFB) скроллил экран
     // (баг «рабочий стол улетает вверх»). Ошибки ниже — печатаются.
+}
+
+// Бинарная запись: как fat_write_path, но длина задаётся ЯВНО (len), а не
+// strlen. Нужна для сейвов DOOM (внутри нули). Возвращает 1 при успехе.
+int fat_write_path_bin(int base_dir, const char* path,
+                       const unsigned char* content, unsigned int len2) {
+    fat_load_geom();
+    char dirpath[FAT_PATH_MAX];
+    char fname[64];
+    int len = 0; while (path[len]) len++;
+    int cut = len;
+    while (cut > 0 && path[cut - 1] != '/') cut--;
+    if (cut > 0) {
+        int k = 0;
+        for (int i = 0; i < cut - 1 && k < FAT_PATH_MAX - 1; i++) dirpath[k++] = path[i];
+        dirpath[k] = 0;
+        int f = 0; for (int i = cut; path[i] && f < 63; i++) fname[f++] = path[i];
+        fname[f] = 0;
+    } else {
+        dirpath[0] = 0;
+        int f = 0; for (int i = 0; path[i] && f < 63; i++) fname[f++] = path[i];
+        fname[f] = 0;
+    }
+    unsigned int dir = (unsigned int)base_dir;
+    if (dirpath[0]) {
+        unsigned int fc; unsigned char at;
+        if (!fat_resolve(base_dir, dirpath, &dir, &fc, 0, &at) || !(at & 0x10)) {
+            print_string("writebin: invalid directory\n"); return 0;
+        }
+        dir = fc;
+    }
+    unsigned char fat_name[11];
+    fat_make_name(fname, fat_name);
+    if (len2 == 0) { print_string("writebin: empty content\n"); return 0; }
+    unsigned int cluster_size = G->sectors_per_cluster * SECTOR_SIZE;
+    unsigned int needed = (len2 + cluster_size - 1) / cluster_size;
+    if (needed > MAX_CLUSTERS_PER_FILE) { print_string("writebin: file too large\n"); return 0; }
+    unsigned int old_fc, old_sz; unsigned char old_at;
+    int exists = fat_dir_lookup(dir, fat_name, 0, 0, &old_fc, &old_sz, &old_at);
+    if (exists && (old_at & 0x10)) { print_string("writebin: name is a directory\n"); return 0; }
+    if (exists && old_fc != 0) fat_free_chain(old_fc);
+    unsigned int chain[MAX_CLUSTERS_PER_FILE];
+    if (!fat_alloc_chain(needed, chain)) { print_string("writebin: no free space\n"); return 0; }
+    fat_write_chain(chain, needed);
+    unsigned int written = 0;
+    for (unsigned int ci = 0; ci < needed; ci++) {
+        unsigned int cluster = chain[ci];
+        unsigned int base = G->data_start_sector + (cluster - 2) * G->sectors_per_cluster;
+        for (unsigned int s = 0; s < G->sectors_per_cluster; s++) {
+            unsigned char data[SECTOR_SIZE];
+            for (int k = 0; k < SECTOR_SIZE; k++) data[k] = 0;
+            for (int k = 0; k < SECTOR_SIZE && written < len2; k++) data[k] = content[written++];
+            ata_write_sector(base + s, data);
+        }
+    }
+    unsigned int ws; int we;
+    if (exists) fat_dir_lookup(dir, fat_name, &ws, &we, 0, 0, 0);
+    else if (!fat_dir_alloc_slot(dir, &ws, &we)) { print_string("writebin: directory full\n"); return 0; }
+    unsigned char buf[SECTOR_SIZE];
+    ata_read_sector(ws, buf);
+    fat_entry_t* ent = (fat_entry_t*)&buf[we * 32];
+    for (int k = 0; k < 11; k++) ent->name[k] = fat_name[k];
+    ent->attr = 0x00;
+    ent->first_cluster = (unsigned short)(chain[0] & 0xFFFF);
+    ent->first_cluster_high = (unsigned short)((chain[0] >> 16) & 0xFFFF);
+    ent->file_size = len2;
+    ata_write_sector(ws, buf);
+    return 1;
 }
 
 // Читает файл целиком в буфер. Возвращает размер или -1.

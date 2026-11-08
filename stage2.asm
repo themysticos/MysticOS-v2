@@ -31,6 +31,114 @@ start:
     call puts
 
     ; ------------------------------------------------------------
+    ; ДИАГНОСТИКА PCI (ДО VBE, пока текст виден на экране).
+    ; Прямой скан config space через порты 0xCF8/0xCFC (не требует PCI BIOS).
+    ; Выводим bus:slot.fn vendor:device для display-класса (0x03).
+    ; ------------------------------------------------------------
+    mov si, msg_pci
+    call puts
+    xor ebp, ebp            ; ebp = bus (0..255)
+.pci_bus:
+    xor edi, edi            ; edi = slot (0..31)
+.pci_slot:
+    xor ebx, ebx            ; ebx = func (0..7)
+.pci_func:
+    ; addr = 0x80000000 | bus<<16 | slot<<11 | func<<8
+    mov eax, 0x80000000
+    mov ecx, ebp
+    shl ecx, 16
+    or eax, ecx
+    mov ecx, edi
+    shl ecx, 11
+    or eax, ecx
+    mov ecx, ebx
+    shl ecx, 8
+    or eax, ecx
+    mov dx, 0x0CF8
+    out dx, eax
+    mov dx, 0x0CFC
+    in eax, dx             ; eax = vendor(lo) | device(hi)
+    cmp ax, 0xFFFF
+    je .pci_next           ; нет устройства
+    ; проверить class (config offset 0x08): читаем из 0xCFC+8
+    mov dx, 0x0CF8
+    mov ecx, eax
+    ; пере-прочитать по offset 8
+    mov eax, 0x80000000
+    mov ecx, ebp
+    shl ecx, 16
+    or eax, ecx
+    mov ecx, edi
+    shl ecx, 11
+    or eax, ecx
+    mov ecx, ebx
+    shl ecx, 8
+    or eax, ecx
+    or eax, 8
+    out dx, eax
+    mov dx, 0x0CFC
+    in eax, dx
+    shr eax, 16            ; eax = class code (hi 16)
+    cmp eax, 0x0300        ; display controller?
+    jb .pci_next
+    cmp eax, 0x0400
+    jae .pci_next
+    ; --- ВЫВОД: bus:slot.fn vendor:device class ---
+    mov al, 13
+    call putc
+    mov al, 10
+    call putc
+    mov eax, ebp
+    call put_hex8          ; bus (младший байт)
+    mov al, ':'
+    call putc
+    mov eax, edi
+    call put_hex8          ; slot
+    mov al, '.'
+    call putc
+    mov eax, ebx
+    call put_hex8          ; func
+    mov al, ' '
+    call putc
+    ; vendor:device
+    mov dx, 0x0CF8
+    mov eax, 0x80000000
+    mov ecx, ebp
+    shl ecx, 16
+    or eax, ecx
+    mov ecx, edi
+    shl ecx, 11
+    or eax, ecx
+    mov ecx, ebx
+    shl ecx, 8
+    or eax, ecx
+    out dx, eax
+    mov dx, 0x0CFC
+    in eax, dx
+    push eax
+    ; vendor (lo16)
+    and eax, 0xFFFF
+    call put_hex16
+    mov al, ':'
+    call putc
+    pop eax
+    shr eax, 16            ; device
+    call put_hex16
+    jmp .pci_next
+.pci_next:
+    inc ebx
+    cmp ebx, 8
+    jb .pci_func
+    inc edi
+    cmp edi, 32
+    jb .pci_slot
+    inc ebp
+    cmp ebp, 256
+    jb .pci_bus
+    ; Пауза убрана: под WHPX int 0x16 (BIOS-клавиатура) не работает.
+    ; Диагностика PCI выводится, но загрузка не ждёт клавишу.
+
+    ; ------------------------------------------------------------
     ; ДИАГНОСТИКА: VBE Controller Info (4F00).
     ; ------------------------------------------------------------
     mov dword [0x7000], 'VBE2'    ; запрос VBE 2.0+
@@ -175,11 +283,7 @@ vbe_search:
     test ax, 0x0080
     jz .try_no_lfb            ; нет LFB — попробуем всё равно
 
-    ; --- ПАУЗА: ждать клавишу перед 4F02 ---
-    mov si, msg_pause
-    call puts
-    mov ah, 0x00
-    int 0x16
+    ; --- Пауза убрана: под WHPX int 0x16 (BIOS-клавиатура) не работает. ---
 
     ; --- Попытка с LFB (bit14 = 0x4000) ---
     mov si, msg_try_lfb
@@ -216,9 +320,16 @@ vbe_search:
 ;   0x9000: fb_addr | 0x9004: pitch | 0x9006: w | 0x9008: h | 0x900A: bpp
 ; ------------------------------------------------------------
 vbe_ok:
-    mov eax, [0x5000 + 0x28]      ; PhysBasePtr
+    ; ВАЖНО: перечитать ModeInfo ПОСЛЕ 4F02 — PhysBasePtr/pitch в 4F01 ДО
+    ; установки режима могут быть 0 или устаревшими. Свежие — только сейчас.
+    mov cx, [cur_mode]
+    mov ax, 0x4F01
+    mov di, 0x5000
+    int 0x10
+
+    mov eax, [0x5000 + 0x28]      ; PhysBasePtr (свежий)
     mov [0x9000], eax
-    mov ax, [0x5000 + 0x10]       ; BytesPerScanLine (pitch)
+    mov ax, [0x5000 + 0x32]       ; LinBytesPerScanLine (LFB pitch!)
     mov [0x9004], ax
     mov ax, [0x5000 + 0x12]       ; Xres
     mov [0x9006], ax
@@ -257,7 +368,11 @@ vbe_fail:
 load_kernel:
     mov si, msg_load_kern
     call puts
-    mov word [kern_sectors], 400
+    ; Лимит загрузки ядра. Резерв образа = -R 512 секторов, ядро с LBA16
+    ; -> максимум 496 секторов (253952 байт). РАНЬШЕ было 400 (204800):
+    ; после добавления GCM kernel.bin вырос до ~206649 -> хвост (.data
+    ; с g_ip и др.) НЕ догружался, IP=0.0.0.0, зависание. 496 = потолок.
+    mov word [kern_sectors], 496
     mov byte [chs_sector], 17      ; первый сектор ядра (сектор CHS)
     mov byte [chs_head], 0
     mov byte [chs_cyl], 0
@@ -462,6 +577,7 @@ msg_load_kern db '[..] loading kernel...', 13, 10, 0
 msg_kern_ok   db '[OK] kernel loaded, jumping to protected mode', 13, 10, 0
 msg_disk_err  db '[ERR] disk read error!', 13, 10, 0
 msg_pause     db 'Press any key...', 13, 10, 0
+msg_pci       db 'PCI display devices:', 13, 10, 0
 
 ; GDT для перехода в protected mode.
 gdt_start:

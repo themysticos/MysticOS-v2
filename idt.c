@@ -42,11 +42,22 @@ static const char* exc_name(unsigned int n) {
 // MMDCM: обработчик исключений из V86 (по флагу g_v86_active).
 extern int mmdcm_handle_v86_exc(registers_t* r);
 
+extern void serial_print(const char* s);
+extern void serial_print_hex(unsigned int v);
+extern void serial_print_int(int v);
+
 void isr_handler(registers_t* r) {
     // Любое исключение во время исполнения V86-кода — отдать MMDCM.
     if (mmdcm_handle_v86_exc(r)) return;   // обработано (выход из V86)
     unsigned int cr2;
     __asm__ volatile ("mov %%cr2, %0" : "=r"(cr2));
+    // ДИАГНОСТИКА: паника в serial (видно в -serial stdio).
+    serial_print("\n!!! EXC vec="); serial_print_int((int)r->int_no);
+    serial_print(" err="); serial_print_hex(r->err_code);
+    serial_print(" cr2="); serial_print_hex(cr2);
+    serial_print(" eip="); serial_print_hex(r->eip);
+    serial_print(" cs="); serial_print_hex(r->cs);
+    serial_print("\n");
     console_set_color(FB_RGB(0xFF,0x44,0x44), FB_RGB(0,0,0));
     console_print("\n=== KERNEL PANIC ===\n");
     console_print("Exception: ");

@@ -3,7 +3,7 @@
 #ifndef TASK_H
 #define TASK_H
 
-#define TASK_MAX 8
+#define TASK_MAX 12
 
 #define TASK_FREE  0
 #define TASK_READY 1
@@ -22,6 +22,9 @@ typedef struct task_s {
     unsigned int pd_phys;    // физ. адрес PD задачи (CR3)
     unsigned int code_phys;  // физ. блок кода (4 МБ)
     unsigned int stack_phys; // физ. блок стека (4 МБ)
+    // Сколько блоков занимает регион кода: ELF берёт 2 (8 МБ),
+    // PE — 1 (4 МБ). Нужно, чтобы task_reap освободил ровно столько.
+    unsigned int code_blocks;
     // want_exit: задача должна завершиться на следующем api->yield().
     // Ставится, когда ядро закрывает окно, ПРИНАДЛЕЖАЩЕЕ этой задаче
     // (см. process_events в kernel.c). Раньше был глобальный g_exit_request,

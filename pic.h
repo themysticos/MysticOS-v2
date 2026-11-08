@@ -30,6 +30,12 @@ void mouse_set_grab(int on);
 int  mouse_grabbed(void);
 void mouse_take_rel(int* dx, int* dy);
 
+// Очередь событий мыши (неблокирующая). Кодировка события:
+//   bits 0-11: x; bits 12-23: y; bits 24-27: type (0=move,1=down,2=up);
+//   bits 28-31: button (1=левая, 2=правая). -1 если пусто.
+int  mouse_event_available(void);
+int  mouse_get_event(void);
+
 // Клавиатура: очередь событий (нажатие/отпускание) для игр.
 void kb_push_event(int pressed, unsigned char sc);
 int  kb_event_available(void);

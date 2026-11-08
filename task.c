@@ -27,6 +27,9 @@ void task_init(void) {
         tasks[i].exit_request_code = 0;
         tasks[i].kernel_stack_phys = 0;
         tasks[i].kernel_stack_top = 0;
+        tasks[i].code_phys = 0;
+        tasks[i].code_blocks = 0;
+        tasks[i].stack_phys = 0;
     }
     // Задача 0 = само ядро. Своё адресное пространство — ядровая PD.
     // pd_phys = адрес ядровой PD (НЕ 0!): возврат из программы обязан
@@ -101,12 +104,21 @@ int task_create_elf(const unsigned char* image, unsigned int size, const void* a
     }
     if (slot < 0) return -1;
 
-    // Код+heap: 8 смежных блоков (32 МБ) - хватит на код + WAD + кучу.
-    unsigned int code_phys   = pmem_alloc_contig(8);
+    // Размер региона код+heap зависит от программы:
+    //  * DOOM (и вообще крупные ELF) жёстко инициализирует heap на
+    //    0x04400000 размером ~28 МБ (libc_init_heap) => нужен регион
+    //    в 8 блоков (32 МБ, до 0x06000000), иначе heap попадает в
+    //    незамапленную память и программа падает.
+    //  * Обычные системные ELF (10–20 КБ) heap не используют вовсе
+    //    => 1 блок (4 МБ) с колоссальным запасом, и, что важно, НЕ
+    //    страдают от фрагментации (contig(1) не требует смежных пар).
+    // Эвристика: образ > 400 КБ — «тяжёлая» программа (DOOM.elf ~579 КБ).
+    unsigned int code_blocks = (size > 409600u) ? 8u : 1u;
+    unsigned int code_phys   = pmem_alloc_contig(code_blocks);
     unsigned int stack_phys  = pmem_alloc_block();
     unsigned int kstack_phys = pmem_alloc_block();   // стек ЯДРА этой задачи
     if (!code_phys || !stack_phys || !kstack_phys) {
-        if (code_phys)   pmem_free_contig(code_phys, 8);
+        if (code_phys)   pmem_free_contig(code_phys, code_blocks);
         if (stack_phys)  pmem_free_block(stack_phys);
         if (kstack_phys) pmem_free_block(kstack_phys);
         return -1;
@@ -114,13 +126,13 @@ int task_create_elf(const unsigned char* image, unsigned int size, const void* a
 
     int entry = exec_load_segments(image, size, TASK_CODE_VIRT, code_phys);
     if (entry < 0) {
-        pmem_free_contig(code_phys, 8); pmem_free_block(stack_phys); pmem_free_block(kstack_phys);
+        pmem_free_contig(code_phys, code_blocks); pmem_free_block(stack_phys); pmem_free_block(kstack_phys);
         return -1;
     }
 
-    unsigned int pd = paging_task_pd_alloc(code_phys, stack_phys);
+    unsigned int pd = paging_task_pd_alloc(code_phys, stack_phys, code_blocks);
     if (!pd) {
-        pmem_free_contig(code_phys, 8); pmem_free_block(stack_phys); pmem_free_block(kstack_phys);
+        pmem_free_contig(code_phys, code_blocks); pmem_free_block(stack_phys); pmem_free_block(kstack_phys);
         return -1;
     }
 
@@ -132,6 +144,7 @@ int task_create_elf(const unsigned char* image, unsigned int size, const void* a
     t->exit_request_code = 0;
     t->pd_phys = pd;
     t->code_phys = code_phys;
+    t->code_blocks = code_blocks;   // ELF: 1 (4 МБ) или 8 (32 МБ) для крупных
     t->stack_phys = stack_phys;
     // Стек ядра задачи: kstack_phys .. kstack_phys + 4 МБ (pmem блок).
     // Верх — туда CPU положит iret-кадр при ring3 -> ring0 (int 0x80).
@@ -189,7 +202,7 @@ int task_create_pe(const unsigned char* image, unsigned int size, const void* ap
     // Вызывается ДО старта задачи. Если импортов нет — вернёт 0.
     pe_load_imports(image, size, code_phys);
 
-    unsigned int pd = paging_task_pd_alloc(code_phys, stack_phys);
+    unsigned int pd = paging_task_pd_alloc(code_phys, stack_phys, 1);   // PE: 1 блок
     if (!pd) {
         pmem_free_block(code_phys); pmem_free_block(stack_phys); pmem_free_block(kstack_phys);
         return -1;
@@ -203,6 +216,7 @@ int task_create_pe(const unsigned char* image, unsigned int size, const void* ap
     t->exit_request_code = 0;
     t->pd_phys = pd;
     t->code_phys = code_phys;
+    t->code_blocks = 1;   // PE: pmem_alloc_block() = 4 МБ
     t->stack_phys = stack_phys;
     t->kernel_stack_phys = kstack_phys;
     t->kernel_stack_top  = kstack_phys + PMEM_BLOCK - 16;
@@ -232,7 +246,7 @@ void task_enable(void) { sched_on = 1; }
 void task_reap(void) {
     for (int i = 1; i < TASK_MAX; i++) {
         if (tasks[i].state == TASK_DEAD) {
-            if (tasks[i].code_phys)   pmem_free_contig(tasks[i].code_phys, 8);
+            if (tasks[i].code_phys)   pmem_free_contig(tasks[i].code_phys, tasks[i].code_blocks ? tasks[i].code_blocks : 1);
             if (tasks[i].stack_phys)  pmem_free_block(tasks[i].stack_phys);
             if (tasks[i].kernel_stack_phys) pmem_free_block(tasks[i].kernel_stack_phys);
             if (tasks[i].pd_phys)     paging_task_pd_free(tasks[i].pd_phys);

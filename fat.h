@@ -20,6 +20,9 @@ int  fat_find(int base_dir, const char* path);      // 1 если найден, 
 void fat_list(int base_dir, const char* path);      // печатает содержимое каталога
 void fat_read(int base_dir, const char* path);      // печатает содержимое файла
 void fat_write_path(int base_dir, const char* path, const char* content);
+// Бинарная запись: len задаётся явно (внутри могут быть нули). 1 при успехе.
+int  fat_write_path_bin(int base_dir, const char* path,
+                        const unsigned char* content, unsigned int len);
 int  fat_mkdir(int base_dir, const char* path);     // 1 при успехе
 int  fat_cd(const char* path, unsigned int* out_cluster); // абсолютный путь; 1 при успехе
 
@@ -31,5 +34,13 @@ int  fat_read_dir(int base_dir, const char* path, char* names, int* is_dir,
 
 // Читает весь файл в буфер. Возвращает число байт или -1.
 int  fat_read_file_buf(const char* path, unsigned char* buf, unsigned int max);
+
+// --- Файловый дескриптор (стриминг). fh — указатель на структуру драйвера
+//     (fat_file_state_t), размер <= FS_FH_MAX. Возвраты: open->1/0,
+//     read->число байт, seek->новая позиция, close->void. ---
+int  fat_file_open(const char* path, void* fh);
+int  fat_file_read(void* fh, unsigned char* buf, unsigned int n);
+int  fat_file_seek(void* fh, unsigned int pos);
+void fat_file_close(void* fh);
 
 #endif
