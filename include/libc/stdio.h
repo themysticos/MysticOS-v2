@@ -26,6 +26,8 @@ typedef struct _libc_FILE FILE;
 FILE* fopen(const char* path, const char* mode);
 int   fclose(FILE* f);
 size_t fread(void* buf, size_t size, size_t nmemb, FILE* f);
+int    fgetc(FILE* f);
+FILE*  fmemopen(const void* buf, size_t size);
 size_t fwrite(const void* buf, size_t size, size_t nmemb, FILE* f);
 int   fseek(FILE* f, long offset, int whence);
 long  ftell(FILE* f);

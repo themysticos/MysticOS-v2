@@ -16,6 +16,13 @@ typedef unsigned int       uintptr_t;
 
 typedef int32_t            int_least32_t;
 typedef uint32_t           uint_least32_t;
+typedef int32_t            int_fast32_t;
+typedef uint32_t           uint_fast32_t;
+typedef int64_t            int_fast64_t;
+typedef uint64_t           uint_fast64_t;
+
+#define INT64_C(c)  c##LL
+#define UINT64_C(c) c##ULL
 
 #define INT8_MAX   127
 #define INT16_MAX  32767
