@@ -29,9 +29,8 @@ jobs:
       - name: Package
         run: |
           mkdir -p dist
+          echo "for test run qemu-system-x86_64.exe -accel tcg  -drive format=raw,file=mysticos2.img,if=ide,index=0 -drive format=raw,file=disk2.img,if=ide,index=1 -m 512 -device virtio-vga -device intel-hda -device hda-duplex -serial stdio" > dist/README.txt 
           cp mysticos2.img disk2.img dist/
-          # (опционально) добавить README/CHANGELOG в архив
-          cp CHANGELOG.md dist/ 2>/dev/null || true
           cd dist && zip -9 "../mysticos2-${{ github.ref_name }}.zip" *
 
       - name: Create GitHub Release
