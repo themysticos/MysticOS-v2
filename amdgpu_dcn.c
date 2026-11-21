@@ -115,7 +115,8 @@ static int dcn_init_hubp(void) {
     stage_mark(3);
 
     unsigned int fb_phys = (unsigned int)(unsigned long)g_fb;
-    unsigned int pitch = DCN_FB_W * 4;   // 32bpp
+    /* pitch в байтах = DCN_FB_W * 4 (32bpp); в DCSURF_SURFACE_PITCH
+     * поле задаётся в пикселях, см. reg_wr ниже. */
 
     // 0. НАСТРОЙКА VM (identity через SYSTEM_APERTURE) — чтобы HUBP
     //    читал ФИЗИЧЕСКИЕ адреса напрямую, без page table.
