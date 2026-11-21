@@ -13,4 +13,11 @@ int amdgpu_dcn_init(unsigned int mmio);
 // Установить цвет заливки (24bpp RGB).
 void amdgpu_dcn_set_color(unsigned char r, unsigned char g, unsigned char b);
 
+// Разрешён ли захват вывода DCN (этап 2). По умолчанию 0: на реальном
+// железе amdgpu_dcn_init() рвёт BIOS-дисплейный конвейер (нет SMU/DMUB FW,
+// нет link training, TLB-регистры пишутся по неверным маскам) — экран гаснет.
+// Включить вручную (=1) только для отладки на стенде с последовательным
+// портом, когда терять картинку не страшно.
+int amdgpu_dcn_takeover_enabled(void);
+
 #endif // AMDGPU_DCN_H
