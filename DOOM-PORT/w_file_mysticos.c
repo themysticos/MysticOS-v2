@@ -14,7 +14,12 @@ typedef struct {
 extern wad_file_class_t stdc_wad_file;
 
 static inline void ms_debug(const char* s) {
-    __asm__ volatile ("int $0x80" :: "a"(700), "b"(s) : "memory");
+    // ВАЖНО: ABI int 0x80 ждёт ebx = указатель на МАССИВ аргументов, а не
+    // саму строку. Раньше передавали "b"(s) -> ядро брало первые 4 байта
+    // строки как указатель и лило в serial случайную память (поток пробелов).
+    unsigned int args[1];
+    args[0] = (unsigned int)s;
+    __asm__ volatile ("int $0x80" :: "a"(700), "b"(args) : "memory");
 }
 static wad_file_t* W_StdC_OpenFile(char* path) {
     // Без serial-спама: fopen зовётся в горячем пути (лумпы текстур/спрайтов).

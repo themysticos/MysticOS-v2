@@ -326,7 +326,17 @@ int vfs_size(const char* path) {
     for (int i = 0; i < n; i++) {
         const char* a = names + i * 13;
         const char* bb = b;
-        while (*a && *bb && *a == *bb) { a++; bb++; }
+        // FAT отдаёт имена в UPPERCASE (8.3), а путь может быть в нижнем
+        // регистре ("doom.wad"). Сравниваем БЕЗ учёта регистра — иначе
+        // fs_exists() находит файл (fat_find с toupper), а fs_size() нет,
+        // и fopen() падает на WAD.
+        while (*a && *bb) {
+            char ca = *a, cb = *bb;
+            if (ca >= 'A' && ca <= 'Z') ca += 32;
+            if (cb >= 'A' && cb <= 'Z') cb += 32;
+            if (ca != cb) break;
+            a++; bb++;
+        }
         if (*a == 0 && *bb == 0) return isdir[i] ? -1 : (int)sizes[i];
     }
     return -1;

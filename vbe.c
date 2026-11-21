@@ -8,6 +8,7 @@
 //   если снова сдвигается — это не баг, это фича (нет).
 #include "vbe.h"
 #include "gpu.h"
+#include "vgadbg.h"
 
 // Параметры VBE, сохранённые загрузчиком по адресу 0x9000:
 //   0x9000: dword fb_addr | 0x9004: word pitch | 0x9006: w | 0x9008: h
@@ -57,6 +58,19 @@ int vbe_init(void) {
     g_green_size= *(volatile unsigned char*)(VBE_PARAM_ADDR + 0x0F);
     g_blue_pos  = *(volatile unsigned char*)(VBE_PARAM_ADDR + 0x10);
     g_blue_size = *(volatile unsigned char*)(VBE_PARAM_ADDR + 0x11);
+
+    // ДИАГНОСТИКА: выводим параметры VBE в VGA-текст (0xB8000), в верхнем
+    // углу 0-й строки. Не зависит от serial, не трогает LFB — видно даже
+    // если графика работает плохо. (В graphics mode запись в 0xB8000 обычно
+    // не видна, но при отладке в текстовом режиме это надёжный канал.)
+    vga_print_at(0, 0, "VBE ");
+    vga_set_pos(4, 0);
+    vga_print("w="); vga_print_int(g_w);
+    vga_print(" h="); vga_print_int(g_h);
+    vga_print(" bpp="); vga_print_int(g_lfb_bpp);
+    vga_print(" pitch="); vga_print_int((int)g_pitch);
+    vga_print(" fb="); vga_print_hex(g_fb);
+
     g_active = 1;
     return 1;
 }

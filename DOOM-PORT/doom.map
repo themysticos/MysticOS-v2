@@ -1274,21 +1274,21 @@ LOAD opl/opl_mysticos.o
                 0x04037dc0                ms_fs_exists
                 0x04037de0                _start
  *fill*         0x04037e77        0x9 
- .text          0x04037e80       0xc4 w_file_mysticos.o
+ .text          0x04037e80       0xfb w_file_mysticos.o
                 0x04037e80                W_StdC_Read
- *fill*         0x04037f44        0xc 
- .text          0x04037f50      0x234 dg_sound_mysticos.o
-                0x04037f50                DG_sound_init
-                0x04037f60                DG_sound_shutdown
-                0x04037f70                DG_sound_update
-                0x04037f80                DG_sound_update_params
-                0x04037f90                DG_sound_is_playing
-                0x04037fa0                DG_sound_precache
-                0x04037fb0                DG_sound_stop
-                0x04037fc0                DG_sound_getlump
-                0x04038000                DG_sound_start
-                0x04038160                ms_music_pcm
- *fill*         0x04038184       0x3c 
+ *fill*         0x04037f7b        0x5 
+ .text          0x04037f80      0x234 dg_sound_mysticos.o
+                0x04037f80                DG_sound_init
+                0x04037f90                DG_sound_shutdown
+                0x04037fa0                DG_sound_update
+                0x04037fb0                DG_sound_update_params
+                0x04037fc0                DG_sound_is_playing
+                0x04037fd0                DG_sound_precache
+                0x04037fe0                DG_sound_stop
+                0x04037ff0                DG_sound_getlump
+                0x04038030                DG_sound_start
+                0x04038190                ms_music_pcm
+ *fill*         0x040381b4        0xc 
  .text          0x040381c0     0x1a0d i_oplmusic.o
                 0x040399a0                I_SetOPLDriverVer
                 0x040399b0                I_OPL_DevMessages
@@ -1346,346 +1346,346 @@ LOAD opl/opl_mysticos.o
                 0x0403e000                        . = ALIGN (CONSTANT (MAXPAGESIZE))
                 0x0403e000                        . = SEGMENT_START ("rodata-segment", (ALIGN (CONSTANT (MAXPAGESIZE)) + (. & (CONSTANT (MAXPAGESIZE) - 0x1))))
 
-.rodata         0x0403e000    0x1e2e0
+.rodata         0x0403e000    0x1e300
  *(.rodata .rodata.* .gnu.linkonce.r.*)
  .rodata.str1.1
-                0x0403e000     0x34f0 doomgeneric/doomgeneric/am_map.o
+                0x0403e000     0x3528 doomgeneric/doomgeneric/am_map.o
                                  0x67 (size before relaxing)
- *fill*         0x040414f0       0x10 
- .rodata        0x04041500       0x40 doomgeneric/doomgeneric/am_map.o
+ *fill*         0x04041528       0x18 
+ .rodata        0x04041540       0x40 doomgeneric/doomgeneric/am_map.o
  .rodata.str1.1
-                0x04041540        0x0 doomgeneric/doomgeneric/d_iwad.o
+                0x04041580        0x0 doomgeneric/doomgeneric/d_iwad.o
                                 0x186 (size before relaxing)
  .rodata.str1.4
-                0x04041540     0x47dc doomgeneric/doomgeneric/d_iwad.o
+                0x04041580     0x47b4 doomgeneric/doomgeneric/d_iwad.o
                                  0x50 (size before relaxing)
- *fill*         0x04045d1c        0x4 
- .rodata        0x04045d20       0xe0 doomgeneric/doomgeneric/d_iwad.o
+ *fill*         0x04045d34        0xc 
+ .rodata        0x04045d40       0xe0 doomgeneric/doomgeneric/d_iwad.o
  .rodata.str1.4
-                0x04045e00        0x0 doomgeneric/doomgeneric/d_loop.o
+                0x04045e20        0x0 doomgeneric/doomgeneric/d_loop.o
                                  0x28 (size before relaxing)
  .rodata.str1.1
-                0x04045e00        0x0 doomgeneric/doomgeneric/d_loop.o
+                0x04045e20        0x0 doomgeneric/doomgeneric/d_loop.o
                                  0x47 (size before relaxing)
  .rodata.str1.1
-                0x04045e00        0x0 doomgeneric/doomgeneric/d_main.o
+                0x04045e20        0x0 doomgeneric/doomgeneric/d_main.o
                                 0x682 (size before relaxing)
  .rodata.str1.4
-                0x04045e00        0x0 doomgeneric/doomgeneric/d_main.o
+                0x04045e20        0x0 doomgeneric/doomgeneric/d_main.o
                                 0x53d (size before relaxing)
- .rodata        0x04045e00      0x178 doomgeneric/doomgeneric/d_main.o
+ .rodata        0x04045e20      0x178 doomgeneric/doomgeneric/d_main.o
  .rodata.str1.1
-                0x04045f78        0x0 doomgeneric/doomgeneric/d_mode.o
+                0x04045f98        0x0 doomgeneric/doomgeneric/d_mode.o
                                  0x3c (size before relaxing)
- *fill*         0x04045f78        0x8 
- .rodata        0x04045f80      0x170 doomgeneric/doomgeneric/d_mode.o
+ *fill*         0x04045f98        0x8 
+ .rodata        0x04045fa0      0x170 doomgeneric/doomgeneric/d_mode.o
  .rodata.str1.1
-                0x040460f0        0x0 doomgeneric/doomgeneric/d_net.o
+                0x04046110        0x0 doomgeneric/doomgeneric/d_net.o
                                  0x6f (size before relaxing)
  .rodata.str1.4
-                0x040460f0        0x0 doomgeneric/doomgeneric/d_net.o
+                0x04046110        0x0 doomgeneric/doomgeneric/d_net.o
                                 0x108 (size before relaxing)
  .rodata.str1.1
-                0x040460f0        0x0 doomgeneric/doomgeneric/doomgeneric.o
+                0x04046110        0x0 doomgeneric/doomgeneric/doomgeneric.o
                                  0xa2 (size before relaxing)
  .rodata.str1.4
-                0x040460f0        0x0 doomgeneric/doomgeneric/doomgeneric.o
+                0x04046110        0x0 doomgeneric/doomgeneric/doomgeneric.o
                                  0x22 (size before relaxing)
  .rodata.str1.4
-                0x040460f0        0x0 doomgeneric/doomgeneric/dstrings.o
+                0x04046110        0x0 doomgeneric/doomgeneric/dstrings.o
                                 0x33b (size before relaxing)
  .rodata.str1.1
-                0x040460f0        0x0 doomgeneric/doomgeneric/f_finale.o
+                0x04046110        0x0 doomgeneric/doomgeneric/f_finale.o
                                 0x153 (size before relaxing)
  .rodata.str1.4
-                0x040460f0        0x0 doomgeneric/doomgeneric/f_finale.o
+                0x04046110        0x0 doomgeneric/doomgeneric/f_finale.o
                                0x1ddf (size before relaxing)
- .rodata        0x040460f0       0x18 doomgeneric/doomgeneric/f_wipe.o
+ .rodata        0x04046110       0x18 doomgeneric/doomgeneric/f_wipe.o
  .rodata.str1.1
-                0x04046108        0x0 doomgeneric/doomgeneric/g_game.o
+                0x04046128        0x0 doomgeneric/doomgeneric/g_game.o
                                 0x13a (size before relaxing)
  .rodata.str1.4
-                0x04046108        0x0 doomgeneric/doomgeneric/g_game.o
+                0x04046128        0x0 doomgeneric/doomgeneric/g_game.o
                                 0x23e (size before relaxing)
- *fill*         0x04046108       0x18 
- .rodata        0x04046120       0xc0 doomgeneric/doomgeneric/g_game.o
- .rodata.cst4   0x040461e0       0x18 doomgeneric/doomgeneric/g_game.o
+ *fill*         0x04046128       0x18 
+ .rodata        0x04046140       0xc0 doomgeneric/doomgeneric/g_game.o
+ .rodata.cst4   0x04046200       0x18 doomgeneric/doomgeneric/g_game.o
                                   0x4 (size before relaxing)
  .rodata.str1.1
-                0x040461f8        0x0 doomgeneric/doomgeneric/gusconf.o
+                0x04046218        0x0 doomgeneric/doomgeneric/gusconf.o
                                  0x3a (size before relaxing)
  .rodata.str1.4
-                0x040461f8        0x0 doomgeneric/doomgeneric/gusconf.o
+                0x04046218        0x0 doomgeneric/doomgeneric/gusconf.o
                                  0xdf (size before relaxing)
- .rodata.cst2   0x040461f8        0x4 doomgeneric/doomgeneric/hu_lib.o
+ .rodata.cst2   0x04046218        0x4 doomgeneric/doomgeneric/hu_lib.o
                                   0x2 (size before relaxing)
  .rodata.str1.1
-                0x040461fc        0x0 doomgeneric/doomgeneric/hu_stuff.o
+                0x0404621c        0x0 doomgeneric/doomgeneric/hu_stuff.o
                                 0xbaf (size before relaxing)
  .rodata.str1.4
-                0x040461fc        0x0 doomgeneric/doomgeneric/hu_stuff.o
+                0x0404621c        0x0 doomgeneric/doomgeneric/hu_stuff.o
                                  0x63 (size before relaxing)
- *fill*         0x040461fc        0x4 
- .rodata        0x04046200       0x80 doomgeneric/doomgeneric/i_input.o
+ *fill*         0x0404621c        0x4 
+ .rodata        0x04046220       0x80 doomgeneric/doomgeneric/i_input.o
  .rodata.str1.1
-                0x04046280        0x0 doomgeneric/doomgeneric/i_joystick.o
+                0x040462a0        0x0 doomgeneric/doomgeneric/i_joystick.o
                                  0xa7 (size before relaxing)
  .rodata.str1.4
-                0x04046280        0x0 doomgeneric/doomgeneric/i_scale.o
+                0x040462a0        0x0 doomgeneric/doomgeneric/i_scale.o
                                  0xc5 (size before relaxing)
  .rodata.str1.1
-                0x04046280        0x0 doomgeneric/doomgeneric/i_scale.o
+                0x040462a0        0x0 doomgeneric/doomgeneric/i_scale.o
                                   0xe (size before relaxing)
- .rodata.cst2   0x04046280        0x0 doomgeneric/doomgeneric/i_scale.o
+ .rodata.cst2   0x040462a0        0x0 doomgeneric/doomgeneric/i_scale.o
                                   0x2 (size before relaxing)
  .rodata.str1.1
-                0x04046280        0x0 doomgeneric/doomgeneric/i_sound.o
+                0x040462a0        0x0 doomgeneric/doomgeneric/i_sound.o
                                  0xc5 (size before relaxing)
  .rodata.str1.4
-                0x04046280        0x0 doomgeneric/doomgeneric/i_system.o
-                                0x1c2 (size before relaxing)
+                0x040462a0        0x0 doomgeneric/doomgeneric/i_system.o
+                                0x19a (size before relaxing)
  .rodata.str1.1
-                0x04046280        0x0 doomgeneric/doomgeneric/i_system.o
-                                 0x61 (size before relaxing)
- .rodata        0x04046280       0x22 doomgeneric/doomgeneric/i_system.o
+                0x040462a0        0x0 doomgeneric/doomgeneric/i_system.o
+                                 0x73 (size before relaxing)
+ .rodata        0x040462a0       0x22 doomgeneric/doomgeneric/i_system.o
  .rodata.str1.4
-                0x040462a2        0x0 doomgeneric/doomgeneric/i_video.o
+                0x040462c2        0x0 doomgeneric/doomgeneric/i_video.o
                                 0x16d (size before relaxing)
  .rodata.str1.1
-                0x040462a2        0x0 doomgeneric/doomgeneric/i_video.o
+                0x040462c2        0x0 doomgeneric/doomgeneric/i_video.o
                                  0x50 (size before relaxing)
  .rodata.str1.1
-                0x040462a2        0x0 doomgeneric/doomgeneric/info.o
+                0x040462c2        0x0 doomgeneric/doomgeneric/info.o
                                 0x2b2 (size before relaxing)
  .rodata.str1.4
-                0x040462a2        0x0 doomgeneric/doomgeneric/m_config.o
+                0x040462c2        0x0 doomgeneric/doomgeneric/m_config.o
                                  0x76 (size before relaxing)
  .rodata.str1.1
-                0x040462a2        0x0 doomgeneric/doomgeneric/m_config.o
+                0x040462c2        0x0 doomgeneric/doomgeneric/m_config.o
                                 0xbfd (size before relaxing)
- *fill*         0x040462a2       0x1e 
- .rodata        0x040462c0      0x200 doomgeneric/doomgeneric/m_config.o
+ *fill*         0x040462c2       0x1e 
+ .rodata        0x040462e0      0x200 doomgeneric/doomgeneric/m_config.o
  .rodata.str1.1
-                0x040464c0        0x0 doomgeneric/doomgeneric/m_controls.o
+                0x040464e0        0x0 doomgeneric/doomgeneric/m_controls.o
                                 0x630 (size before relaxing)
  .rodata.str1.1
-                0x040464c0        0x0 doomgeneric/doomgeneric/m_menu.o
+                0x040464e0        0x0 doomgeneric/doomgeneric/m_menu.o
                                 0x157 (size before relaxing)
  .rodata.str1.4
-                0x040464c0        0x0 doomgeneric/doomgeneric/m_menu.o
+                0x040464e0        0x0 doomgeneric/doomgeneric/m_menu.o
                                 0x2c6 (size before relaxing)
- .rodata        0x040464c0       0x10 doomgeneric/doomgeneric/m_menu.o
+ .rodata        0x040464e0       0x10 doomgeneric/doomgeneric/m_menu.o
  .rodata.str1.4
-                0x040464d0        0x0 doomgeneric/doomgeneric/m_misc.o
+                0x040464f0        0x0 doomgeneric/doomgeneric/m_misc.o
                                  0xd5 (size before relaxing)
  .rodata.str1.1
-                0x040464d0        0x0 doomgeneric/doomgeneric/m_misc.o
+                0x040464f0        0x0 doomgeneric/doomgeneric/m_misc.o
                                  0x48 (size before relaxing)
- *fill*         0x040464d0       0x10 
- .rodata        0x040464e0      0x100 doomgeneric/doomgeneric/m_random.o
+ *fill*         0x040464f0       0x10 
+ .rodata        0x04046500      0x100 doomgeneric/doomgeneric/m_random.o
  .rodata.str1.1
-                0x040465e0        0x0 doomgeneric/doomgeneric/memio.o
+                0x04046600        0x0 doomgeneric/doomgeneric/memio.o
                                  0x28 (size before relaxing)
- .rodata        0x040465e0       0x26 doomgeneric/doomgeneric/mus2mid.o
- *fill*         0x04046606        0x2 
- .rodata        0x04046608       0x30 doomgeneric/doomgeneric/p_ceilng.o
- .rodata        0x04046638       0x40 doomgeneric/doomgeneric/p_doors.o
+ .rodata        0x04046600       0x26 doomgeneric/doomgeneric/mus2mid.o
+ *fill*         0x04046626        0x2 
+ .rodata        0x04046628       0x30 doomgeneric/doomgeneric/p_ceilng.o
+ .rodata        0x04046658       0x40 doomgeneric/doomgeneric/p_doors.o
  .rodata.str1.4
-                0x04046678        0x0 doomgeneric/doomgeneric/p_doors.o
+                0x04046698        0x0 doomgeneric/doomgeneric/p_doors.o
                                 0x13f (size before relaxing)
  .rodata.str1.1
-                0x04046678        0x0 doomgeneric/doomgeneric/p_enemy.o
+                0x04046698        0x0 doomgeneric/doomgeneric/p_enemy.o
                                  0x16 (size before relaxing)
  .rodata.str1.4
-                0x04046678        0x0 doomgeneric/doomgeneric/p_enemy.o
+                0x04046698        0x0 doomgeneric/doomgeneric/p_enemy.o
                                  0x25 (size before relaxing)
- .rodata        0x04046678       0x34 doomgeneric/doomgeneric/p_floor.o
+ .rodata        0x04046698       0x34 doomgeneric/doomgeneric/p_floor.o
  .rodata.str1.1
-                0x040466ac        0x0 doomgeneric/doomgeneric/p_inter.o
+                0x040466cc        0x0 doomgeneric/doomgeneric/p_inter.o
                                 0x302 (size before relaxing)
- .rodata        0x040466ac       0xb4 doomgeneric/doomgeneric/p_inter.o
+ .rodata        0x040466cc       0xb4 doomgeneric/doomgeneric/p_inter.o
  .rodata.str1.4
-                0x04046760        0x0 doomgeneric/doomgeneric/p_inter.o
+                0x04046780        0x0 doomgeneric/doomgeneric/p_inter.o
                                  0xdb (size before relaxing)
  .rodata.str1.1
-                0x04046760        0x0 doomgeneric/doomgeneric/p_map.o
+                0x04046780        0x0 doomgeneric/doomgeneric/p_map.o
                                   0x9 (size before relaxing)
  .rodata.str1.4
-                0x04046760        0x0 doomgeneric/doomgeneric/p_map.o
+                0x04046780        0x0 doomgeneric/doomgeneric/p_map.o
                                  0x6b (size before relaxing)
- .rodata        0x04046760      0x114 doomgeneric/doomgeneric/p_maputl.o
+ .rodata        0x04046780      0x114 doomgeneric/doomgeneric/p_maputl.o
  .rodata.str1.4
-                0x04046874        0x0 doomgeneric/doomgeneric/p_mobj.o
+                0x04046894        0x0 doomgeneric/doomgeneric/p_mobj.o
                                  0x2d (size before relaxing)
  .rodata.str1.4
-                0x04046874        0x0 doomgeneric/doomgeneric/p_plats.o
+                0x04046894        0x0 doomgeneric/doomgeneric/p_plats.o
                                  0x48 (size before relaxing)
- .rodata        0x04046874       0x14 doomgeneric/doomgeneric/p_plats.o
+ .rodata        0x04046894       0x14 doomgeneric/doomgeneric/p_plats.o
  .rodata.str1.4
-                0x04046888        0x0 doomgeneric/doomgeneric/p_saveg.o
+                0x040468a8        0x0 doomgeneric/doomgeneric/p_saveg.o
                                  0xa2 (size before relaxing)
  .rodata.str1.1
-                0x04046888        0x0 doomgeneric/doomgeneric/p_saveg.o
+                0x040468a8        0x0 doomgeneric/doomgeneric/p_saveg.o
                                  0x45 (size before relaxing)
- .rodata        0x04046888       0x20 doomgeneric/doomgeneric/p_saveg.o
+ .rodata        0x040468a8       0x20 doomgeneric/doomgeneric/p_saveg.o
  .rodata.str1.1
-                0x040468a8        0x0 doomgeneric/doomgeneric/p_setup.o
+                0x040468c8        0x0 doomgeneric/doomgeneric/p_setup.o
                                  0x21 (size before relaxing)
  .rodata.str1.4
-                0x040468a8        0x0 doomgeneric/doomgeneric/p_setup.o
+                0x040468c8        0x0 doomgeneric/doomgeneric/p_setup.o
                                  0x39 (size before relaxing)
  .rodata.str1.4
-                0x040468a8        0x0 doomgeneric/doomgeneric/p_sight.o
+                0x040468c8        0x0 doomgeneric/doomgeneric/p_sight.o
                                  0x28 (size before relaxing)
  .rodata.str1.4
-                0x040468a8        0x0 doomgeneric/doomgeneric/p_spec.o
+                0x040468c8        0x0 doomgeneric/doomgeneric/p_spec.o
                                 0x23c (size before relaxing)
- .rodata        0x040468a8      0x2b4 doomgeneric/doomgeneric/p_spec.o
+ .rodata        0x040468c8      0x2b4 doomgeneric/doomgeneric/p_spec.o
  .rodata.str1.1
-                0x04046b5c        0x0 doomgeneric/doomgeneric/p_spec.o
+                0x04046b7c        0x0 doomgeneric/doomgeneric/p_spec.o
                                   0x7 (size before relaxing)
  .rodata.str1.4
-                0x04046b5c        0x0 doomgeneric/doomgeneric/p_switch.o
+                0x04046b7c        0x0 doomgeneric/doomgeneric/p_switch.o
                                  0x25 (size before relaxing)
- .rodata        0x04046b5c      0x210 doomgeneric/doomgeneric/p_switch.o
+ .rodata        0x04046b7c      0x210 doomgeneric/doomgeneric/p_switch.o
  .rodata.str1.4
-                0x04046d6c        0x0 doomgeneric/doomgeneric/r_bsp.o
+                0x04046d8c        0x0 doomgeneric/doomgeneric/r_bsp.o
                                  0x23 (size before relaxing)
  .rodata.str1.4
-                0x04046d6c        0x0 doomgeneric/doomgeneric/r_data.o
+                0x04046d8c        0x0 doomgeneric/doomgeneric/r_data.o
                                 0x132 (size before relaxing)
  .rodata.str1.1
-                0x04046d6c        0x0 doomgeneric/doomgeneric/r_data.o
+                0x04046d8c        0x0 doomgeneric/doomgeneric/r_data.o
                                 0x101 (size before relaxing)
  .rodata.str1.1
-                0x04046d6c        0x0 doomgeneric/doomgeneric/r_draw.o
+                0x04046d8c        0x0 doomgeneric/doomgeneric/r_draw.o
                                  0x85 (size before relaxing)
  .rodata.str1.4
-                0x04046d6c        0x0 doomgeneric/doomgeneric/r_draw.o
+                0x04046d8c        0x0 doomgeneric/doomgeneric/r_draw.o
                                  0x21 (size before relaxing)
  .rodata.str1.1
-                0x04046d6c        0x0 doomgeneric/doomgeneric/r_main.o
+                0x04046d8c        0x0 doomgeneric/doomgeneric/r_main.o
                                  0x78 (size before relaxing)
  .rodata.str1.1
-                0x04046d6c        0x0 doomgeneric/doomgeneric/r_plane.o
+                0x04046d8c        0x0 doomgeneric/doomgeneric/r_plane.o
                                  0x19 (size before relaxing)
  .rodata.str1.4
-                0x04046d6c        0x0 doomgeneric/doomgeneric/r_plane.o
+                0x04046d8c        0x0 doomgeneric/doomgeneric/r_plane.o
                                  0x94 (size before relaxing)
  .rodata.str1.4
-                0x04046d6c        0x0 doomgeneric/doomgeneric/r_segs.o
+                0x04046d8c        0x0 doomgeneric/doomgeneric/r_segs.o
                                  0x20 (size before relaxing)
  .rodata.str1.4
-                0x04046d6c        0x0 doomgeneric/doomgeneric/r_things.o
+                0x04046d8c        0x0 doomgeneric/doomgeneric/r_things.o
                                 0x1df (size before relaxing)
  .rodata.str1.4
-                0x04046d6c        0x0 doomgeneric/doomgeneric/s_sound.o
+                0x04046d8c        0x0 doomgeneric/doomgeneric/s_sound.o
                                  0x42 (size before relaxing)
  .rodata.str1.1
-                0x04046d6c        0x0 doomgeneric/doomgeneric/s_sound.o
+                0x04046d8c        0x0 doomgeneric/doomgeneric/s_sound.o
                                  0x27 (size before relaxing)
  .rodata.str1.1
-                0x04046d6c        0x0 doomgeneric/doomgeneric/sounds.o
+                0x04046d8c        0x0 doomgeneric/doomgeneric/sounds.o
                                 0x191 (size before relaxing)
  .rodata.str1.1
-                0x04046d6c        0x0 doomgeneric/doomgeneric/st_lib.o
+                0x04046d8c        0x0 doomgeneric/doomgeneric/st_lib.o
                                  0x5b (size before relaxing)
  .rodata.str1.1
-                0x04046d6c        0x0 doomgeneric/doomgeneric/st_stuff.o
+                0x04046d8c        0x0 doomgeneric/doomgeneric/st_stuff.o
                                 0x18b (size before relaxing)
  .rodata.str1.4
-                0x04046d6c        0x0 doomgeneric/doomgeneric/st_stuff.o
+                0x04046d8c        0x0 doomgeneric/doomgeneric/st_stuff.o
                                  0x2e (size before relaxing)
  .rodata.str1.1
-                0x04046d6c        0x0 doomgeneric/doomgeneric/statdump.o
+                0x04046d8c        0x0 doomgeneric/doomgeneric/statdump.o
                                   0xa (size before relaxing)
- *fill*         0x04046d6c       0x14 
- .rodata        0x04046d80    0x10520 doomgeneric/doomgeneric/tables.o
-                0x04046d80                gammatable
-                0x04047280                tantoangle
-                0x040492a0                finesine
-                0x040532a0                finetangent
+ *fill*         0x04046d8c       0x14 
+ .rodata        0x04046da0    0x10520 doomgeneric/doomgeneric/tables.o
+                0x04046da0                gammatable
+                0x040472a0                tantoangle
+                0x040492c0                finesine
+                0x040532c0                finetangent
  .rodata.str1.1
-                0x040572a0        0x0 doomgeneric/doomgeneric/v_video.o
+                0x040572c0        0x0 doomgeneric/doomgeneric/v_video.o
                                  0x90 (size before relaxing)
  .rodata.str1.4
-                0x040572a0        0x0 doomgeneric/doomgeneric/v_video.o
+                0x040572c0        0x0 doomgeneric/doomgeneric/v_video.o
                                  0x78 (size before relaxing)
- .rodata.cst8   0x040572a0       0x10 doomgeneric/doomgeneric/v_video.o
+ .rodata.cst8   0x040572c0       0x10 doomgeneric/doomgeneric/v_video.o
                                   0x8 (size before relaxing)
  .rodata.str1.1
-                0x040572b0        0x0 doomgeneric/doomgeneric/w_file.o
+                0x040572d0        0x0 doomgeneric/doomgeneric/w_file.o
                                   0x6 (size before relaxing)
  .rodata.str1.1
-                0x040572b0        0x0 doomgeneric/doomgeneric/w_main.o
+                0x040572d0        0x0 doomgeneric/doomgeneric/w_main.o
                                  0x12 (size before relaxing)
  .rodata.str1.1
-                0x040572b0        0x0 doomgeneric/doomgeneric/w_wad.o
+                0x040572d0        0x0 doomgeneric/doomgeneric/w_wad.o
                                  0x9b (size before relaxing)
  .rodata.str1.4
-                0x040572b0        0x0 doomgeneric/doomgeneric/w_wad.o
+                0x040572d0        0x0 doomgeneric/doomgeneric/w_wad.o
                                 0x1b4 (size before relaxing)
- *fill*         0x040572b0       0x10 
- .rodata        0x040572c0       0x20 doomgeneric/doomgeneric/w_wad.o
+ *fill*         0x040572d0       0x10 
+ .rodata        0x040572e0       0x20 doomgeneric/doomgeneric/w_wad.o
  .rodata.str1.1
-                0x040572e0        0x0 doomgeneric/doomgeneric/wi_stuff.o
+                0x04057300        0x0 doomgeneric/doomgeneric/wi_stuff.o
                                  0xe9 (size before relaxing)
  .rodata.str1.4
-                0x040572e0        0x0 doomgeneric/doomgeneric/wi_stuff.o
+                0x04057300        0x0 doomgeneric/doomgeneric/wi_stuff.o
                                  0x22 (size before relaxing)
- .rodata        0x040572e0      0x1a0 doomgeneric/doomgeneric/wi_stuff.o
+ .rodata        0x04057300      0x1a0 doomgeneric/doomgeneric/wi_stuff.o
  .rodata.str1.4
-                0x04057480        0x0 doomgeneric/doomgeneric/z_zone.o
+                0x040574a0        0x0 doomgeneric/doomgeneric/z_zone.o
                                 0x27e (size before relaxing)
  .rodata.str1.1
-                0x04057480        0x0 doomgeneric/doomgeneric/z_zone.o
+                0x040574a0        0x0 doomgeneric/doomgeneric/z_zone.o
                                  0x32 (size before relaxing)
- .rodata        0x04057480      0x300 ../libc/ctype.o
- .rodata.cst4   0x04057780        0x0 ../libc/math.o
+ .rodata        0x040574a0      0x300 ../libc/ctype.o
+ .rodata.cst4   0x040577a0        0x0 ../libc/math.o
                                   0x4 (size before relaxing)
  .rodata.str1.1
-                0x04057780        0x0 ../libc/stdio.o
+                0x040577a0        0x0 ../libc/stdio.o
                                  0x3a (size before relaxing)
- .rodata        0x04057780       0xdc ../libc/stdio.o
- .rodata.cst4   0x0405785c        0x0 ../libc/stdio.o
+ .rodata        0x040577a0       0xdc ../libc/stdio.o
+ .rodata.cst4   0x0405787c        0x0 ../libc/stdio.o
                                   0x8 (size before relaxing)
- .rodata.cst8   0x0405785c        0x0 ../libc/stdlib.o
+ .rodata.cst8   0x0405787c        0x0 ../libc/stdlib.o
                                   0x8 (size before relaxing)
- .rodata.cst4   0x0405785c        0x0 ../libc/stdlib.o
+ .rodata.cst4   0x0405787c        0x0 ../libc/stdlib.o
                                   0x4 (size before relaxing)
  .rodata.str1.4
-                0x0405785c        0x0 doomgeneric_mysticos.o
+                0x0405787c        0x0 doomgeneric_mysticos.o
                                  0x9e (size before relaxing)
  .rodata.str1.1
-                0x0405785c        0x0 doomgeneric_mysticos.o
+                0x0405787c        0x0 doomgeneric_mysticos.o
                                  0x99 (size before relaxing)
- *fill*         0x0405785c        0x4 
- .rodata        0x04057860       0x50 doomgeneric_mysticos.o
+ *fill*         0x0405787c        0x4 
+ .rodata        0x04057880       0x50 doomgeneric_mysticos.o
  .rodata.str1.1
-                0x040578b0        0x0 w_file_mysticos.o
-                                  0x3 (size before relaxing)
+                0x040578d0        0x0 w_file_mysticos.o
+                                 0x29 (size before relaxing)
  .rodata.str1.1
-                0x040578b0        0x0 dg_sound_mysticos.o
+                0x040578d0        0x0 dg_sound_mysticos.o
                                   0x5 (size before relaxing)
  .rodata.str1.1
-                0x040578b0        0x0 i_oplmusic.o
+                0x040578d0        0x0 i_oplmusic.o
                                  0x74 (size before relaxing)
  .rodata.str1.4
-                0x040578b0        0x0 i_oplmusic.o
+                0x040578d0        0x0 i_oplmusic.o
                                  0x50 (size before relaxing)
- *fill*         0x040578b0       0x10 
- .rodata        0x040578c0      0x788 i_oplmusic.o
+ *fill*         0x040578d0       0x10 
+ .rodata        0x040578e0      0x788 i_oplmusic.o
  .rodata.str1.1
-                0x04058048        0x0 midifile.o
+                0x04058068        0x0 midifile.o
                                  0x31 (size before relaxing)
  .rodata.str1.4
-                0x04058048        0x0 midifile.o
+                0x04058068        0x0 midifile.o
                                 0x36c (size before relaxing)
- *fill*         0x04058048       0x18 
- .rodata        0x04058060     0x4280 opl/opl3.o
- .rodata.cst2   0x0405c2e0        0x0 opl/opl3.o
+ *fill*         0x04058068       0x18 
+ .rodata        0x04058080     0x4280 opl/opl3.o
+ .rodata.cst2   0x0405c300        0x0 opl/opl3.o
                                   0x4 (size before relaxing)
- .rodata.cst4   0x0405c2e0        0x0 opl/opl_mysticos.o
+ .rodata.cst4   0x0405c300        0x0 opl/opl_mysticos.o
                                   0x8 (size before relaxing)
 
 .rodata1
@@ -1695,180 +1695,180 @@ LOAD opl/opl_mysticos.o
  *(.eh_frame_hdr)
  *(.eh_frame_entry .eh_frame_entry.*)
 
-.eh_frame       0x0405c2e0    0x12c58
+.eh_frame       0x0405c300    0x12c54
  *(.eh_frame)
- .eh_frame      0x0405c2e0      0xa54 doomgeneric/doomgeneric/am_map.o
- .eh_frame      0x0405cd34       0x38 doomgeneric/doomgeneric/d_event.o
+ .eh_frame      0x0405c300      0xa54 doomgeneric/doomgeneric/am_map.o
+ .eh_frame      0x0405cd54       0x38 doomgeneric/doomgeneric/d_event.o
                                  0x50 (size before relaxing)
- .eh_frame      0x0405cd6c      0x2c8 doomgeneric/doomgeneric/d_iwad.o
+ .eh_frame      0x0405cd8c      0x2c8 doomgeneric/doomgeneric/d_iwad.o
                                 0x2e0 (size before relaxing)
- .eh_frame      0x0405d034      0x1e8 doomgeneric/doomgeneric/d_loop.o
+ .eh_frame      0x0405d054      0x1e8 doomgeneric/doomgeneric/d_loop.o
                                 0x200 (size before relaxing)
- .eh_frame      0x0405d21c      0x8f4 doomgeneric/doomgeneric/d_main.o
+ .eh_frame      0x0405d23c      0x8f4 doomgeneric/doomgeneric/d_main.o
                                 0x90c (size before relaxing)
- .eh_frame      0x0405db10       0xbc doomgeneric/doomgeneric/d_mode.o
+ .eh_frame      0x0405db30       0xbc doomgeneric/doomgeneric/d_mode.o
                                  0xd4 (size before relaxing)
- .eh_frame      0x0405dbcc      0x198 doomgeneric/doomgeneric/d_net.o
+ .eh_frame      0x0405dbec      0x198 doomgeneric/doomgeneric/d_net.o
                                 0x1b0 (size before relaxing)
- .eh_frame      0x0405dd64       0x50 doomgeneric/doomgeneric/doomgeneric.o
+ .eh_frame      0x0405dd84       0x50 doomgeneric/doomgeneric/doomgeneric.o
                                  0x68 (size before relaxing)
- .eh_frame      0x0405ddb4      0x3dc doomgeneric/doomgeneric/f_finale.o
+ .eh_frame      0x0405ddd4      0x3dc doomgeneric/doomgeneric/f_finale.o
                                 0x3f4 (size before relaxing)
- .eh_frame      0x0405e190      0x278 doomgeneric/doomgeneric/f_wipe.o
+ .eh_frame      0x0405e1b0      0x278 doomgeneric/doomgeneric/f_wipe.o
                                 0x290 (size before relaxing)
- .eh_frame      0x0405e408      0xa14 doomgeneric/doomgeneric/g_game.o
+ .eh_frame      0x0405e428      0xa14 doomgeneric/doomgeneric/g_game.o
                                 0xa2c (size before relaxing)
- .eh_frame      0x0405ee1c      0x1d4 doomgeneric/doomgeneric/gusconf.o
+ .eh_frame      0x0405ee3c      0x1d4 doomgeneric/doomgeneric/gusconf.o
                                 0x1ec (size before relaxing)
- .eh_frame      0x0405eff0      0x330 doomgeneric/doomgeneric/hu_lib.o
+ .eh_frame      0x0405f010      0x330 doomgeneric/doomgeneric/hu_lib.o
                                 0x348 (size before relaxing)
- .eh_frame      0x0405f320      0x280 doomgeneric/doomgeneric/hu_stuff.o
+ .eh_frame      0x0405f340      0x280 doomgeneric/doomgeneric/hu_stuff.o
                                 0x298 (size before relaxing)
- .eh_frame      0x0405f5a0       0x14 doomgeneric/doomgeneric/i_endoom.o
+ .eh_frame      0x0405f5c0       0x14 doomgeneric/doomgeneric/i_endoom.o
                                  0x2c (size before relaxing)
- .eh_frame      0x0405f5b4       0x84 doomgeneric/doomgeneric/i_input.o
+ .eh_frame      0x0405f5d4       0x84 doomgeneric/doomgeneric/i_input.o
                                  0x9c (size before relaxing)
- .eh_frame      0x0405f638       0xe0 doomgeneric/doomgeneric/i_joystick.o
+ .eh_frame      0x0405f658       0xe0 doomgeneric/doomgeneric/i_joystick.o
                                  0xf8 (size before relaxing)
- .eh_frame      0x0405f718      0x5b4 doomgeneric/doomgeneric/i_scale.o
+ .eh_frame      0x0405f738      0x5b4 doomgeneric/doomgeneric/i_scale.o
                                 0x5cc (size before relaxing)
- .eh_frame      0x0405fccc      0x328 doomgeneric/doomgeneric/i_sound.o
+ .eh_frame      0x0405fcec      0x328 doomgeneric/doomgeneric/i_sound.o
                                 0x340 (size before relaxing)
- .eh_frame      0x0405fff4      0x300 doomgeneric/doomgeneric/i_system.o
-                                0x318 (size before relaxing)
- .eh_frame      0x040602f4       0x90 doomgeneric/doomgeneric/i_timer.o
+ .eh_frame      0x04060014      0x2f0 doomgeneric/doomgeneric/i_system.o
+                                0x308 (size before relaxing)
+ .eh_frame      0x04060304       0x90 doomgeneric/doomgeneric/i_timer.o
                                  0xa8 (size before relaxing)
- .eh_frame      0x04060384      0x320 doomgeneric/doomgeneric/i_video.o
+ .eh_frame      0x04060394      0x320 doomgeneric/doomgeneric/i_video.o
                                 0x338 (size before relaxing)
- .eh_frame      0x040606a4      0x10c doomgeneric/doomgeneric/m_argv.o
+ .eh_frame      0x040606b4      0x10c doomgeneric/doomgeneric/m_argv.o
                                 0x124 (size before relaxing)
- .eh_frame      0x040607b0       0x28 doomgeneric/doomgeneric/m_bbox.o
+ .eh_frame      0x040607c0       0x28 doomgeneric/doomgeneric/m_bbox.o
                                  0x40 (size before relaxing)
- .eh_frame      0x040607d8       0x90 doomgeneric/doomgeneric/m_cheat.o
+ .eh_frame      0x040607e8       0x90 doomgeneric/doomgeneric/m_cheat.o
                                  0xa8 (size before relaxing)
- .eh_frame      0x04060868      0x270 doomgeneric/doomgeneric/m_config.o
+ .eh_frame      0x04060878      0x270 doomgeneric/doomgeneric/m_config.o
                                 0x288 (size before relaxing)
- .eh_frame      0x04060ad8      0x658 doomgeneric/doomgeneric/m_controls.o
+ .eh_frame      0x04060ae8      0x658 doomgeneric/doomgeneric/m_controls.o
                                 0x670 (size before relaxing)
- .eh_frame      0x04061130       0x5c doomgeneric/doomgeneric/m_fixed.o
+ .eh_frame      0x04061140       0x5c doomgeneric/doomgeneric/m_fixed.o
                                  0x74 (size before relaxing)
- .eh_frame      0x0406118c      0xc88 doomgeneric/doomgeneric/m_menu.o
+ .eh_frame      0x0406119c      0xc88 doomgeneric/doomgeneric/m_menu.o
                                 0xca0 (size before relaxing)
- .eh_frame      0x04061e14      0x540 doomgeneric/doomgeneric/m_misc.o
+ .eh_frame      0x04061e24      0x540 doomgeneric/doomgeneric/m_misc.o
                                 0x558 (size before relaxing)
- .eh_frame      0x04062354       0x3c doomgeneric/doomgeneric/m_random.o
+ .eh_frame      0x04062364       0x3c doomgeneric/doomgeneric/m_random.o
                                  0x54 (size before relaxing)
- .eh_frame      0x04062390      0x188 doomgeneric/doomgeneric/memio.o
+ .eh_frame      0x040623a0      0x188 doomgeneric/doomgeneric/memio.o
                                 0x1a0 (size before relaxing)
- .eh_frame      0x04062518      0x2d8 doomgeneric/doomgeneric/mus2mid.o
+ .eh_frame      0x04062528      0x2d8 doomgeneric/doomgeneric/mus2mid.o
                                 0x2f0 (size before relaxing)
- .eh_frame      0x040627f0      0x17c doomgeneric/doomgeneric/p_ceilng.o
+ .eh_frame      0x04062800      0x17c doomgeneric/doomgeneric/p_ceilng.o
                                 0x194 (size before relaxing)
- .eh_frame      0x0406296c      0x3a4 doomgeneric/doomgeneric/p_doors.o
+ .eh_frame      0x0406297c      0x3a4 doomgeneric/doomgeneric/p_doors.o
                                 0x3bc (size before relaxing)
- .eh_frame      0x04062d10     0x1310 doomgeneric/doomgeneric/p_enemy.o
+ .eh_frame      0x04062d20     0x1310 doomgeneric/doomgeneric/p_enemy.o
                                0x1328 (size before relaxing)
- .eh_frame      0x04064020      0x428 doomgeneric/doomgeneric/p_floor.o
+ .eh_frame      0x04064030      0x428 doomgeneric/doomgeneric/p_floor.o
                                 0x440 (size before relaxing)
- .eh_frame      0x04064448      0x37c doomgeneric/doomgeneric/p_inter.o
+ .eh_frame      0x04064458      0x37c doomgeneric/doomgeneric/p_inter.o
                                 0x394 (size before relaxing)
- .eh_frame      0x040647c4      0x298 doomgeneric/doomgeneric/p_lights.o
+ .eh_frame      0x040647d4      0x298 doomgeneric/doomgeneric/p_lights.o
                                 0x2b0 (size before relaxing)
- .eh_frame      0x04064a5c      0x97c doomgeneric/doomgeneric/p_map.o
+ .eh_frame      0x04064a6c      0x97c doomgeneric/doomgeneric/p_map.o
                                 0x994 (size before relaxing)
- .eh_frame      0x040653d8      0x524 doomgeneric/doomgeneric/p_maputl.o
+ .eh_frame      0x040653e8      0x524 doomgeneric/doomgeneric/p_maputl.o
                                 0x53c (size before relaxing)
- .eh_frame      0x040658fc      0x718 doomgeneric/doomgeneric/p_mobj.o
+ .eh_frame      0x0406590c      0x718 doomgeneric/doomgeneric/p_mobj.o
                                 0x730 (size before relaxing)
- .eh_frame      0x04066014      0x1c0 doomgeneric/doomgeneric/p_plats.o
+ .eh_frame      0x04066024      0x1c0 doomgeneric/doomgeneric/p_plats.o
                                 0x1d8 (size before relaxing)
- .eh_frame      0x040661d4      0x704 doomgeneric/doomgeneric/p_pspr.o
+ .eh_frame      0x040661e4      0x704 doomgeneric/doomgeneric/p_pspr.o
                                 0x71c (size before relaxing)
- .eh_frame      0x040668d8      0x570 doomgeneric/doomgeneric/p_saveg.o
+ .eh_frame      0x040668e8      0x570 doomgeneric/doomgeneric/p_saveg.o
                                 0x588 (size before relaxing)
- .eh_frame      0x04066e48      0x538 doomgeneric/doomgeneric/p_setup.o
+ .eh_frame      0x04066e58      0x538 doomgeneric/doomgeneric/p_setup.o
                                 0x550 (size before relaxing)
- .eh_frame      0x04067380      0x230 doomgeneric/doomgeneric/p_sight.o
+ .eh_frame      0x04067390      0x230 doomgeneric/doomgeneric/p_sight.o
                                 0x248 (size before relaxing)
- .eh_frame      0x040675b0      0x73c doomgeneric/doomgeneric/p_spec.o
+ .eh_frame      0x040675c0      0x73c doomgeneric/doomgeneric/p_spec.o
                                 0x754 (size before relaxing)
- .eh_frame      0x04067cec      0x36c doomgeneric/doomgeneric/p_switch.o
+ .eh_frame      0x04067cfc      0x36c doomgeneric/doomgeneric/p_switch.o
                                 0x384 (size before relaxing)
- .eh_frame      0x04068058       0x94 doomgeneric/doomgeneric/p_telept.o
+ .eh_frame      0x04068068       0x94 doomgeneric/doomgeneric/p_telept.o
                                  0xac (size before relaxing)
- .eh_frame      0x040680ec       0xc0 doomgeneric/doomgeneric/p_tick.o
+ .eh_frame      0x040680fc       0xc0 doomgeneric/doomgeneric/p_tick.o
                                  0xd8 (size before relaxing)
- .eh_frame      0x040681ac      0x1c8 doomgeneric/doomgeneric/p_user.o
+ .eh_frame      0x040681bc      0x1c8 doomgeneric/doomgeneric/p_user.o
                                 0x1e0 (size before relaxing)
- .eh_frame      0x04068374      0x2d4 doomgeneric/doomgeneric/r_bsp.o
+ .eh_frame      0x04068384      0x2d4 doomgeneric/doomgeneric/r_bsp.o
                                 0x2ec (size before relaxing)
- .eh_frame      0x04068648      0x5d4 doomgeneric/doomgeneric/r_data.o
+ .eh_frame      0x04068658      0x5d4 doomgeneric/doomgeneric/r_data.o
                                 0x5ec (size before relaxing)
- .eh_frame      0x04068c1c      0x4a4 doomgeneric/doomgeneric/r_draw.o
+ .eh_frame      0x04068c2c      0x4a4 doomgeneric/doomgeneric/r_draw.o
                                 0x4bc (size before relaxing)
- .eh_frame      0x040690c0      0x410 doomgeneric/doomgeneric/r_main.o
+ .eh_frame      0x040690d0      0x410 doomgeneric/doomgeneric/r_main.o
                                 0x428 (size before relaxing)
- .eh_frame      0x040694d0      0x298 doomgeneric/doomgeneric/r_plane.o
+ .eh_frame      0x040694e0      0x298 doomgeneric/doomgeneric/r_plane.o
                                 0x2b0 (size before relaxing)
- .eh_frame      0x04069768      0x1f8 doomgeneric/doomgeneric/r_segs.o
+ .eh_frame      0x04069778      0x1f8 doomgeneric/doomgeneric/r_segs.o
                                 0x210 (size before relaxing)
- .eh_frame      0x04069960       0x14 doomgeneric/doomgeneric/r_sky.o
+ .eh_frame      0x04069970       0x14 doomgeneric/doomgeneric/r_sky.o
                                  0x2c (size before relaxing)
- .eh_frame      0x04069974      0x520 doomgeneric/doomgeneric/r_things.o
+ .eh_frame      0x04069984      0x520 doomgeneric/doomgeneric/r_things.o
                                 0x538 (size before relaxing)
- .eh_frame      0x04069e94      0x3b4 doomgeneric/doomgeneric/s_sound.o
+ .eh_frame      0x04069ea4      0x3b4 doomgeneric/doomgeneric/s_sound.o
                                 0x3cc (size before relaxing)
- .eh_frame      0x0406a248      0x140 doomgeneric/doomgeneric/sha1.o
+ .eh_frame      0x0406a258      0x140 doomgeneric/doomgeneric/sha1.o
                                 0x158 (size before relaxing)
- .eh_frame      0x0406a388      0x234 doomgeneric/doomgeneric/st_lib.o
+ .eh_frame      0x0406a398      0x234 doomgeneric/doomgeneric/st_lib.o
                                 0x24c (size before relaxing)
- .eh_frame      0x0406a5bc      0x834 doomgeneric/doomgeneric/st_stuff.o
+ .eh_frame      0x0406a5cc      0x834 doomgeneric/doomgeneric/st_stuff.o
                                 0x84c (size before relaxing)
- .eh_frame      0x0406adf0       0x48 doomgeneric/doomgeneric/statdump.o
+ .eh_frame      0x0406ae00       0x48 doomgeneric/doomgeneric/statdump.o
                                  0x60 (size before relaxing)
- .eh_frame      0x0406ae38       0x14 doomgeneric/doomgeneric/tables.o
+ .eh_frame      0x0406ae48       0x14 doomgeneric/doomgeneric/tables.o
                                  0x2c (size before relaxing)
- .eh_frame      0x0406ae4c      0x638 doomgeneric/doomgeneric/v_video.o
+ .eh_frame      0x0406ae5c      0x638 doomgeneric/doomgeneric/v_video.o
                                 0x650 (size before relaxing)
- .eh_frame      0x0406b484       0xc0 doomgeneric/doomgeneric/w_checksum.o
+ .eh_frame      0x0406b494       0xc0 doomgeneric/doomgeneric/w_checksum.o
                                  0xd8 (size before relaxing)
- .eh_frame      0x0406b544       0x4c doomgeneric/doomgeneric/w_file.o
+ .eh_frame      0x0406b554       0x4c doomgeneric/doomgeneric/w_file.o
                                  0x64 (size before relaxing)
- .eh_frame      0x0406b590       0x4c doomgeneric/doomgeneric/w_main.o
+ .eh_frame      0x0406b5a0       0x4c doomgeneric/doomgeneric/w_main.o
                                  0x64 (size before relaxing)
- .eh_frame      0x0406b5dc      0x510 doomgeneric/doomgeneric/w_wad.o
+ .eh_frame      0x0406b5ec      0x510 doomgeneric/doomgeneric/w_wad.o
                                 0x528 (size before relaxing)
- .eh_frame      0x0406baec      0xd18 doomgeneric/doomgeneric/wi_stuff.o
+ .eh_frame      0x0406bafc      0xd18 doomgeneric/doomgeneric/wi_stuff.o
                                 0xd30 (size before relaxing)
- .eh_frame      0x0406c804      0x2c0 doomgeneric/doomgeneric/z_zone.o
+ .eh_frame      0x0406c814      0x2c0 doomgeneric/doomgeneric/z_zone.o
                                 0x2d8 (size before relaxing)
- .eh_frame      0x0406cac4       0xf8 ../libc/builtins.o
+ .eh_frame      0x0406cad4       0xf8 ../libc/builtins.o
                                 0x110 (size before relaxing)
- .eh_frame      0x0406cbbc       0xdc ../libc/ctype.o
+ .eh_frame      0x0406cbcc       0xdc ../libc/ctype.o
                                  0xf4 (size before relaxing)
- .eh_frame      0x0406cc98       0xe0 ../libc/math.o
+ .eh_frame      0x0406cca8       0xe0 ../libc/math.o
                                  0xf8 (size before relaxing)
- .eh_frame      0x0406cd78      0x1d4 ../libc/posix.o
+ .eh_frame      0x0406cd88      0x1d4 ../libc/posix.o
                                 0x1ec (size before relaxing)
- .eh_frame      0x0406cf4c      0x408 ../libc/stdio.o
+ .eh_frame      0x0406cf5c      0x408 ../libc/stdio.o
                                 0x420 (size before relaxing)
- .eh_frame      0x0406d354      0x170 ../libc/stdlib.o
+ .eh_frame      0x0406d364      0x170 ../libc/stdlib.o
                                 0x188 (size before relaxing)
- .eh_frame      0x0406d4c4      0x2c4 ../libc/string.o
+ .eh_frame      0x0406d4d4      0x2c4 ../libc/string.o
                                 0x2dc (size before relaxing)
- .eh_frame      0x0406d788      0x1d0 doomgeneric_mysticos.o
+ .eh_frame      0x0406d798      0x1d0 doomgeneric_mysticos.o
                                 0x1e8 (size before relaxing)
- .eh_frame      0x0406d958       0xa4 w_file_mysticos.o
-                                 0xbc (size before relaxing)
- .eh_frame      0x0406d9fc      0x164 dg_sound_mysticos.o
+ .eh_frame      0x0406d968       0xb0 w_file_mysticos.o
+                                 0xc8 (size before relaxing)
+ .eh_frame      0x0406da18      0x164 dg_sound_mysticos.o
                                 0x17c (size before relaxing)
- .eh_frame      0x0406db60      0x770 i_oplmusic.o
+ .eh_frame      0x0406db7c      0x770 i_oplmusic.o
                                 0x788 (size before relaxing)
- .eh_frame      0x0406e2d0      0x4f4 midifile.o
+ .eh_frame      0x0406e2ec      0x4f4 midifile.o
                                 0x50c (size before relaxing)
- .eh_frame      0x0406e7c4      0x49c opl/opl3.o
+ .eh_frame      0x0406e7e0      0x49c opl/opl3.o
                                 0x4b4 (size before relaxing)
- .eh_frame      0x0406ec60      0x2d8 opl/opl_mysticos.o
+ .eh_frame      0x0406ec7c      0x2d8 opl/opl_mysticos.o
                                 0x2f0 (size before relaxing)
  *(.eh_frame.*)
 
@@ -1889,198 +1889,198 @@ LOAD opl/opl_mysticos.o
  *(.note.build-id)
 
 .note.GNU-stack
-                0x0406ef38        0x0
+                0x0406ef54        0x0
  *(.note.GNU-stack)
  .note.GNU-stack
-                0x0406ef38        0x0 doomgeneric/doomgeneric/am_map.o
+                0x0406ef54        0x0 doomgeneric/doomgeneric/am_map.o
  .note.GNU-stack
-                0x0406ef38        0x0 doomgeneric/doomgeneric/d_event.o
+                0x0406ef54        0x0 doomgeneric/doomgeneric/d_event.o
  .note.GNU-stack
-                0x0406ef38        0x0 doomgeneric/doomgeneric/d_items.o
+                0x0406ef54        0x0 doomgeneric/doomgeneric/d_items.o
  .note.GNU-stack
-                0x0406ef38        0x0 doomgeneric/doomgeneric/d_iwad.o
+                0x0406ef54        0x0 doomgeneric/doomgeneric/d_iwad.o
  .note.GNU-stack
-                0x0406ef38        0x0 doomgeneric/doomgeneric/d_loop.o
+                0x0406ef54        0x0 doomgeneric/doomgeneric/d_loop.o
  .note.GNU-stack
-                0x0406ef38        0x0 doomgeneric/doomgeneric/d_main.o
+                0x0406ef54        0x0 doomgeneric/doomgeneric/d_main.o
  .note.GNU-stack
-                0x0406ef38        0x0 doomgeneric/doomgeneric/d_mode.o
+                0x0406ef54        0x0 doomgeneric/doomgeneric/d_mode.o
  .note.GNU-stack
-                0x0406ef38        0x0 doomgeneric/doomgeneric/d_net.o
+                0x0406ef54        0x0 doomgeneric/doomgeneric/d_net.o
  .note.GNU-stack
-                0x0406ef38        0x0 doomgeneric/doomgeneric/doomdef.o
+                0x0406ef54        0x0 doomgeneric/doomgeneric/doomdef.o
  .note.GNU-stack
-                0x0406ef38        0x0 doomgeneric/doomgeneric/doomgeneric.o
+                0x0406ef54        0x0 doomgeneric/doomgeneric/doomgeneric.o
  .note.GNU-stack
-                0x0406ef38        0x0 doomgeneric/doomgeneric/doomstat.o
+                0x0406ef54        0x0 doomgeneric/doomgeneric/doomstat.o
  .note.GNU-stack
-                0x0406ef38        0x0 doomgeneric/doomgeneric/dstrings.o
+                0x0406ef54        0x0 doomgeneric/doomgeneric/dstrings.o
  .note.GNU-stack
-                0x0406ef38        0x0 doomgeneric/doomgeneric/dummy.o
+                0x0406ef54        0x0 doomgeneric/doomgeneric/dummy.o
  .note.GNU-stack
-                0x0406ef38        0x0 doomgeneric/doomgeneric/f_finale.o
+                0x0406ef54        0x0 doomgeneric/doomgeneric/f_finale.o
  .note.GNU-stack
-                0x0406ef38        0x0 doomgeneric/doomgeneric/f_wipe.o
+                0x0406ef54        0x0 doomgeneric/doomgeneric/f_wipe.o
  .note.GNU-stack
-                0x0406ef38        0x0 doomgeneric/doomgeneric/g_game.o
+                0x0406ef54        0x0 doomgeneric/doomgeneric/g_game.o
  .note.GNU-stack
-                0x0406ef38        0x0 doomgeneric/doomgeneric/gusconf.o
+                0x0406ef54        0x0 doomgeneric/doomgeneric/gusconf.o
  .note.GNU-stack
-                0x0406ef38        0x0 doomgeneric/doomgeneric/hu_lib.o
+                0x0406ef54        0x0 doomgeneric/doomgeneric/hu_lib.o
  .note.GNU-stack
-                0x0406ef38        0x0 doomgeneric/doomgeneric/hu_stuff.o
+                0x0406ef54        0x0 doomgeneric/doomgeneric/hu_stuff.o
  .note.GNU-stack
-                0x0406ef38        0x0 doomgeneric/doomgeneric/i_endoom.o
+                0x0406ef54        0x0 doomgeneric/doomgeneric/i_endoom.o
  .note.GNU-stack
-                0x0406ef38        0x0 doomgeneric/doomgeneric/i_input.o
+                0x0406ef54        0x0 doomgeneric/doomgeneric/i_input.o
  .note.GNU-stack
-                0x0406ef38        0x0 doomgeneric/doomgeneric/i_joystick.o
+                0x0406ef54        0x0 doomgeneric/doomgeneric/i_joystick.o
  .note.GNU-stack
-                0x0406ef38        0x0 doomgeneric/doomgeneric/i_scale.o
+                0x0406ef54        0x0 doomgeneric/doomgeneric/i_scale.o
  .note.GNU-stack
-                0x0406ef38        0x0 doomgeneric/doomgeneric/i_sound.o
+                0x0406ef54        0x0 doomgeneric/doomgeneric/i_sound.o
  .note.GNU-stack
-                0x0406ef38        0x0 doomgeneric/doomgeneric/i_system.o
+                0x0406ef54        0x0 doomgeneric/doomgeneric/i_system.o
  .note.GNU-stack
-                0x0406ef38        0x0 doomgeneric/doomgeneric/i_timer.o
+                0x0406ef54        0x0 doomgeneric/doomgeneric/i_timer.o
  .note.GNU-stack
-                0x0406ef38        0x0 doomgeneric/doomgeneric/i_video.o
+                0x0406ef54        0x0 doomgeneric/doomgeneric/i_video.o
  .note.GNU-stack
-                0x0406ef38        0x0 doomgeneric/doomgeneric/icon.o
+                0x0406ef54        0x0 doomgeneric/doomgeneric/icon.o
  .note.GNU-stack
-                0x0406ef38        0x0 doomgeneric/doomgeneric/info.o
+                0x0406ef54        0x0 doomgeneric/doomgeneric/info.o
  .note.GNU-stack
-                0x0406ef38        0x0 doomgeneric/doomgeneric/m_argv.o
+                0x0406ef54        0x0 doomgeneric/doomgeneric/m_argv.o
  .note.GNU-stack
-                0x0406ef38        0x0 doomgeneric/doomgeneric/m_bbox.o
+                0x0406ef54        0x0 doomgeneric/doomgeneric/m_bbox.o
  .note.GNU-stack
-                0x0406ef38        0x0 doomgeneric/doomgeneric/m_cheat.o
+                0x0406ef54        0x0 doomgeneric/doomgeneric/m_cheat.o
  .note.GNU-stack
-                0x0406ef38        0x0 doomgeneric/doomgeneric/m_config.o
+                0x0406ef54        0x0 doomgeneric/doomgeneric/m_config.o
  .note.GNU-stack
-                0x0406ef38        0x0 doomgeneric/doomgeneric/m_controls.o
+                0x0406ef54        0x0 doomgeneric/doomgeneric/m_controls.o
  .note.GNU-stack
-                0x0406ef38        0x0 doomgeneric/doomgeneric/m_fixed.o
+                0x0406ef54        0x0 doomgeneric/doomgeneric/m_fixed.o
  .note.GNU-stack
-                0x0406ef38        0x0 doomgeneric/doomgeneric/m_menu.o
+                0x0406ef54        0x0 doomgeneric/doomgeneric/m_menu.o
  .note.GNU-stack
-                0x0406ef38        0x0 doomgeneric/doomgeneric/m_misc.o
+                0x0406ef54        0x0 doomgeneric/doomgeneric/m_misc.o
  .note.GNU-stack
-                0x0406ef38        0x0 doomgeneric/doomgeneric/m_random.o
+                0x0406ef54        0x0 doomgeneric/doomgeneric/m_random.o
  .note.GNU-stack
-                0x0406ef38        0x0 doomgeneric/doomgeneric/memio.o
+                0x0406ef54        0x0 doomgeneric/doomgeneric/memio.o
  .note.GNU-stack
-                0x0406ef38        0x0 doomgeneric/doomgeneric/mus2mid.o
+                0x0406ef54        0x0 doomgeneric/doomgeneric/mus2mid.o
  .note.GNU-stack
-                0x0406ef38        0x0 doomgeneric/doomgeneric/p_ceilng.o
+                0x0406ef54        0x0 doomgeneric/doomgeneric/p_ceilng.o
  .note.GNU-stack
-                0x0406ef38        0x0 doomgeneric/doomgeneric/p_doors.o
+                0x0406ef54        0x0 doomgeneric/doomgeneric/p_doors.o
  .note.GNU-stack
-                0x0406ef38        0x0 doomgeneric/doomgeneric/p_enemy.o
+                0x0406ef54        0x0 doomgeneric/doomgeneric/p_enemy.o
  .note.GNU-stack
-                0x0406ef38        0x0 doomgeneric/doomgeneric/p_floor.o
+                0x0406ef54        0x0 doomgeneric/doomgeneric/p_floor.o
  .note.GNU-stack
-                0x0406ef38        0x0 doomgeneric/doomgeneric/p_inter.o
+                0x0406ef54        0x0 doomgeneric/doomgeneric/p_inter.o
  .note.GNU-stack
-                0x0406ef38        0x0 doomgeneric/doomgeneric/p_lights.o
+                0x0406ef54        0x0 doomgeneric/doomgeneric/p_lights.o
  .note.GNU-stack
-                0x0406ef38        0x0 doomgeneric/doomgeneric/p_map.o
+                0x0406ef54        0x0 doomgeneric/doomgeneric/p_map.o
  .note.GNU-stack
-                0x0406ef38        0x0 doomgeneric/doomgeneric/p_maputl.o
+                0x0406ef54        0x0 doomgeneric/doomgeneric/p_maputl.o
  .note.GNU-stack
-                0x0406ef38        0x0 doomgeneric/doomgeneric/p_mobj.o
+                0x0406ef54        0x0 doomgeneric/doomgeneric/p_mobj.o
  .note.GNU-stack
-                0x0406ef38        0x0 doomgeneric/doomgeneric/p_plats.o
+                0x0406ef54        0x0 doomgeneric/doomgeneric/p_plats.o
  .note.GNU-stack
-                0x0406ef38        0x0 doomgeneric/doomgeneric/p_pspr.o
+                0x0406ef54        0x0 doomgeneric/doomgeneric/p_pspr.o
  .note.GNU-stack
-                0x0406ef38        0x0 doomgeneric/doomgeneric/p_saveg.o
+                0x0406ef54        0x0 doomgeneric/doomgeneric/p_saveg.o
  .note.GNU-stack
-                0x0406ef38        0x0 doomgeneric/doomgeneric/p_setup.o
+                0x0406ef54        0x0 doomgeneric/doomgeneric/p_setup.o
  .note.GNU-stack
-                0x0406ef38        0x0 doomgeneric/doomgeneric/p_sight.o
+                0x0406ef54        0x0 doomgeneric/doomgeneric/p_sight.o
  .note.GNU-stack
-                0x0406ef38        0x0 doomgeneric/doomgeneric/p_spec.o
+                0x0406ef54        0x0 doomgeneric/doomgeneric/p_spec.o
  .note.GNU-stack
-                0x0406ef38        0x0 doomgeneric/doomgeneric/p_switch.o
+                0x0406ef54        0x0 doomgeneric/doomgeneric/p_switch.o
  .note.GNU-stack
-                0x0406ef38        0x0 doomgeneric/doomgeneric/p_telept.o
+                0x0406ef54        0x0 doomgeneric/doomgeneric/p_telept.o
  .note.GNU-stack
-                0x0406ef38        0x0 doomgeneric/doomgeneric/p_tick.o
+                0x0406ef54        0x0 doomgeneric/doomgeneric/p_tick.o
  .note.GNU-stack
-                0x0406ef38        0x0 doomgeneric/doomgeneric/p_user.o
+                0x0406ef54        0x0 doomgeneric/doomgeneric/p_user.o
  .note.GNU-stack
-                0x0406ef38        0x0 doomgeneric/doomgeneric/r_bsp.o
+                0x0406ef54        0x0 doomgeneric/doomgeneric/r_bsp.o
  .note.GNU-stack
-                0x0406ef38        0x0 doomgeneric/doomgeneric/r_data.o
+                0x0406ef54        0x0 doomgeneric/doomgeneric/r_data.o
  .note.GNU-stack
-                0x0406ef38        0x0 doomgeneric/doomgeneric/r_draw.o
+                0x0406ef54        0x0 doomgeneric/doomgeneric/r_draw.o
  .note.GNU-stack
-                0x0406ef38        0x0 doomgeneric/doomgeneric/r_main.o
+                0x0406ef54        0x0 doomgeneric/doomgeneric/r_main.o
  .note.GNU-stack
-                0x0406ef38        0x0 doomgeneric/doomgeneric/r_plane.o
+                0x0406ef54        0x0 doomgeneric/doomgeneric/r_plane.o
  .note.GNU-stack
-                0x0406ef38        0x0 doomgeneric/doomgeneric/r_segs.o
+                0x0406ef54        0x0 doomgeneric/doomgeneric/r_segs.o
  .note.GNU-stack
-                0x0406ef38        0x0 doomgeneric/doomgeneric/r_sky.o
+                0x0406ef54        0x0 doomgeneric/doomgeneric/r_sky.o
  .note.GNU-stack
-                0x0406ef38        0x0 doomgeneric/doomgeneric/r_things.o
+                0x0406ef54        0x0 doomgeneric/doomgeneric/r_things.o
  .note.GNU-stack
-                0x0406ef38        0x0 doomgeneric/doomgeneric/s_sound.o
+                0x0406ef54        0x0 doomgeneric/doomgeneric/s_sound.o
  .note.GNU-stack
-                0x0406ef38        0x0 doomgeneric/doomgeneric/sha1.o
+                0x0406ef54        0x0 doomgeneric/doomgeneric/sha1.o
  .note.GNU-stack
-                0x0406ef38        0x0 doomgeneric/doomgeneric/sounds.o
+                0x0406ef54        0x0 doomgeneric/doomgeneric/sounds.o
  .note.GNU-stack
-                0x0406ef38        0x0 doomgeneric/doomgeneric/st_lib.o
+                0x0406ef54        0x0 doomgeneric/doomgeneric/st_lib.o
  .note.GNU-stack
-                0x0406ef38        0x0 doomgeneric/doomgeneric/st_stuff.o
+                0x0406ef54        0x0 doomgeneric/doomgeneric/st_stuff.o
  .note.GNU-stack
-                0x0406ef38        0x0 doomgeneric/doomgeneric/statdump.o
+                0x0406ef54        0x0 doomgeneric/doomgeneric/statdump.o
  .note.GNU-stack
-                0x0406ef38        0x0 doomgeneric/doomgeneric/tables.o
+                0x0406ef54        0x0 doomgeneric/doomgeneric/tables.o
  .note.GNU-stack
-                0x0406ef38        0x0 doomgeneric/doomgeneric/v_video.o
+                0x0406ef54        0x0 doomgeneric/doomgeneric/v_video.o
  .note.GNU-stack
-                0x0406ef38        0x0 doomgeneric/doomgeneric/w_checksum.o
+                0x0406ef54        0x0 doomgeneric/doomgeneric/w_checksum.o
  .note.GNU-stack
-                0x0406ef38        0x0 doomgeneric/doomgeneric/w_file.o
+                0x0406ef54        0x0 doomgeneric/doomgeneric/w_file.o
  .note.GNU-stack
-                0x0406ef38        0x0 doomgeneric/doomgeneric/w_main.o
+                0x0406ef54        0x0 doomgeneric/doomgeneric/w_main.o
  .note.GNU-stack
-                0x0406ef38        0x0 doomgeneric/doomgeneric/w_wad.o
+                0x0406ef54        0x0 doomgeneric/doomgeneric/w_wad.o
  .note.GNU-stack
-                0x0406ef38        0x0 doomgeneric/doomgeneric/wi_stuff.o
+                0x0406ef54        0x0 doomgeneric/doomgeneric/wi_stuff.o
  .note.GNU-stack
-                0x0406ef38        0x0 doomgeneric/doomgeneric/z_zone.o
+                0x0406ef54        0x0 doomgeneric/doomgeneric/z_zone.o
  .note.GNU-stack
-                0x0406ef38        0x0 ../libc/builtins.o
+                0x0406ef54        0x0 ../libc/builtins.o
  .note.GNU-stack
-                0x0406ef38        0x0 ../libc/ctype.o
+                0x0406ef54        0x0 ../libc/ctype.o
  .note.GNU-stack
-                0x0406ef38        0x0 ../libc/math.o
+                0x0406ef54        0x0 ../libc/math.o
  .note.GNU-stack
-                0x0406ef38        0x0 ../libc/posix.o
+                0x0406ef54        0x0 ../libc/posix.o
  .note.GNU-stack
-                0x0406ef38        0x0 ../libc/stdio.o
+                0x0406ef54        0x0 ../libc/stdio.o
  .note.GNU-stack
-                0x0406ef38        0x0 ../libc/stdlib.o
+                0x0406ef54        0x0 ../libc/stdlib.o
  .note.GNU-stack
-                0x0406ef38        0x0 ../libc/string.o
+                0x0406ef54        0x0 ../libc/string.o
  .note.GNU-stack
-                0x0406ef38        0x0 doomgeneric_mysticos.o
+                0x0406ef54        0x0 doomgeneric_mysticos.o
  .note.GNU-stack
-                0x0406ef38        0x0 w_file_mysticos.o
+                0x0406ef54        0x0 w_file_mysticos.o
  .note.GNU-stack
-                0x0406ef38        0x0 dg_sound_mysticos.o
+                0x0406ef54        0x0 dg_sound_mysticos.o
  .note.GNU-stack
-                0x0406ef38        0x0 i_oplmusic.o
+                0x0406ef54        0x0 i_oplmusic.o
  .note.GNU-stack
-                0x0406ef38        0x0 midifile.o
+                0x0406ef54        0x0 midifile.o
  .note.GNU-stack
-                0x0406ef38        0x0 opl/opl3.o
+                0x0406ef54        0x0 opl/opl3.o
  .note.GNU-stack
-                0x0406ef38        0x0 opl/opl_mysticos.o
+                0x0406ef54        0x0 opl/opl_mysticos.o
 
 .note.gnu.property
  *(.note.gnu.property)

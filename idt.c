@@ -2,6 +2,8 @@
 #include "idt.h"
 #include "console.h"
 #include "vbe.h"
+#include "vga_text.h"
+#include "vgadbg.h"
 
 static idt_entry_t g_idt[256];
 static idt_ptr_t   g_idt_ptr;
@@ -58,6 +60,21 @@ void isr_handler(registers_t* r) {
     serial_print(" eip="); serial_print_hex(r->eip);
     serial_print(" cs="); serial_print_hex(r->cs);
     serial_print("\n");
+
+    // SAFE CONSOLE: переключаем VGA в текстовый режим через регистры и
+    // печатаем панику ТУДА. VBE LFB может быть сломан — console (VBE) тогда
+    // не виден, а 0xB8000 в text mode виден всегда. Это последний надёжный
+    // канал на железе.
+    safe_console_enter("kernel panic");
+    vga_print("Exception: "); vga_print(exc_name(r->int_no));
+    vga_print(" vec="); vga_print_int((int)r->int_no);
+    vga_print("\n err="); vga_print_hex(r->err_code);
+    vga_print(" cr2="); vga_print_hex(cr2);
+    vga_print(" eip="); vga_print_hex(r->eip);
+    vga_print("\n CS="); vga_print_hex(r->cs);
+    vga_print("\n\nSystem halted.\n");
+
+    // Best-effort: тот же текст в VBE-консоль (если она ещё работает).
     console_set_color(FB_RGB(0xFF,0x44,0x44), FB_RGB(0,0,0));
     console_print("\n=== KERNEL PANIC ===\n");
     console_print("Exception: ");

@@ -335,7 +335,14 @@ vbe_ok:
     mov [0x9006], ax
     mov ax, [0x5000 + 0x14]       ; Yres
     mov [0x9008], ax
-    mov al, [0x5000 + 0x19]       ; BitsPerPixel (0x19)
+    ; BPP для LFB: LinBitsPerPixel (VBE3.0, offset 0x1A), а не banked
+    ; BitsPerPixel (0x19). На Insyde BIOS эти поля могут отличаться —
+    ; если писать 24bpp в 32bpp-буфер, получаются полоски.
+    mov al, [0x5000 + 0x1A]       ; LinBitsPerPixel (LFB, VBE3.0)
+    test al, al
+    jnz .bpp_ok
+    mov al, [0x5000 + 0x19]       ; fallback: BitsPerPixel (banked)
+.bpp_ok:
     mov [0x900A], al
     ; Маски каналов (Linux vesafb так делает): red/green/blue pos/size.
     ; ModeInfo offsets: 0x1F=RedSize 0x20=RedPos 0x21=GreenSize 0x22=GreenPos

@@ -50,8 +50,23 @@ mmdcm.o: mmdcm.c mmdcm.h
 mmdcm_asm.o: mmdcm_asm.asm
 	$(NASM) -f elf32 $< -o $@
 
-vbe.o: vbe.c
+vbe.o: vbe.c vbe.h vgadbg.h
 	$(GCC) $(CFLAGS) -c $< -o $@
+
+vgadbg.o: vgadbg.c vgadbg.h
+	$(GCC) $(CFLAGS) -c $< -o $@
+
+vga_text.o: vga_text.c vga_text.h vgadbg.h io.h
+	$(GCC) $(CFLAGS) -c $< -o $@
+
+idt.o: idt.c idt.h console.h vbe.h vga_text.h vgadbg.h
+	$(GCC) $(CFLAGS) -c $< -o $@
+
+amdgpu.o: amdgpu.c amdgpu.h amdgpu_dcn.h pci.h serial.h vgadbg.h
+	$(GCC) $(CFLAGS) -c $< -o $@
+
+# старая цель amdgpu.o (перекрыта выше) — оставлена закомментированной
+# amdgpu.o: amdgpu.c amdgpu.h amdgpu_dcn.h pci.h serial.h
 
 gif.o: gif.c gif.h
 	$(GCC) $(CFLAGS) -c $< -o $@
@@ -75,9 +90,6 @@ console.o: console.c
 	$(GCC) $(CFLAGS) -c $< -o $@
 
 kernel.o: kernel.c
-	$(GCC) $(CFLAGS) -c $< -o $@
-
-idt.o: idt.c
 	$(GCC) $(CFLAGS) -c $< -o $@
 
 pic.o: pic.c
@@ -117,9 +129,6 @@ msdll.o: dll/msdll.c dll/msdll.h
 	$(GCC) $(CFLAGS) -c $< -o $@
 
 pe.o: pe.c pe.h
-	$(GCC) $(CFLAGS) -c $< -o $@
-
-amdgpu.o: amdgpu.c amdgpu.h amdgpu_dcn.h pci.h serial.h
 	$(GCC) $(CFLAGS) -c $< -o $@
 
 amdgpu_dcn.o: amdgpu_dcn.c amdgpu_dcn.h dcn10_regs.h
@@ -248,7 +257,7 @@ net.o: net.c net.h virtio_net.h serial.h
 tcp.o: tcp.c tcp.h net.h serial.h
 	$(GCC) $(CFLAGS) -c $< -o $@
 
-$(ELF): entry.o switch.o kernel.o task.o paging.o paging_asm.o pmem.o mmdcm.o mmdcm_asm.o vbe.o bmp.o gif.o vfs.o msfs.o gdt.o font.o console.o idt.o pic.o apic.o io.o cursor.o icons.o icons_gen.o ata.o fat.o kprint.o term.o exec.o msdll.o pe.o pci.o driver.o serial.o virtio.o virtio_net.o net.o tcp.o gpu.o theme.o vss.o hda.o ac97.o music.o amdgpu.o amdgpu_dcn.o tls/sha256.o tls/hmac.o tls/rand.o tls/aes.o tls/bigint.o tls/rsa.o tls/x509.o tls/ec.o tls/gcm.o tls/sha1.o tls/tls.o
+$(ELF): entry.o switch.o kernel.o task.o paging.o paging_asm.o pmem.o mmdcm.o mmdcm_asm.o vbe.o vgadbg.o vga_text.o bmp.o gif.o vfs.o msfs.o gdt.o font.o console.o idt.o pic.o apic.o io.o cursor.o icons.o icons_gen.o ata.o fat.o kprint.o term.o exec.o msdll.o pe.o pci.o driver.o serial.o virtio.o virtio_net.o net.o tcp.o gpu.o theme.o vss.o hda.o ac97.o music.o amdgpu.o amdgpu_dcn.o tls/sha256.o tls/hmac.o tls/rand.o tls/aes.o tls/bigint.o tls/rsa.o tls/x509.o tls/ec.o tls/gcm.o tls/sha1.o tls/tls.o
 	$(LD) $(LDFLAGS) -o $@ $^
 
 $(BIN): $(ELF)
@@ -366,15 +375,15 @@ krun: $(BIN)
 .PHONY: krun
 
 run: $(IMAGE) $(IMAGE2)
-	qemu-system-x86_64.exe -accel tcg \
+	qemu-system-x86_64.exe -accel whpx \
   -drive format=raw,file=$(IMAGE),if=ide,index=0 \
   -drive format=raw,file=$(IMAGE2),if=ide,index=1 \
   -m 512 \
   -device virtio-vga \
   -netdev user,id=n0 \
   -device virtio-net-pci,netdev=n0 \
-  -audiodev sdl,id=snd0 \
-  -device AC97,audiodev=snd0 \
+  -device intel-hda \
+  -device hda-duplex \
   -display gtk \
   -serial stdio 
 

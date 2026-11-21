@@ -12,6 +12,8 @@
 #include "driver.h"
 #include "serial.h"
 #include "io.h"
+#include "vgadbg.h"
+#include "vga_text.h"
 
 // --- Caps Lock как индикатор результата (на ноуте без serial) ------------
 // Пишем команду 0xED (Set LEDs) в контроллер клавиатуры через порт 0x60.
@@ -39,18 +41,21 @@ void amdgpu_caps_led(int on) {
 static unsigned int g_mmio = 0;
 static int g_ready = 0;
 
-// Вывод ТОЛЬКО в serial. console.c пишет в VBE LFB (fb_put_pixel), а VBE
-// на этом железе работает плохо — трогать LFB на этапе теста нельзя.
-static void dprint(const char* t) { serial_print(t); }
-static void dint(int v)           { serial_print_int(v); }
-static void dhex(unsigned int v)  { serial_print_hex(v); }
-static void dflush(void)          { /* no-op: только serial */ }
+// Вывод в serial + VGA-текст (0xB8000). serial_print пишет в COM1 (на
+// реальном ноуте его нет), а vga_* — в текстовый буфер, который виден
+// на экране даже когда VBE LFB работает плохо. Дублируем в оба канала,
+// чтобы rc от amdgpu_dcn_init был виден и на экране, и в логе.
+// (VBE LFB/fb_put_pixel не трогаем — на этом железе он ненадёжен.)
+static void dprint(const char* t) { serial_print(t); vga_print(t); }
+static void dint(int v)           { serial_print_int(v); vga_print_int(v); }
+static void dhex(unsigned int v)  { serial_print_hex(v); vga_print_hex(v); }
+static void dflush(void)          { /* polling: буферы уже синхронны */ }
 
 // --- match: наш ли это GPU -------------------------------------------------
 static int amdgpu_match(const device_t* dev) {
     if (dev->bus != BUS_PCI) return 0;
     if (dev->vendor != 0x1002) return 0;                 // не AMD
-    unsigned int base = (dev->class_code >> 16) & 0xFF;
+    unsigned int base = (dev->class_code >> 8) & 0xFF;   // class_code = base<<8 | subclass (16 бит, как в ac97/hda)
     if (base != 0x03) return 0;                          // не display controller
     return 1;
 }
@@ -102,8 +107,25 @@ static int amdgpu_probe(device_t* dev) {
     int rc = amdgpu_dcn_init(mmio);
     dprint("[amdgpu] DCN init rc="); dint(rc); dprint("\n");
 
-    // СИГНАЛ: всё прошло — гасим Caps Lock (вернули в норму).
+    // СИГНАЛ: гасим Caps Lock (операция завершилась, не зависли).
     amdgpu_caps_led(0);
+
+    if (rc != 0) {
+        // DCN не поднялся. НЕ роняем систему — уходим в SAFE CONSOLE
+        // (реальный VGA text mode через регистры, не зависит от VBE).
+        // Пользователь/разработчик видит причину на экране, ОС продолжает
+        // работать в текстовом безопасном режиме.
+        dprint("[amdgpu] DCN init FAILED, entering safe console\n");
+        safe_console_enter("amdgpu DCN init failed");
+        vga_print("DCN init rc=");
+        vga_print_int(rc);
+        vga_print("\n mmio=");
+        vga_print_hex(mmio);
+        vga_print("\n GPU output disabled, staying in text mode.\n");
+        return -1;
+    }
+
+    dprint("[amdgpu] DCN output enabled\n");
     return 0;
 }
 

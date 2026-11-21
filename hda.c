@@ -74,7 +74,7 @@
 #define SD_CTL_TAG_SH   20
 
 // BDLE
-#define BDL_ENTRIES     2
+#define BDL_ENTRIES     8
 #define MAX_BDL_BYTES   (16u * 1024u)
 
 // --- Миксер: непрерывный кольцевой поток + пул голосов ---------------
@@ -394,31 +394,30 @@ static void hda_stream_stop(void) {
 // контроллер играет его по кругу. Мы постоянно дописываем микс вперёд.
 static void hda_stream_start_ring(void) {
     unsigned int sb = SD_BASE + g_stream_idx * SD_STRIDE;
-    unsigned int half_bytes = RING_BYTES / 2;
 
-    // ЭКСПЕРИМЕНТ: одно BDLE на всё кольцо — убираем внутреннюю границу
-    // дескрипторов (раньше 2×половина → тик каждые ~341 мс).
-    (void)half_bytes;
-    g_bdl[0].addr_lo = (unsigned int)&g_ring[0];
-    g_bdl[0].addr_hi = 0;
-    g_bdl[0].length = RING_BYTES;
-    g_bdl[0].flags = 0x0;
+    // ЭКСПЕРИМЕНТ: 4 BDLE, без IOC. Проверяем, обходит ли HW список
+    // дескрипторов вообще. Если звук не изменился — проблема не в BDL.
+    #define NCHUNKS 4
+    unsigned int chunk_bytes = RING_BYTES / NCHUNKS;   // = 32768 байт = 16384 кадра
+    for (int i = 0; i < NCHUNKS; i++) {
+        g_bdl[i].addr_lo = (unsigned int)&g_ring[(i * chunk_bytes) / 2];
+        g_bdl[i].addr_hi = 0;
+        g_bdl[i].length  = chunk_bytes;
+        g_bdl[i].flags   = 0x0;    // без IOC — эксперимент минимальный
+    }
 
     mmio_w32(sb + SD_BDPL, (unsigned int)g_bdl & ~0x7Fu);
     mmio_w32(sb + SD_BDPU, 0);
-    mmio_w32(sb + SD_CBL, RING_BYTES);
-    mmio_w16(sb + SD_LVI, 0);
+    mmio_w32(sb + SD_CBL, RING_BYTES);       // CBL = всё кольцо
+    mmio_w16(sb + SD_LVI, NCHUNKS - 1);      // ← теперь 3, а не 0
 
-    // DPIB: адрес буфера, куда HW пишет РЕАЛЬНУЮ позицию DMA.
-    // Регистры ГЛОБАЛЬНЫЕ (0x70/0x74), выровнено на 128 байт.
+    // DPIB (не используется, но оставим для будущего)
     mmio_w32(HDA_DPIBLBASE, (unsigned int)g_posbuf & ~0x7Fu);
     mmio_w32(HDA_DPIBUBASE, 0);
 
-    unsigned int stream_fmt = (1u << 4) | (2u - 1) | 0x0;   // 16-бит stereo 48к
+    unsigned int stream_fmt = (1u << 4) | (2u - 1) | 0x0;
     mmio_w16(sb + SD_FMT, (unsigned short)stream_fmt);
 
-    // Сброс статуса потока до запуска: FIFOE(bit2)/DESE(bit3) — write-1-to-clear.
-    // Если они «залипли» с прошлого запуска, поток глючит (щелчки).
     mmio_w8(sb + SD_STS, 0x1C);
     unsigned int ctl = mmio_r32(sb + SD_CTL) & 0x00FFFFFFu;
     ctl &= ~(0xFu << SD_CTL_TAG_SH);
@@ -440,7 +439,7 @@ static unsigned int hda_hw_read_frame(void) {
 static void hda_mix(unsigned int count) {
     for (unsigned int f = 0; f < count; f++) {
         int acc = 0;
-        for (int v = 0; v < MAX_VOICES; v++) {
+         for (int v = 0; v < MAX_VOICES; v++) {
             voice_t* vo = &g_voices[v];
             if (!vo->active) continue;
             unsigned int idx = vo->pos >> 16;

@@ -157,8 +157,9 @@ byte *I_ZoneBase (int *size)
 
     zonemem = AutoAllocMemory(size, default_ram, min_ram);
 
-    printf("zone memory: %p, %x allocated for zone\n", 
-           zonemem, *size);
+    // printf заменён на ms_debug: printf льёт в консоль/serial потоком и
+    // роняет терминал; ms_debug идёт коротким syscall'ом без форматирования.
+    { extern void ms_debug(const char *s); ms_debug("[zone] allocated\n"); }
 
     return zonemem;
 }
