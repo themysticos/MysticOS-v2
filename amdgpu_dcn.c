@@ -16,6 +16,11 @@
 static unsigned int g_mmio = 0;
 static unsigned char g_r = 0x20, g_g = 0x40, g_b = 0xC0;
 
+// Флаг захвата вывода (этап 2). 0 = probe-only (безопасно для реального
+// железа: не трогаем BIOS-дисплейный конвейер). См. amdgpu_dcn.h.
+int g_amdgpu_dcn_takeover = 0;
+int amdgpu_dcn_takeover_enabled(void) { return g_amdgpu_dcn_takeover; }
+
 void amdgpu_caps_led(int on);
 
 static inline volatile unsigned int* reg_ptr(unsigned int reg) {

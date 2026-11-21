@@ -10,6 +10,7 @@
 #include "amdgpu.h"
 #include "amdgpu_dcn.h"
 #include "driver.h"
+#include "pci.h"
 #include "serial.h"
 #include "io.h"
 #include "vgadbg.h"
@@ -84,6 +85,26 @@ static int amdgpu_probe(device_t* dev) {
     mmio &= 0xFFFFFFF0u;
     g_mmio = mmio;
     dprint("[amdgpu] MMIO BAR = 0x"); dhex(mmio); dprint("\n");
+
+    // ОБЯЗАТЕЛЬНО включить Memory Space Enable (bit 1 в PCI Command, off 0x04).
+    // Без ME любые чтения/записи по MMIO на реальном железе отбиваются в
+    // Master Abort -> зависание/машина-мёртв. В QEMU BAR'ы часто работают и
+    // без явного ME (или BIOS оставил включённым), поэтому баг виден ТОЛЬКО
+    // на железе. Классика «в эмуляторе ок, на ноутбуке труп».
+    {
+        // Читаем word через pci_read16, пишем read-modify-write всего dword 0x04:
+        // в нём ещё Status (16..31) — его не трогаем (w1c-биты), обнуляем только
+        // старшее слово своей же прочитанной величиной.
+        unsigned int cmd = pci_read16(dev->bus_num, dev->slot, dev->func, 0x04);
+        dprint("[amdgpu] PCI cmd = 0x"); dhex(cmd); dprint("\n");
+        if (!(cmd & 0x2)) {
+            unsigned int dw = pci_read32(dev->bus_num, dev->slot, dev->func, 0x04);
+            dw = (dw & 0xFFFF0000u) | ((cmd | 0x2) & 0xFFFF);  // Memory Space Enable
+            pci_write32(dev->bus_num, dev->slot, dev->func, 0x04, dw);
+            dprint("[amdgpu] MSE set\n");
+        }
+    }
+    dflush();
     dprint("[amdgpu] reading DCN regs (may fault)...\n");
     dflush();   // <-- последняя строка ТОЧНО видна, если дальше #PF
 
@@ -103,9 +124,27 @@ static int amdgpu_probe(device_t* dev) {
 
     // ЭТАП 2: свой DCN-драйвер — инициализация вывода (заливка цвета).
     // Caps Lock мигает по этапам (1..6). Если зависнет — увидим, где.
-    dprint("[amdgpu] starting DCN init...\n");
-    int rc = amdgpu_dcn_init(mmio);
-    dprint("[amdgpu] DCN init rc="); dint(rc); dprint("\n");
+    //
+    // ВНИМАНИЕ: на реальном железе этот путь НЕБЕЗОПАСЕН и выключен:
+    //  1) DCN без SMU/DMUB/FW load + без программирования FE/ DigBE / link
+    //     training / stream_encoder — регистры OTG/HUBP в обход BIOS-таблиц
+    //     дисплея могут увести пайп в состояние, из которого VBIOS-конвейер
+    //     перестаёт отдавать картинку (чёрный экран после «успешного» probe);
+    //  2) запись в mmHUBPREQ0_DCN_VM_MX_L1_TLB_CNTL с произвольной маской
+    //     ломает адресацию VM для ВСЕХ pipe (в т.ч. тех, что использует
+    //     активный режим вывода от BIOS) — снова чёрный экран/зависание;
+    //  3) тайминги 640x480 в OTG0 при активном потоке на другом OTG/линке
+    //     конфликтуют с уже запрограммированным display sequence.
+    // В QEMU этого не видно: там amdgpu нет вообще, driver_scan() до probe
+    // не доходит. Поэтому пока оставляем только read-only probe (этап 1),
+    // а захват вывода включается явным флагом для отладки на стенде.
+    if (amdgpu_dcn_takeover_enabled()) {
+        dprint("[amdgpu] starting DCN init...\n");
+        int rc = amdgpu_dcn_init(mmio);
+        dprint("[amdgpu] DCN init rc="); dint(rc); dprint("\n");
+    } else {
+        dprint("[amdgpu] DCN takeover disabled (probe-only)\n");
+    }
 
     // СИГНАЛ: гасим Caps Lock (операция завершилась, не зависли).
     amdgpu_caps_led(0);

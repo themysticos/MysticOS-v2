@@ -21,7 +21,7 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y \
-            nasm gcc-multilib binutils dosfstools mtools python3 make
+            nasm gcc-multilib binutils dosfstools mtools python3 make gcc-mingw-w64-i686
 
       - name: Build images
         run: make -j"$(nproc)" all
